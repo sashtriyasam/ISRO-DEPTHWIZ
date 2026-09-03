@@ -8,12 +8,14 @@ import { LayerControls } from "../components/LayerControls/LayerControls";
 import { HeightExaggeration } from "../components/HeightExaggeration/HeightExaggeration";
 import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
+import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ArtifactLoader, FixtureSource } from "../artifact";
 import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
 import { calculateMeasurement } from "../measurement/calculator";
-import { updateMeasurementGraphics } from "../viewer/Viewer";
+import { generateProfile } from "../profile/sampler";
+import { updateMeasurementGraphics, updateProfileGraphics } from "../viewer/Viewer";
 import type { ArtifactState } from "../artifact/types";
 import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
@@ -21,6 +23,7 @@ import type { LayerId, LayerState } from "../layers/types";
 import type { ExaggerationLevel } from "../display/types";
 import type { InspectionResult, InspectionState } from "../inspection/types";
 import type { MeasurementMode, MeasurementPoint, MeasurementState } from "../measurement/types";
+import type { ProfileState } from "../profile/types";
 
 export function App() {
   const [artifact, setArtifact] = useState<SceneArtifact | null>(null);
@@ -31,6 +34,7 @@ export function App() {
   const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "empty" });
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>("distance");
   const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
+  const [profileState, setProfileState] = useState<ProfileState>({ status: "empty" });
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
 
@@ -55,9 +59,10 @@ export function App() {
   }, [layerState]);
 
   const interactionMode = useMemo(() => {
-    if (measurementState.status === "empty") return "inspect";
-    return "measure";
-  }, [measurementState.status]);
+    if (measurementState.status !== "empty") return "measure";
+    if (profileState.status !== "empty") return "profile";
+    return "inspect";
+  }, [measurementState.status, profileState.status]);
 
   const handleCameraReady = useCallback(() => {
     setCameraMode("orbit");
@@ -96,6 +101,8 @@ export function App() {
     setInspectionState({ status: "empty" });
     setMeasurementState({ status: "empty" });
     viewerRef.current?.clearMeasurementGraphics();
+    setProfileState({ status: "empty" });
+    viewerRef.current?.clearProfileGraphics();
   }, []);
 
   const handleExaggerationChange = useCallback((level: ExaggerationLevel) => {
@@ -118,6 +125,8 @@ export function App() {
   const handleStartMeasurement = useCallback(() => {
     viewerRef.current?.clearSelection();
     setInspectionState({ status: "empty" });
+    setProfileState({ status: "empty" });
+    viewerRef.current?.clearProfileGraphics();
     setMeasurementState({ status: "selecting-first" });
   }, []);
 
@@ -175,6 +184,66 @@ export function App() {
     viewerRef.current?.clearMeasurementGraphics();
   }, []);
 
+  const handleStartProfile = useCallback(() => {
+    viewerRef.current?.clearSelection();
+    setInspectionState({ status: "empty" });
+    setMeasurementState({ status: "empty" });
+    viewerRef.current?.clearMeasurementGraphics();
+    setProfileState({ status: "selecting-first" });
+  }, []);
+
+  const handleProfilePointSelected = useCallback((point: MeasurementPoint | null) => {
+    if (!point) {
+      setProfileState({ status: "empty" });
+      viewerRef.current?.clearProfileGraphics();
+      return;
+    }
+
+    setProfileState((prev) => {
+      if (prev.status === "selecting-first") {
+        return { status: "selecting-second", pointA: point };
+      }
+      if (prev.status === "selecting-second") {
+        const profile = generateProfile(
+          prev.pointA,
+          point,
+          artifact?.elevation,
+          artifact?.layers?.agl,
+          artifact?.metadata.transform
+        );
+        return { status: "completed", profile };
+      }
+      return prev;
+    });
+  }, [artifact]);
+
+  useEffect(() => {
+    if (profileState.status === "selecting-first") {
+      updateProfileGraphics(
+        viewerRef.current as unknown as { threeScene: null; profileMarkerA: null; profileMarkerB: null; profileLine: null; verticalScaleRef: number },
+        null,
+        null
+      );
+    } else if (profileState.status === "selecting-second") {
+      updateProfileGraphics(
+        viewerRef.current as unknown as { threeScene: null; profileMarkerA: null; profileMarkerB: null; profileLine: null; verticalScaleRef: number },
+        profileState.pointA,
+        null
+      );
+    } else if (profileState.status === "completed") {
+      updateProfileGraphics(
+        viewerRef.current as unknown as { threeScene: null; profileMarkerA: null; profileMarkerB: null; profileLine: null; verticalScaleRef: number },
+        profileState.profile.pointA,
+        profileState.profile.pointB
+      );
+    }
+  }, [profileState]);
+
+  const handleClearProfile = useCallback(() => {
+    setProfileState({ status: "empty" });
+    viewerRef.current?.clearProfileGraphics();
+  }, []);
+
   return (
     <StrictMode>
       <AppShell
@@ -190,6 +259,7 @@ export function App() {
               onCameraReady={handleCameraReady}
               onPointSelected={handlePointSelected}
               onMeasurementPointSelected={handleMeasurementPointSelected}
+              onProfilePointSelected={handleProfilePointSelected}
             />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}>
@@ -220,6 +290,11 @@ export function App() {
               onModeChange={handleMeasurementModeChange}
               onStartMeasurement={handleStartMeasurement}
               onClear={handleClearMeasurement}
+            />
+            <ProfilePanel
+              state={profileState}
+              onStartProfile={handleStartProfile}
+              onClear={handleClearProfile}
             />
             <InspectorPanel
               state={inspectionState}

@@ -10,7 +10,7 @@ import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
 import { resolveInspection } from "../inspection/resolver";
 
-type InteractionMode = "inspect" | "measure";
+type InteractionMode = "inspect" | "measure" | "profile";
 
 interface ViewerProps {
   scene: SceneArtifact;
@@ -20,6 +20,7 @@ interface ViewerProps {
   onCameraReady?: (manager: CameraManager) => void;
   onPointSelected?: (result: InspectionResult | null) => void;
   onMeasurementPointSelected?: (point: MeasurementPoint | null) => void;
+  onProfilePointSelected?: (point: MeasurementPoint | null) => void;
 }
 
 export interface ViewerHandle {
@@ -27,6 +28,7 @@ export interface ViewerHandle {
   loadArtifact: (artifact: SceneArtifact) => void;
   clearSelection: () => void;
   clearMeasurementGraphics: () => void;
+  clearProfileGraphics: () => void;
 }
 
 interface MeshGroup {
@@ -36,7 +38,7 @@ interface MeshGroup {
   material: THREE.Material;
 }
 
-export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, interactionMode, onCameraReady, onPointSelected, onMeasurementPointSelected }, ref) {
+export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, interactionMode, onCameraReady, onPointSelected, onMeasurementPointSelected, onProfilePointSelected }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer | null;
@@ -50,11 +52,15 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     measurementMarkerA: THREE.Mesh | null;
     measurementMarkerB: THREE.Mesh | null;
     measurementLine: THREE.Line | null;
+    profileMarkerA: THREE.Mesh | null;
+    profileMarkerB: THREE.Mesh | null;
+    profileLine: THREE.Line | null;
     currentArtifact: SceneArtifact | null;
     animationId: number;
     disposed: boolean;
     onPointSelectedRef: ((result: InspectionResult | null) => void) | null;
     onMeasurementPointSelectedRef: ((point: MeasurementPoint | null) => void) | null;
+    onProfilePointSelectedRef: ((point: MeasurementPoint | null) => void) | null;
     interactionModeRef: InteractionMode;
     verticalScaleRef: number;
   }>({
@@ -69,11 +75,15 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     measurementMarkerA: null,
     measurementMarkerB: null,
     measurementLine: null,
+    profileMarkerA: null,
+    profileMarkerB: null,
+    profileLine: null,
     currentArtifact: null,
     animationId: 0,
     disposed: false,
     onPointSelectedRef: null,
     onMeasurementPointSelectedRef: null,
+    onProfilePointSelectedRef: null,
     interactionModeRef: "inspect",
     verticalScaleRef: 1,
   });
@@ -104,8 +114,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
           state.selectionRing = null;
         }
         state.onPointSelectedRef?.(null);
-      } else {
+      } else if (state.interactionModeRef === "measure") {
         state.onMeasurementPointSelectedRef?.(null);
+      } else {
+        state.onProfilePointSelectedRef?.(null);
       }
       return;
     }
@@ -166,7 +178,11 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         layerId: inspectionResult.layerId,
         artifactId: inspectionResult.artifactId,
       };
-      state.onMeasurementPointSelectedRef?.(measurementPoint);
+      if (state.interactionModeRef === "measure") {
+        state.onMeasurementPointSelectedRef?.(measurementPoint);
+      } else {
+        state.onProfilePointSelectedRef?.(measurementPoint);
+      }
     }
   }, []);
 
@@ -196,6 +212,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       }
 
       clearMeasurementGraphics(state);
+      clearProfileGraphics(state);
 
       state.currentArtifact = artifact;
 
@@ -230,6 +247,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     clearMeasurementGraphics: () => {
       clearMeasurementGraphics(stateRef.current);
     },
+    clearProfileGraphics: () => {
+      clearProfileGraphics(stateRef.current);
+    },
   }));
 
   useEffect(() => {
@@ -239,6 +259,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
   useEffect(() => {
     stateRef.current.onMeasurementPointSelectedRef = onMeasurementPointSelected ?? null;
   }, [onMeasurementPointSelected]);
+
+  useEffect(() => {
+    stateRef.current.onProfilePointSelectedRef = onProfilePointSelected ?? null;
+  }, [onProfilePointSelected]);
 
   useEffect(() => {
     stateRef.current.interactionModeRef = interactionMode;
@@ -354,6 +378,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       }
 
       clearMeasurementGraphics(state);
+      clearProfileGraphics(state);
 
       if (state.currentMeshGroup) {
         disposeLayerMesh(state.currentMeshGroup);
@@ -406,6 +431,32 @@ function clearMeasurementGraphics(state: {
     (state.measurementLine.material as THREE.Material).dispose();
     state.measurementLine.geometry.dispose();
     state.measurementLine = null;
+  }
+}
+
+function clearProfileGraphics(state: {
+  threeScene: THREE.Scene | null;
+  profileMarkerA: THREE.Mesh | null;
+  profileMarkerB: THREE.Mesh | null;
+  profileLine: THREE.Line | null;
+}) {
+  if (state.profileMarkerA && state.threeScene) {
+    state.threeScene.remove(state.profileMarkerA);
+    (state.profileMarkerA.material as THREE.Material).dispose();
+    state.profileMarkerA.geometry.dispose();
+    state.profileMarkerA = null;
+  }
+  if (state.profileMarkerB && state.threeScene) {
+    state.threeScene.remove(state.profileMarkerB);
+    (state.profileMarkerB.material as THREE.Material).dispose();
+    state.profileMarkerB.geometry.dispose();
+    state.profileMarkerB = null;
+  }
+  if (state.profileLine && state.threeScene) {
+    state.threeScene.remove(state.profileLine);
+    (state.profileLine.material as THREE.Material).dispose();
+    state.profileLine.geometry.dispose();
+    state.profileLine = null;
   }
 }
 
@@ -463,6 +514,63 @@ export function updateMeasurementGraphics(
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffaa44, linewidth: 2 });
     state.measurementLine = new THREE.Line(lineGeometry, lineMaterial);
     state.threeScene.add(state.measurementLine);
+  }
+}
+
+export function updateProfileGraphics(
+  state: {
+    threeScene: THREE.Scene | null;
+    profileMarkerA: THREE.Mesh | null;
+    profileMarkerB: THREE.Mesh | null;
+    profileLine: THREE.Line | null;
+    verticalScaleRef: number;
+  },
+  pointA: MeasurementPoint | null,
+  pointB: MeasurementPoint | null
+) {
+  clearProfileGraphics(state);
+
+  if (!state.threeScene) return;
+
+  if (pointA) {
+    const markerGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xaa44ff });
+    state.profileMarkerA = new THREE.Mesh(markerGeometry, markerMaterial);
+    state.profileMarkerA.position.set(
+      pointA.displayPosition.x,
+      pointA.displayPosition.y * state.verticalScaleRef,
+      pointA.displayPosition.z
+    );
+    state.threeScene.add(state.profileMarkerA);
+  }
+
+  if (pointA && pointB) {
+    const markerGeometryB = new THREE.SphereGeometry(0.06, 16, 16);
+    const markerMaterialB = new THREE.MeshBasicMaterial({ color: 0xff44aa });
+    state.profileMarkerB = new THREE.Mesh(markerGeometryB, markerMaterialB);
+    state.profileMarkerB.position.set(
+      pointB.displayPosition.x,
+      pointB.displayPosition.y * state.verticalScaleRef,
+      pointB.displayPosition.z
+    );
+    state.threeScene.add(state.profileMarkerB);
+
+    const points = [
+      new THREE.Vector3(
+        pointA.displayPosition.x,
+        pointA.displayPosition.y * state.verticalScaleRef,
+        pointA.displayPosition.z
+      ),
+      new THREE.Vector3(
+        pointB.displayPosition.x,
+        pointB.displayPosition.y * state.verticalScaleRef,
+        pointB.displayPosition.z
+      ),
+    ];
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xdd44dd, linewidth: 2 });
+    state.profileLine = new THREE.Line(lineGeometry, lineMaterial);
+    state.threeScene.add(state.profileLine);
   }
 }
 
