@@ -37,6 +37,16 @@ export interface LayerPayloads {
   agl?: ElevationData;
 }
 
+export interface BackendOrigin {
+  model_name: string;
+  model_version?: string;
+  depth_scale: "relative" | "metric";
+  elevation_semantics: string;
+  georeferencing: string;
+  calibration_method?: string;
+  calibration_reference?: string;
+}
+
 export interface SceneMetadata {
   CRS?: string;
   transform?: GeoTransform;
@@ -47,6 +57,7 @@ export interface SceneMetadata {
   };
   source: "deterministic-fixture" | "backend";
   description?: string;
+  backend?: BackendOrigin;
 }
 
 export interface GeoTransform {
