@@ -17,6 +17,7 @@ from depthwizard.geospatial.grids import (
 from depthwizard.geospatial.overlap import OverlapResult, calculate_overlap
 from depthwizard.geospatial.transforms import (
     PixelAnchor,
+    from_affine,
     pixel_to_world,
     raster_bounds,
     require_invertible,
@@ -44,6 +45,7 @@ __all__ = [
     "check_grid_compatibility",
     "classify_alignment",
     "crs_equal",
+    "from_affine",
     "parse_crs",
     "pixel_to_world",
     "raster_bounds",

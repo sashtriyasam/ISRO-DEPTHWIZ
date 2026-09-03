@@ -173,7 +173,7 @@ def align_raster(
     return reproject_array(
         source,
         source_grid.crs,
-        to_affine(source_grid.transform),
+        source_grid.transform,
         target_grid,
         source_nodata=float("nan"),
         resampling=resampling,

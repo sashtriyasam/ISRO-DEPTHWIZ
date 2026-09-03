@@ -67,6 +67,23 @@ def to_affine(transform: AffineTransform) -> Any:
     return Affine(transform.b, transform.c, transform.a, transform.e, transform.f, transform.d)
 
 
+def from_affine(affine: Any) -> AffineTransform:
+    """Convert a rasterio ``Affine`` to the contract GDAL-order transform.
+
+    Exact inverse of :func:`to_affine` (verified by round-trip test).
+    Centralizes the parameter-order mapping so ingestion, mesh and DEM
+    code never reimplement it.
+    """
+    return AffineTransform(
+        a=float(affine.c),
+        b=float(affine.a),
+        c=float(affine.b),
+        d=float(affine.f),
+        e=float(affine.d),
+        f=float(affine.e),
+    )
+
+
 def pixel_to_world(
     transform: AffineTransform,
     col: float,

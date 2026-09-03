@@ -36,3 +36,7 @@ class ElevationSemantics(str, Enum):
     RELATIVE_SURFACE_RDSM = "relative_surface_rdsm"
     HEIGHT_AGL_NDSM = "height_agl_ndsm"
     ABSOLUTE_ELEVATION_DSM = "absolute_elevation_dsm"
+    # Ground/terrain elevation reference (DEM). Not a surface model:
+    # never interchangeable with DSM/AGL meanings without an explicit
+    # scientifically valid surface relationship (see S8 docs).
+    TERRAIN_ELEVATION = "terrain_elevation"
