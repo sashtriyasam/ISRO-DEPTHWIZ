@@ -6,3 +6,25 @@ dist/
 .env.local
 .DS_Store
 Thumbs.db
+
+# Python scientific engine
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.tif
+*.tiff
+*.geotiff
+*.obj
+*.ckpt
+*.pt
+*.pth
+*.safetensors
