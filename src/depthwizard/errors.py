@@ -80,3 +80,14 @@ class PipelineExecutionError(DepthWizardError):
     """
 
     code = "pipeline_execution_failure"
+
+
+class GeospatialProcessingError(DepthWizardError):
+    """Geospatial processing failed (CRS, transform, warp, alignment).
+
+    Distinct from InvalidInputError so callers needing spatial-failure
+    handling (e.g. future DEM alignment) can distinguish it. Missing
+    CRS for CRS-requiring operations stays MissingCRSError.
+    """
+
+    code = "geospatial_processing_failure"
