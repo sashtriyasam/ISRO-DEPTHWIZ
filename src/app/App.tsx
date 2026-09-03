@@ -6,6 +6,7 @@ import { StatusBar } from "../components/StatusBar/StatusBar";
 import { CameraControls } from "../components/CameraControls/CameraControls";
 import { LayerControls } from "../components/LayerControls/LayerControls";
 import { HeightExaggeration } from "../components/HeightExaggeration/HeightExaggeration";
+import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ArtifactLoader, FixtureSource } from "../artifact";
 import { createLayerState, setActiveLayer } from "../layers";
@@ -15,6 +16,7 @@ import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
 import type { LayerId, LayerState } from "../layers/types";
 import type { ExaggerationLevel } from "../display/types";
+import type { InspectionResult, InspectionState } from "../inspection/types";
 
 export function App() {
   const [artifact, setArtifact] = useState<SceneArtifact | null>(null);
@@ -22,6 +24,7 @@ export function App() {
   const [cameraMode, setCameraMode] = useState<CameraMode | null>(null);
   const [layerState, setLayerState] = useState<LayerState | null>(null);
   const [exaggeration, setExaggeration] = useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
+  const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "empty" });
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
 
@@ -78,10 +81,25 @@ export function App() {
 
   const handleLayerSelect = useCallback((layerId: LayerId) => {
     setLayerState((prev) => prev ? setActiveLayer(prev, layerId) : prev);
+    viewerRef.current?.clearSelection();
+    setInspectionState({ status: "empty" });
   }, []);
 
   const handleExaggerationChange = useCallback((level: ExaggerationLevel) => {
     setExaggeration(level);
+  }, []);
+
+  const handlePointSelected = useCallback((result: InspectionResult | null) => {
+    if (!result) {
+      setInspectionState({ status: "empty" });
+    } else {
+      setInspectionState({ status: "selected", result });
+    }
+  }, []);
+
+  const handleClearInspection = useCallback(() => {
+    viewerRef.current?.clearSelection();
+    setInspectionState({ status: "empty" });
   }, []);
 
   return (
@@ -96,6 +114,7 @@ export function App() {
               layerId={activeLayerId}
               verticalScale={exaggeration}
               onCameraReady={handleCameraReady}
+              onPointSelected={handlePointSelected}
             />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}>
@@ -120,6 +139,10 @@ export function App() {
                 onLayerSelect={handleLayerSelect}
               />
             )}
+            <InspectorPanel
+              state={inspectionState}
+              onClear={handleClearInspection}
+            />
             <SceneInfo
               artifact={artifact}
               state={artifactState}

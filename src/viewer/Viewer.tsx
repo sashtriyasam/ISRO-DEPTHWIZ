@@ -1,22 +1,26 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
 import * as THREE from "three";
 import type { SceneArtifact } from "../types/scene";
 import type { LayerId } from "../layers/types";
 import type { ExaggerationLevel } from "../display/types";
+import type { InspectionResult } from "../inspection/types";
 import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
 import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
+import { resolveInspection } from "../inspection/resolver";
 
 interface ViewerProps {
   scene: SceneArtifact;
   layerId: LayerId;
   verticalScale: ExaggerationLevel;
   onCameraReady?: (manager: CameraManager) => void;
+  onPointSelected?: (result: InspectionResult | null) => void;
 }
 
 export interface ViewerHandle {
   getCameraManager: () => CameraManager | null;
   loadArtifact: (artifact: SceneArtifact) => void;
+  clearSelection: () => void;
 }
 
 interface MeshGroup {
@@ -26,7 +30,7 @@ interface MeshGroup {
   material: THREE.Material;
 }
 
-export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, onCameraReady }, ref) {
+export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, onCameraReady, onPointSelected }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer | null;
@@ -35,8 +39,12 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     cameraManager: CameraManager | null;
     currentLayerId: LayerId | null;
     currentMeshGroup: MeshGroup | null;
+    selectionMarker: THREE.Mesh | null;
+    selectionRing: THREE.Mesh | null;
+    currentArtifact: SceneArtifact | null;
     animationId: number;
     disposed: boolean;
+    onPointSelectedRef: ((result: InspectionResult | null) => void) | null;
   }>({
     renderer: null,
     camera: null,
@@ -44,9 +52,88 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     cameraManager: null,
     currentLayerId: null,
     currentMeshGroup: null,
+    selectionMarker: null,
+    selectionRing: null,
+    currentArtifact: null,
     animationId: 0,
     disposed: false,
+    onPointSelectedRef: null,
   });
+
+  const handlePointerDown = useCallback((event: PointerEvent) => {
+    const state = stateRef.current;
+    if (state.disposed || !state.camera || !state.threeScene || !state.currentMeshGroup || !state.currentArtifact) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(x, y), state.camera);
+
+    const intersects = raycaster.intersectObject(state.currentMeshGroup.mesh, false);
+    if (intersects.length === 0) {
+      if (state.selectionMarker && state.threeScene) {
+        state.threeScene.remove(state.selectionMarker);
+        state.selectionMarker = null;
+      }
+      if (state.selectionRing && state.threeScene) {
+        state.threeScene.remove(state.selectionRing);
+        state.selectionRing = null;
+      }
+      state.onPointSelectedRef?.(null);
+      return;
+    }
+
+    const hit = intersects[0];
+    const uv = (hit as THREE.Intersection & { uv?: THREE.Vector2 }).uv;
+    const point = hit.point;
+
+    const result = resolveInspection(
+      uv ? { u: uv.x, v: uv.y } : null,
+      { x: point.x, y: point.y / verticalScale, z: point.z },
+      state.currentArtifact,
+      state.currentLayerId ?? "dsm"
+    );
+
+    if (!result) return;
+
+    if (!state.selectionMarker) {
+      const markerGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+      const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+      state.selectionMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+      state.threeScene.add(state.selectionMarker);
+    }
+
+    if (!state.selectionRing) {
+      const ringGeometry = new THREE.RingGeometry(0.08, 0.12, 32);
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6666,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.6,
+      });
+      state.selectionRing = new THREE.Mesh(ringGeometry, ringMaterial);
+      state.selectionRing.rotation.x = -Math.PI / 2;
+      state.threeScene.add(state.selectionRing);
+    }
+
+    state.selectionMarker.position.set(
+      result.position.x,
+      result.position.y * verticalScale,
+      result.position.z
+    );
+    state.selectionRing.position.set(
+      result.position.x,
+      result.position.y * verticalScale + 0.01,
+      result.position.z
+    );
+
+    state.onPointSelectedRef?.(result);
+  }, [verticalScale]);
 
   useImperativeHandle(ref, () => ({
     getCameraManager: () => stateRef.current.cameraManager,
@@ -64,6 +151,17 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.currentLayerId = null;
       }
 
+      if (state.selectionMarker) {
+        state.threeScene.remove(state.selectionMarker);
+        state.selectionMarker = null;
+      }
+      if (state.selectionRing) {
+        state.threeScene.remove(state.selectionRing);
+        state.selectionRing = null;
+      }
+
+      state.currentArtifact = artifact;
+
       const group = createLayerMesh(artifact, state.currentLayerId ?? "dsm");
       if (group) {
         group.mesh.scale.y = verticalScale;
@@ -80,7 +178,23 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.cameraManager.frameBounds(bounds);
       }
     },
+    clearSelection: () => {
+      const state = stateRef.current;
+      if (state.selectionMarker && state.threeScene) {
+        state.threeScene.remove(state.selectionMarker);
+        state.selectionMarker = null;
+      }
+      if (state.selectionRing && state.threeScene) {
+        state.threeScene.remove(state.selectionRing);
+        state.selectionRing = null;
+      }
+      state.onPointSelectedRef?.(null);
+    },
   }));
+
+  useEffect(() => {
+    stateRef.current.onPointSelectedRef = onPointSelected ?? null;
+  }, [onPointSelected]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -118,6 +232,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x362a28, 0.3);
     threeScene.add(hemisphereLight);
 
+    state.currentArtifact = scene;
+
     const group = createLayerMesh(scene, layerId);
     if (group) {
       group.mesh.scale.y = verticalScale;
@@ -148,6 +264,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
     onCameraReady?.(cameraManager);
 
+    container.addEventListener("pointerdown", handlePointerDown);
+
     function onResize() {
       if (state.disposed || !container) return;
       const w = container.clientWidth;
@@ -170,8 +288,18 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.disposed = true;
       cancelAnimationFrame(state.animationId);
       window.removeEventListener("resize", onResize);
+      container.removeEventListener("pointerdown", handlePointerDown);
 
       cameraManager.dispose();
+
+      if (state.selectionMarker) {
+        (state.selectionMarker.material as THREE.Material).dispose();
+        state.selectionMarker.geometry.dispose();
+      }
+      if (state.selectionRing) {
+        (state.selectionRing.material as THREE.Material).dispose();
+        state.selectionRing.geometry.dispose();
+      }
 
       if (state.currentMeshGroup) {
         disposeLayerMesh(state.currentMeshGroup);
@@ -188,8 +316,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.camera = null;
       state.threeScene = null;
       state.cameraManager = null;
+      state.selectionMarker = null;
+      state.selectionRing = null;
     };
-  }, [scene, layerId, verticalScale, onCameraReady]);
+  }, [scene, layerId, verticalScale, onCameraReady, handlePointerDown]);
 
   return (
     <div
