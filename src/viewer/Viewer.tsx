@@ -1,28 +1,39 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import * as THREE from "three";
 import type { SceneArtifact } from "../types/scene";
+import { CameraManager } from "../camera/CameraManager";
+import { computeDisplayBounds } from "../camera/sceneBounds";
 
 interface ViewerProps {
   scene: SceneArtifact;
+  onCameraReady?: (manager: CameraManager) => void;
 }
 
-export function Viewer({ scene }: ViewerProps) {
+export interface ViewerHandle {
+  getCameraManager: () => CameraManager | null;
+}
+
+export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, onCameraReady }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer | null;
     camera: THREE.PerspectiveCamera | null;
     threeScene: THREE.Scene | null;
-    mesh: THREE.Mesh | null;
+    cameraManager: CameraManager | null;
     animationId: number;
     disposed: boolean;
   }>({
     renderer: null,
     camera: null,
     threeScene: null,
-    mesh: null,
+    cameraManager: null,
     animationId: 0,
     disposed: false,
   });
+
+  useImperativeHandle(ref, () => ({
+    getCameraManager: () => stateRef.current.cameraManager,
+  }));
 
   useEffect(() => {
     const container = containerRef.current;
@@ -91,7 +102,6 @@ export function Viewer({ scene }: ViewerProps) {
 
     const mesh = new THREE.Mesh(geometry, material);
     threeScene.add(mesh);
-    state.mesh = mesh;
 
     const wireframe = new THREE.LineSegments(
       new THREE.WireframeGeometry(geometry),
@@ -99,26 +109,36 @@ export function Viewer({ scene }: ViewerProps) {
     );
     threeScene.add(wireframe);
 
+    const bounds = computeDisplayBounds([mesh]);
+    const cameraManager = new CameraManager(camera, renderer.domElement);
+    cameraManager.setInitial(
+      new THREE.Vector3(6, 5, 6),
+      bounds.center.clone()
+    );
+    cameraManager.activate("orbit", bounds.center, {
+      center: bounds.center,
+      size: bounds.size,
+      sphere: bounds.sphere,
+      box: bounds.box,
+    });
+    state.cameraManager = cameraManager;
+
+    onCameraReady?.(cameraManager);
+
     function onResize() {
       if (state.disposed || !container) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      cameraManager.resize(w, h);
       renderer.setSize(w, h);
     }
 
     window.addEventListener("resize", onResize);
 
-    let time = 0;
     function animate() {
       if (state.disposed) return;
       state.animationId = requestAnimationFrame(animate);
-      time += 0.002;
-      camera.position.x = 6 * Math.cos(time);
-      camera.position.z = 6 * Math.sin(time);
-      camera.position.y = 5;
-      camera.lookAt(0, 0, 0);
+      cameraManager.update();
       renderer.render(threeScene, camera);
     }
     state.animationId = requestAnimationFrame(animate);
@@ -127,6 +147,8 @@ export function Viewer({ scene }: ViewerProps) {
       state.disposed = true;
       cancelAnimationFrame(state.animationId);
       window.removeEventListener("resize", onResize);
+
+      cameraManager.dispose();
 
       geometry.dispose();
       material.dispose();
@@ -141,9 +163,9 @@ export function Viewer({ scene }: ViewerProps) {
       state.renderer = null;
       state.camera = null;
       state.threeScene = null;
-      state.mesh = null;
+      state.cameraManager = null;
     };
-  }, [scene]);
+  }, [scene, onCameraReady]);
 
   return (
     <div
@@ -151,4 +173,4 @@ export function Viewer({ scene }: ViewerProps) {
       style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
     />
   );
-}
+});
