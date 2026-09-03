@@ -4,23 +4,29 @@ import type { SceneArtifact } from "../types/scene";
 import type { LayerId } from "../layers/types";
 import type { ExaggerationLevel } from "../display/types";
 import type { InspectionResult } from "../inspection/types";
+import type { MeasurementPoint } from "../measurement/types";
 import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
 import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
 import { resolveInspection } from "../inspection/resolver";
 
+type InteractionMode = "inspect" | "measure";
+
 interface ViewerProps {
   scene: SceneArtifact;
   layerId: LayerId;
   verticalScale: ExaggerationLevel;
+  interactionMode: InteractionMode;
   onCameraReady?: (manager: CameraManager) => void;
   onPointSelected?: (result: InspectionResult | null) => void;
+  onMeasurementPointSelected?: (point: MeasurementPoint | null) => void;
 }
 
 export interface ViewerHandle {
   getCameraManager: () => CameraManager | null;
   loadArtifact: (artifact: SceneArtifact) => void;
   clearSelection: () => void;
+  clearMeasurementGraphics: () => void;
 }
 
 interface MeshGroup {
@@ -30,7 +36,7 @@ interface MeshGroup {
   material: THREE.Material;
 }
 
-export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, onCameraReady, onPointSelected }, ref) {
+export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, interactionMode, onCameraReady, onPointSelected, onMeasurementPointSelected }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer | null;
@@ -41,10 +47,16 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     currentMeshGroup: MeshGroup | null;
     selectionMarker: THREE.Mesh | null;
     selectionRing: THREE.Mesh | null;
+    measurementMarkerA: THREE.Mesh | null;
+    measurementMarkerB: THREE.Mesh | null;
+    measurementLine: THREE.Line | null;
     currentArtifact: SceneArtifact | null;
     animationId: number;
     disposed: boolean;
     onPointSelectedRef: ((result: InspectionResult | null) => void) | null;
+    onMeasurementPointSelectedRef: ((point: MeasurementPoint | null) => void) | null;
+    interactionModeRef: InteractionMode;
+    verticalScaleRef: number;
   }>({
     renderer: null,
     camera: null,
@@ -54,10 +66,16 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     currentMeshGroup: null,
     selectionMarker: null,
     selectionRing: null,
+    measurementMarkerA: null,
+    measurementMarkerB: null,
+    measurementLine: null,
     currentArtifact: null,
     animationId: 0,
     disposed: false,
     onPointSelectedRef: null,
+    onMeasurementPointSelectedRef: null,
+    interactionModeRef: "inspect",
+    verticalScaleRef: 1,
   });
 
   const handlePointerDown = useCallback((event: PointerEvent) => {
@@ -76,64 +94,81 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
     const intersects = raycaster.intersectObject(state.currentMeshGroup.mesh, false);
     if (intersects.length === 0) {
-      if (state.selectionMarker && state.threeScene) {
-        state.threeScene.remove(state.selectionMarker);
-        state.selectionMarker = null;
+      if (state.interactionModeRef === "inspect") {
+        if (state.selectionMarker && state.threeScene) {
+          state.threeScene.remove(state.selectionMarker);
+          state.selectionMarker = null;
+        }
+        if (state.selectionRing && state.threeScene) {
+          state.threeScene.remove(state.selectionRing);
+          state.selectionRing = null;
+        }
+        state.onPointSelectedRef?.(null);
+      } else {
+        state.onMeasurementPointSelectedRef?.(null);
       }
-      if (state.selectionRing && state.threeScene) {
-        state.threeScene.remove(state.selectionRing);
-        state.selectionRing = null;
-      }
-      state.onPointSelectedRef?.(null);
       return;
     }
 
     const hit = intersects[0];
     const uv = (hit as THREE.Intersection & { uv?: THREE.Vector2 }).uv;
     const point = hit.point;
+    const vscale = state.verticalScaleRef;
 
-    const result = resolveInspection(
+    const inspectionResult = resolveInspection(
       uv ? { u: uv.x, v: uv.y } : null,
-      { x: point.x, y: point.y / verticalScale, z: point.z },
+      { x: point.x, y: point.y / vscale, z: point.z },
       state.currentArtifact,
       state.currentLayerId ?? "dsm"
     );
 
-    if (!result) return;
+    if (!inspectionResult) return;
 
-    if (!state.selectionMarker) {
-      const markerGeometry = new THREE.SphereGeometry(0.05, 16, 16);
-      const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
-      state.selectionMarker = new THREE.Mesh(markerGeometry, markerMaterial);
-      state.threeScene.add(state.selectionMarker);
+    if (state.interactionModeRef === "inspect") {
+      if (!state.selectionMarker) {
+        const markerGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+        const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+        state.selectionMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+        state.threeScene.add(state.selectionMarker);
+      }
+
+      if (!state.selectionRing) {
+        const ringGeometry = new THREE.RingGeometry(0.08, 0.12, 32);
+        const ringMaterial = new THREE.MeshBasicMaterial({
+          color: 0xff6666,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.6,
+        });
+        state.selectionRing = new THREE.Mesh(ringGeometry, ringMaterial);
+        state.selectionRing.rotation.x = -Math.PI / 2;
+        state.threeScene.add(state.selectionRing);
+      }
+
+      state.selectionMarker.position.set(
+        inspectionResult.position.x,
+        inspectionResult.position.y * vscale,
+        inspectionResult.position.z
+      );
+      state.selectionRing.position.set(
+        inspectionResult.position.x,
+        inspectionResult.position.y * vscale + 0.01,
+        inspectionResult.position.z
+      );
+
+      state.onPointSelectedRef?.(inspectionResult);
+    } else {
+      const measurementPoint: MeasurementPoint = {
+        displayPosition: inspectionResult.position,
+        scientific: inspectionResult.scientific,
+        uv: inspectionResult.uv,
+        gridIndex: inspectionResult.gridIndex,
+        layerId: inspectionResult.layerId,
+        artifactId: inspectionResult.artifactId,
+      };
+      state.onMeasurementPointSelectedRef?.(measurementPoint);
     }
-
-    if (!state.selectionRing) {
-      const ringGeometry = new THREE.RingGeometry(0.08, 0.12, 32);
-      const ringMaterial = new THREE.MeshBasicMaterial({
-        color: 0xff6666,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.6,
-      });
-      state.selectionRing = new THREE.Mesh(ringGeometry, ringMaterial);
-      state.selectionRing.rotation.x = -Math.PI / 2;
-      state.threeScene.add(state.selectionRing);
-    }
-
-    state.selectionMarker.position.set(
-      result.position.x,
-      result.position.y * verticalScale,
-      result.position.z
-    );
-    state.selectionRing.position.set(
-      result.position.x,
-      result.position.y * verticalScale + 0.01,
-      result.position.z
-    );
-
-    state.onPointSelectedRef?.(result);
-  }, [verticalScale]);
+  }, []);
 
   useImperativeHandle(ref, () => ({
     getCameraManager: () => stateRef.current.cameraManager,
@@ -160,13 +195,15 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.selectionRing = null;
       }
 
+      clearMeasurementGraphics(state);
+
       state.currentArtifact = artifact;
 
       const group = createLayerMesh(artifact, state.currentLayerId ?? "dsm");
       if (group) {
-        group.mesh.scale.y = verticalScale;
+        group.mesh.scale.y = state.verticalScaleRef;
         if (group.wireframe) {
-          group.wireframe.scale.y = verticalScale;
+          group.wireframe.scale.y = state.verticalScaleRef;
         }
         state.threeScene.add(group.mesh);
         if (group.wireframe) {
@@ -174,7 +211,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         }
         state.currentMeshGroup = group;
 
-        const bounds = computeScaledBounds(group.mesh, verticalScale);
+        const bounds = computeScaledBounds(group.mesh, state.verticalScaleRef);
         state.cameraManager.frameBounds(bounds);
       }
     },
@@ -190,11 +227,26 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       }
       state.onPointSelectedRef?.(null);
     },
+    clearMeasurementGraphics: () => {
+      clearMeasurementGraphics(stateRef.current);
+    },
   }));
 
   useEffect(() => {
     stateRef.current.onPointSelectedRef = onPointSelected ?? null;
   }, [onPointSelected]);
+
+  useEffect(() => {
+    stateRef.current.onMeasurementPointSelectedRef = onMeasurementPointSelected ?? null;
+  }, [onMeasurementPointSelected]);
+
+  useEffect(() => {
+    stateRef.current.interactionModeRef = interactionMode;
+  }, [interactionMode]);
+
+  useEffect(() => {
+    stateRef.current.verticalScaleRef = verticalScale;
+  }, [verticalScale]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -301,6 +353,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.selectionRing.geometry.dispose();
       }
 
+      clearMeasurementGraphics(state);
+
       if (state.currentMeshGroup) {
         disposeLayerMesh(state.currentMeshGroup);
         state.currentMeshGroup = null;
@@ -328,6 +382,89 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     />
   );
 });
+
+function clearMeasurementGraphics(state: {
+  threeScene: THREE.Scene | null;
+  measurementMarkerA: THREE.Mesh | null;
+  measurementMarkerB: THREE.Mesh | null;
+  measurementLine: THREE.Line | null;
+}) {
+  if (state.measurementMarkerA && state.threeScene) {
+    state.threeScene.remove(state.measurementMarkerA);
+    (state.measurementMarkerA.material as THREE.Material).dispose();
+    state.measurementMarkerA.geometry.dispose();
+    state.measurementMarkerA = null;
+  }
+  if (state.measurementMarkerB && state.threeScene) {
+    state.threeScene.remove(state.measurementMarkerB);
+    (state.measurementMarkerB.material as THREE.Material).dispose();
+    state.measurementMarkerB.geometry.dispose();
+    state.measurementMarkerB = null;
+  }
+  if (state.measurementLine && state.threeScene) {
+    state.threeScene.remove(state.measurementLine);
+    (state.measurementLine.material as THREE.Material).dispose();
+    state.measurementLine.geometry.dispose();
+    state.measurementLine = null;
+  }
+}
+
+export function updateMeasurementGraphics(
+  state: {
+    threeScene: THREE.Scene | null;
+    measurementMarkerA: THREE.Mesh | null;
+    measurementMarkerB: THREE.Mesh | null;
+    measurementLine: THREE.Line | null;
+    verticalScaleRef: number;
+  },
+  pointA: MeasurementPoint | null,
+  pointB: MeasurementPoint | null
+) {
+  clearMeasurementGraphics(state);
+
+  if (!state.threeScene) return;
+
+  if (pointA) {
+    const markerGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x44aaff });
+    state.measurementMarkerA = new THREE.Mesh(markerGeometry, markerMaterial);
+    state.measurementMarkerA.position.set(
+      pointA.displayPosition.x,
+      pointA.displayPosition.y * state.verticalScaleRef,
+      pointA.displayPosition.z
+    );
+    state.threeScene.add(state.measurementMarkerA);
+  }
+
+  if (pointA && pointB) {
+    const markerGeometryB = new THREE.SphereGeometry(0.06, 16, 16);
+    const markerMaterialB = new THREE.MeshBasicMaterial({ color: 0x44ff88 });
+    state.measurementMarkerB = new THREE.Mesh(markerGeometryB, markerMaterialB);
+    state.measurementMarkerB.position.set(
+      pointB.displayPosition.x,
+      pointB.displayPosition.y * state.verticalScaleRef,
+      pointB.displayPosition.z
+    );
+    state.threeScene.add(state.measurementMarkerB);
+
+    const points = [
+      new THREE.Vector3(
+        pointA.displayPosition.x,
+        pointA.displayPosition.y * state.verticalScaleRef,
+        pointA.displayPosition.z
+      ),
+      new THREE.Vector3(
+        pointB.displayPosition.x,
+        pointB.displayPosition.y * state.verticalScaleRef,
+        pointB.displayPosition.z
+      ),
+    ];
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffaa44, linewidth: 2 });
+    state.measurementLine = new THREE.Line(lineGeometry, lineMaterial);
+    state.threeScene.add(state.measurementLine);
+  }
+}
 
 function computeScaledBounds(mesh: THREE.Mesh, verticalScale: number) {
   mesh.geometry.computeBoundingBox();

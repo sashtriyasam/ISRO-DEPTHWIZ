@@ -7,16 +7,20 @@ import { CameraControls } from "../components/CameraControls/CameraControls";
 import { LayerControls } from "../components/LayerControls/LayerControls";
 import { HeightExaggeration } from "../components/HeightExaggeration/HeightExaggeration";
 import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
+import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ArtifactLoader, FixtureSource } from "../artifact";
 import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
+import { calculateMeasurement } from "../measurement/calculator";
+import { updateMeasurementGraphics } from "../viewer/Viewer";
 import type { ArtifactState } from "../artifact/types";
 import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
 import type { LayerId, LayerState } from "../layers/types";
 import type { ExaggerationLevel } from "../display/types";
 import type { InspectionResult, InspectionState } from "../inspection/types";
+import type { MeasurementMode, MeasurementPoint, MeasurementState } from "../measurement/types";
 
 export function App() {
   const [artifact, setArtifact] = useState<SceneArtifact | null>(null);
@@ -25,6 +29,8 @@ export function App() {
   const [layerState, setLayerState] = useState<LayerState | null>(null);
   const [exaggeration, setExaggeration] = useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
   const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "empty" });
+  const [measurementMode, setMeasurementMode] = useState<MeasurementMode>("distance");
+  const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
 
@@ -47,6 +53,11 @@ export function App() {
   const activeLayerId = useMemo(() => {
     return layerState?.activeLayerId ?? "dsm";
   }, [layerState]);
+
+  const interactionMode = useMemo(() => {
+    if (measurementState.status === "empty") return "inspect";
+    return "measure";
+  }, [measurementState.status]);
 
   const handleCameraReady = useCallback(() => {
     setCameraMode("orbit");
@@ -83,6 +94,8 @@ export function App() {
     setLayerState((prev) => prev ? setActiveLayer(prev, layerId) : prev);
     viewerRef.current?.clearSelection();
     setInspectionState({ status: "empty" });
+    setMeasurementState({ status: "empty" });
+    viewerRef.current?.clearMeasurementGraphics();
   }, []);
 
   const handleExaggerationChange = useCallback((level: ExaggerationLevel) => {
@@ -102,6 +115,66 @@ export function App() {
     setInspectionState({ status: "empty" });
   }, []);
 
+  const handleStartMeasurement = useCallback(() => {
+    viewerRef.current?.clearSelection();
+    setInspectionState({ status: "empty" });
+    setMeasurementState({ status: "selecting-first" });
+  }, []);
+
+  const handleMeasurementModeChange = useCallback((mode: MeasurementMode) => {
+    setMeasurementMode(mode);
+    if (measurementState.status !== "empty") {
+      setMeasurementState({ status: "empty" });
+      viewerRef.current?.clearMeasurementGraphics();
+    }
+  }, [measurementState.status]);
+
+  const handleMeasurementPointSelected = useCallback((point: MeasurementPoint | null) => {
+    if (!point) {
+      setMeasurementState({ status: "empty" });
+      viewerRef.current?.clearMeasurementGraphics();
+      return;
+    }
+
+    setMeasurementState((prev) => {
+      if (prev.status === "selecting-first") {
+        return { status: "selecting-second", pointA: point };
+      }
+      if (prev.status === "selecting-second") {
+        const result = calculateMeasurement(measurementMode, prev.pointA, point);
+        return { status: "completed", result };
+      }
+      return prev;
+    });
+  }, [measurementMode]);
+
+  useEffect(() => {
+    if (measurementState.status === "selecting-first") {
+      updateMeasurementGraphics(
+        viewerRef.current as unknown as { threeScene: null; measurementMarkerA: null; measurementMarkerB: null; measurementLine: null; verticalScaleRef: number },
+        null,
+        null
+      );
+    } else if (measurementState.status === "selecting-second") {
+      updateMeasurementGraphics(
+        viewerRef.current as unknown as { threeScene: null; measurementMarkerA: null; measurementMarkerB: null; measurementLine: null; verticalScaleRef: number },
+        measurementState.pointA,
+        null
+      );
+    } else if (measurementState.status === "completed") {
+      updateMeasurementGraphics(
+        viewerRef.current as unknown as { threeScene: null; measurementMarkerA: null; measurementMarkerB: null; measurementLine: null; verticalScaleRef: number },
+        measurementState.result.pointA,
+        measurementState.result.pointB
+      );
+    }
+  }, [measurementState]);
+
+  const handleClearMeasurement = useCallback(() => {
+    setMeasurementState({ status: "empty" });
+    viewerRef.current?.clearMeasurementGraphics();
+  }, []);
+
   return (
     <StrictMode>
       <AppShell
@@ -113,8 +186,10 @@ export function App() {
               scene={artifact}
               layerId={activeLayerId}
               verticalScale={exaggeration}
+              interactionMode={interactionMode}
               onCameraReady={handleCameraReady}
               onPointSelected={handlePointSelected}
+              onMeasurementPointSelected={handleMeasurementPointSelected}
             />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}>
@@ -139,6 +214,13 @@ export function App() {
                 onLayerSelect={handleLayerSelect}
               />
             )}
+            <MeasurementPanel
+              state={measurementState}
+              mode={measurementMode}
+              onModeChange={handleMeasurementModeChange}
+              onStartMeasurement={handleStartMeasurement}
+              onClear={handleClearMeasurement}
+            />
             <InspectorPanel
               state={inspectionState}
               onClear={handleClearInspection}
