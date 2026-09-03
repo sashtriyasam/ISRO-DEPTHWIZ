@@ -2,6 +2,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import * as THREE from "three";
 import type { SceneArtifact } from "../types/scene";
 import type { LayerId } from "../layers/types";
+import type { ExaggerationLevel } from "../display/types";
 import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
 import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
@@ -9,6 +10,7 @@ import { computeDisplayBounds } from "../camera/sceneBounds";
 interface ViewerProps {
   scene: SceneArtifact;
   layerId: LayerId;
+  verticalScale: ExaggerationLevel;
   onCameraReady?: (manager: CameraManager) => void;
 }
 
@@ -24,7 +26,7 @@ interface MeshGroup {
   material: THREE.Material;
 }
 
-export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, onCameraReady }, ref) {
+export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, verticalScale, onCameraReady }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer | null;
@@ -64,13 +66,17 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
       const group = createLayerMesh(artifact, state.currentLayerId ?? "dsm");
       if (group) {
+        group.mesh.scale.y = verticalScale;
+        if (group.wireframe) {
+          group.wireframe.scale.y = verticalScale;
+        }
         state.threeScene.add(group.mesh);
         if (group.wireframe) {
           state.threeScene.add(group.wireframe);
         }
         state.currentMeshGroup = group;
 
-        const bounds = computeDisplayBounds([group.mesh]);
+        const bounds = computeScaledBounds(group.mesh, verticalScale);
         state.cameraManager.frameBounds(bounds);
       }
     },
@@ -114,6 +120,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
     const group = createLayerMesh(scene, layerId);
     if (group) {
+      group.mesh.scale.y = verticalScale;
+      if (group.wireframe) {
+        group.wireframe.scale.y = verticalScale;
+      }
       threeScene.add(group.mesh);
       if (group.wireframe) {
         threeScene.add(group.wireframe);
@@ -122,7 +132,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.currentLayerId = layerId;
     }
 
-    const bounds = group ? computeDisplayBounds([group.mesh]) : computeDisplayBounds([]);
+    const bounds = group ? computeScaledBounds(group.mesh, verticalScale) : computeDisplayBounds([]);
     const cameraManager = new CameraManager(camera, renderer.domElement);
     cameraManager.setInitial(
       new THREE.Vector3(6, 5, 6),
@@ -179,7 +189,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.threeScene = null;
       state.cameraManager = null;
     };
-  }, [scene, layerId, onCameraReady]);
+  }, [scene, layerId, verticalScale, onCameraReady]);
 
   return (
     <div
@@ -188,3 +198,25 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     />
   );
 });
+
+function computeScaledBounds(mesh: THREE.Mesh, verticalScale: number) {
+  mesh.geometry.computeBoundingBox();
+  const bbox = mesh.geometry.boundingBox;
+  if (!bbox) return computeDisplayBounds([mesh]);
+
+  const scaledBox = new THREE.Box3(
+    new THREE.Vector3(bbox.min.x, bbox.min.y * verticalScale, bbox.min.z),
+    new THREE.Vector3(bbox.max.x, bbox.max.y * verticalScale, bbox.max.z)
+  );
+
+  const center = new THREE.Vector3();
+  scaledBox.getCenter(center);
+
+  const size = new THREE.Vector3();
+  scaledBox.getSize(size);
+
+  const sphere = new THREE.Sphere();
+  scaledBox.getBoundingSphere(sphere);
+
+  return { center, size, sphere, box: scaledBox };
+}

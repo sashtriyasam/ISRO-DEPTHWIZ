@@ -5,19 +5,23 @@ import { Viewer, type ViewerHandle } from "../viewer/Viewer";
 import { StatusBar } from "../components/StatusBar/StatusBar";
 import { CameraControls } from "../components/CameraControls/CameraControls";
 import { LayerControls } from "../components/LayerControls/LayerControls";
+import { HeightExaggeration } from "../components/HeightExaggeration/HeightExaggeration";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ArtifactLoader, FixtureSource } from "../artifact";
 import { createLayerState, setActiveLayer } from "../layers";
+import { DEFAULT_EXAGGERATION } from "../display";
 import type { ArtifactState } from "../artifact/types";
 import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
 import type { LayerId, LayerState } from "../layers/types";
+import type { ExaggerationLevel } from "../display/types";
 
 export function App() {
   const [artifact, setArtifact] = useState<SceneArtifact | null>(null);
   const [artifactState, setArtifactState] = useState<ArtifactState>("idle");
   const [cameraMode, setCameraMode] = useState<CameraMode | null>(null);
   const [layerState, setLayerState] = useState<LayerState | null>(null);
+  const [exaggeration, setExaggeration] = useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
 
@@ -76,6 +80,10 @@ export function App() {
     setLayerState((prev) => prev ? setActiveLayer(prev, layerId) : prev);
   }, []);
 
+  const handleExaggerationChange = useCallback((level: ExaggerationLevel) => {
+    setExaggeration(level);
+  }, []);
+
   return (
     <StrictMode>
       <AppShell
@@ -86,6 +94,7 @@ export function App() {
               ref={viewerRef}
               scene={artifact}
               layerId={activeLayerId}
+              verticalScale={exaggeration}
               onCameraReady={handleCameraReady}
             />
           ) : (
@@ -100,6 +109,10 @@ export function App() {
               currentMode={cameraMode}
               onFrameScene={handleFrameScene}
               onReset={handleReset}
+            />
+            <HeightExaggeration
+              current={exaggeration}
+              onChange={handleExaggerationChange}
             />
             {layerState && (
               <LayerControls
