@@ -8,6 +8,7 @@ describe("height exaggeration semantic immutability", () => {
     const result = applyHeightExaggeration(source, 2);
     expect(source[1]).toBe(2);
     expect(source[4]).toBe(5);
+    expect(result[1]).toBe(4);
   });
 
   it("creates independent output array", () => {
@@ -40,6 +41,7 @@ describe("height exaggeration semantic immutability", () => {
       },
     };
     const result = applyHeightExaggeration(artifact.elevation!.grid, 5);
+    expect(result[1]).toBeCloseTo(1.5);
     expect(artifact.metadata.backend!.depth_scale).toBe("relative");
   });
 

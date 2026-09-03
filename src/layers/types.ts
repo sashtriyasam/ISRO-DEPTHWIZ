@@ -49,3 +49,33 @@ export const LAYER_DESCRIPTIONS: Record<LayerId, string> = {
   reference: "Reference elevation overlay",
   wireframe: "Mesh wireframe overlay",
 };
+
+export function getSemanticLayerLabel(elevationSemantics: string | undefined): string {
+  switch (elevationSemantics) {
+    case "relative_depth":
+      return "Relative Depth";
+    case "relative_surface_rdsm":
+      return "Relative Surface (rDSM)";
+    case "height_agl_ndsm":
+      return "Height Above Ground (AGL)";
+    case "absolute_elevation_dsm":
+      return "DSM";
+    default:
+      return "Depth";
+  }
+}
+
+export function getSemanticLayerDescription(elevationSemantics: string | undefined): string {
+  switch (elevationSemantics) {
+    case "relative_depth":
+      return "Scale-ambiguous relative depth values (not metric elevation)";
+    case "relative_surface_rdsm":
+      return "Relative height above local terrain surface";
+    case "height_agl_ndsm":
+      return "Height above ground level (nDSM)";
+    case "absolute_elevation_dsm":
+      return "Digital Surface Model — absolute elevation in metres";
+    default:
+      return "Depth visualization";
+  }
+}

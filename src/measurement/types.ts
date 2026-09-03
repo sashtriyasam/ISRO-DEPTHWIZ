@@ -34,8 +34,8 @@ export interface MeasurementResult {
   horizontalDistance: number;
   verticalDifference: number;
   distance3D: number;
-  units: "meters";
-  source: "fixture-coordinate-system";
+  units: "meters" | "relative" | string;
+  source: "fixture-coordinate-system" | "backend";
 }
 
 export type MeasurementState =

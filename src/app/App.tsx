@@ -113,6 +113,14 @@ export function App() {
     setExaggeration(level);
   }, []);
 
+  const getArtifactUnits = useCallback(() => {
+    if (!artifact?.metadata.backend) return { units: "meters" as const, source: "fixture-coordinate-system" as const };
+    return {
+      units: artifact.metadata.backend.depth_scale === "metric" ? "meters" as const : "relative" as const,
+      source: "backend" as const,
+    };
+  }, [artifact]);
+
   const handlePointSelected = useCallback((result: InspectionResult | null) => {
     if (!result) {
       setInspectionState({ status: "empty" });
@@ -154,12 +162,12 @@ export function App() {
         return { status: "selecting-second", pointA: point };
       }
       if (prev.status === "selecting-second") {
-        const result = calculateMeasurement(measurementMode, prev.pointA, point);
+        const result = calculateMeasurement(measurementMode, prev.pointA, point, getArtifactUnits());
         return { status: "completed", result };
       }
       return prev;
     });
-  }, [measurementMode]);
+  }, [measurementMode, getArtifactUnits]);
 
   useEffect(() => {
     if (measurementState.status === "selecting-first") {
@@ -213,13 +221,17 @@ export function App() {
           point,
           artifact?.elevation,
           artifact?.layers?.agl,
-          artifact?.metadata.transform
+          artifact?.metadata.transform,
+          {
+            ...getArtifactUnits(),
+            elevationSemantics: artifact?.metadata.backend?.elevation_semantics,
+          }
         );
         return { status: "completed", profile };
       }
       return prev;
     });
-  }, [artifact]);
+  }, [artifact, getArtifactUnits]);
 
   useEffect(() => {
     if (profileState.status === "selecting-first") {
@@ -308,6 +320,7 @@ export function App() {
             />
             <InspectorPanel
               state={inspectionState}
+              metadata={artifact?.metadata}
               onClear={handleClearInspection}
             />
             <SceneInfo

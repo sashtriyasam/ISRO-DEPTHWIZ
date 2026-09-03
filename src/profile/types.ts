@@ -15,8 +15,9 @@ export interface ElevationProfile {
   minElevation: number;
   maxElevation: number;
   sampleCount: number;
-  units: "meters";
-  source: "fixture-coordinate-system";
+  units: "meters" | "relative" | string;
+  source: "fixture-coordinate-system" | "backend";
+  elevationSemantics?: string;
 }
 
 export type ProfileState =

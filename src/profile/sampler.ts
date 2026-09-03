@@ -6,6 +6,9 @@ const DEFAULT_SAMPLE_COUNT = 64;
 
 export interface ProfileSamplerOptions {
   sampleCount?: number;
+  units?: "meters" | "relative" | string;
+  source?: "fixture-coordinate-system" | "backend";
+  elevationSemantics?: string;
 }
 
 function bilinearSample(grid: Float32Array, width: number, height: number, u: number, v: number): number {
@@ -114,7 +117,8 @@ export function generateProfile(
     minElevation,
     maxElevation,
     sampleCount,
-    units: "meters",
-    source: "fixture-coordinate-system",
+    units: options?.units ?? "meters",
+    source: options?.source ?? "fixture-coordinate-system",
+    elevationSemantics: options?.elevationSemantics,
   };
 }

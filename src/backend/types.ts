@@ -91,6 +91,63 @@ export interface BackendDepthResult {
   provenance?: BackendProductProvenance;
 }
 
+export type MeshCoordinateFrame = "georeferenced_local" | "local";
+
+export interface BackendDsmTransport {
+  width: number;
+  height: number;
+  dtype: string;
+  units: string;
+  semantics: ElevationSemantics;
+  values: Array<number | null>;
+  valid_mask: boolean[];
+  invalid_count: number;
+  nodata: number | null;
+  georeferencing: GeoreferencingLevel;
+  spatial: BackendSpatialContext;
+}
+
+export interface BackendTerrainMeshTransport {
+  vertices: number[];
+  indices: number[];
+  normals: number[];
+  uvs: number[];
+  vertex_source_indices: number[];
+  vertex_count: number;
+  triangle_count: number;
+  valid_source_pixels: number;
+  invalid_source_pixels: number;
+  skipped_cells: number;
+  coverage: number;
+  frame: MeshCoordinateFrame;
+  origin_x: number | null;
+  origin_y: number | null;
+  width: number;
+  height: number;
+  units: string;
+  semantics: ElevationSemantics;
+  georeferencing: GeoreferencingLevel;
+  spatial: BackendSpatialContext;
+  depth_model_name: string;
+  depth_model_version?: string | null;
+  depth_checkpoint_id?: string | null;
+  source_input_id?: string | null;
+  source_checksum?: string | null;
+  calibration_method: string;
+  calibration_reference: string;
+  calibration_scale: number;
+  calibration_offset: number;
+  calibration_valid_samples: number;
+  provenance?: BackendProductProvenance;
+}
+
+export interface BackendTerrainProduct {
+  kind: "terrain";
+  depth_result: BackendDepthResult;
+  dsm: BackendDsmTransport;
+  mesh: BackendTerrainMeshTransport;
+}
+
 export interface BackendCalibrationResult {
   method: "scale_offset";
   scale: number;

@@ -1,284 +1,240 @@
 #!/usr/bin/env python3
-"""Backend execution bridge: TypeScript → Python → DepthResult → JSON.
+"""Backend execution bridge: TypeScript → Python → backend products → JSON.
 
-This script executes the actual SyntheticDepthBackend from the depthwizard
-package and outputs the serialized DepthResult as JSON to stdout.
+This script executes the ACTUAL depthwizard backend subsystems and outputs
+serialized products as JSON to stdout.
 
 Architecture:
   TypeScript (bridge.ts)
     → spawns this Python script
-    → this script runs DepthBackend.estimate_depth()
+    → this script runs real backend code (no reimplementation)
     → outputs JSON to stdout
     → TypeScript parses, validates, adapts
 
-Usage:
+Modes:
   python scripts/backend_bridge.py <input_image_path>
+      DepthResult for a real input file.
   python scripts/backend_bridge.py --synthetic <width> <height>
+      DepthResult for a generated synthetic input (depth-only path).
+  python scripts/backend_bridge.py --terrain <width> <height>
+      Full terrain chain for a generated synthetic input:
+        synthetic input
+        → SyntheticDepthBackend.estimate_depth()
+        → deterministic dev calibration (scale_offset)
+        → create_scientific_height_product()
+        → rasterize_height_product()  (DSMGrid)
+        → build_terrain_mesh()        (TerrainMesh)
+      Outputs depth_result + dsm + mesh. All values are produced by the
+      real backend subsystems; this script only orchestrates and serializes.
 
-The --synthetic flag generates a synthetic input without requiring a real file,
-useful for end-to-end testing.
+IMPORTANT: This script requires the depthwizard package to be installed.
+It does NOT contain a duplicate implementation of any backend behavior.
+The dev calibration mirrors tests/height/support.py::exact_calibration
+(the sanctioned deterministic dev calibration); the fit itself is computed
+by the real ScaleOffsetCalibrator.
 """
 
 from __future__ import annotations
 
 import json
-import sys
 import math
-import hashlib
-import struct
+import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 # ---------------------------------------------------------------------------
-# Self-contained backend implementation
-# This mirrors the actual depthwizard backend exactly.
-# When depthwizard is installed, we prefer the real package.
+# Import the ACTUAL depthwizard backend — no fallback, no duplicate formulas
 # ---------------------------------------------------------------------------
-
-USE_REAL_BACKEND = False
 
 try:
-    from depthwizard.contracts.artifacts import DepthResult, ImageResolution
-    from depthwizard.contracts.spatial import SpatialContext, SpatialKind
-    from depthwizard.contracts.semantics import (
-        DepthScale,
-        ElevationSemantics,
-        GeoreferencingLevel,
-    )
-    from depthwizard.contracts.provenance import ProductProvenance
-    from depthwizard.ingestion.models import InputInspection, InputHandle
-    from depthwizard.ingestion.api import inspect_input as real_inspect_input
     from depthwizard.backends.synthetic import SyntheticDepthBackend
-    USE_REAL_BACKEND = True
-except ImportError:
-    pass
+    from depthwizard.calibration import (
+        CalibrationSamples,
+        ScaleOffsetCalibrator,
+    )
+    from depthwizard.contracts.semantics import ElevationSemantics
+    from depthwizard.dsm.rasterize import rasterize_height_product
+    from depthwizard.height import create_scientific_height_product
+    from depthwizard.ingestion.api import inspect_input
+    from depthwizard.mesh.build import build_terrain_mesh
+except ImportError as exc:
+    print(json.dumps({
+        "error": (
+            "depthwizard package not installed. "
+            "Install it with: pip install -e .  "
+            f"Original error: {exc}"
+        ),
+        "type": "ImportError",
+    }))
+    sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
-# Self-contained fallback (identical logic to depthwizard backend)
+# Deterministic dev calibration reference (mirrors the sanctioned backend
+# test helper tests/height/support.py::exact_calibration).
 # ---------------------------------------------------------------------------
 
-def synthetic_depth_values(width: int, height: int) -> tuple:
-    """Deterministic relative-depth pattern in [0, 1], row-major.
-    
-    v(col, row) = 0.5 * (1 + sin(2*pi*col/width) * cos(2*pi*row/height)).
-    This is the EXACT SAME formula as depthwizard.backends.synthetic.
-    """
-    two_pi = 2.0 * math.pi
-    values = []
-    for row in range(height):
-        cos_row = math.cos(two_pi * row / height)
-        for col in range(width):
-            values.append(0.5 * (1.0 + math.sin(two_pi * col / width) * cos_row))
-    return tuple(values)
-
-
-def create_synthetic_result(width: int, height: int, display_name: str = "synthetic-input") -> dict:
-    """Create a DepthResult-compatible dict using the synthetic backend formula.
-    
-    This mirrors the exact output of SyntheticDepthBackend.estimate_depth().
-    """
-    depth_values = synthetic_depth_values(width, height)
-    
-    return {
-        "model_name": "synthetic-depth",
-        "model_version": "0.1.0",
-        "checkpoint_id": None,
-        "input_resolution": {"width": width, "height": height},
-        "output_resolution": {"width": width, "height": height},
-        "depth_scale": "relative",
-        "elevation_semantics": "relative_depth",
-        "georeferencing": "non_georeferenced",
-        "depth_values": list(depth_values),
-        "confidence_values": None,
-        "valid_mask": None,
-        "preprocessing": {"synthetic_pattern": "separable-sinusoid-normalized"},
-        "units": None,
-        "spatial": {"kind": "not_applicable", "details": None},
-        "provenance": {
-            "source_input_id": display_name,
-            "input_checksum": None,
-            "model_name": "synthetic-depth",
-            "model_version": "0.1.0",
-            "checkpoint_id": None,
-            "calibration_method": None,
-            "calibration_reference": None,
-            "calibration_params": None,
-            "software_version": "0.1.0",
-            "code_commit": None,
-            "generated_at": None,
-            "units": None,
-            "semantic_meaning": "relative_depth from synthetic development backend (not scientific inference)",
-        },
-    }
+DEV_REFERENCE_ID = "synthetic-dev-ref"
+DEV_PREDICTED = (0.0, 1.0, 2.0, 3.0, 4.0)
+DEV_REFERENCE = (10.0, 12.5, 15.0, 17.5, 20.0)  # exact 2.5x + 10 mapping
+DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
 
 
 def create_synthetic_png(width: int, height: int, path: Path) -> Path:
-    """Create a deterministic synthetic PNG for testing."""
-    try:
-        from PIL import Image
-        img = Image.new("RGB", (width, height))
-        pixels = img.load()
-        for row in range(height):
-            for col in range(width):
-                v = 255 if (row + col) % 2 == 0 else 0
-                pixels[col, row] = (v, (col * 32) % 256, (row * 40) % 256)
-        img.save(path, format="PNG")
-        return path
-    except ImportError:
-        # Fallback: create minimal valid PNG without Pillow
-        return create_minimal_png(width, height, path)
+    """Create a deterministic synthetic PNG for testing using Pillow."""
+    from PIL import Image
 
-
-def create_minimal_png(width: int, height: int, path: Path) -> Path:
-    """Create a minimal valid PNG file without Pillow (raw bytes)."""
-    import zlib
-    
-    def create_png_chunk(chunk_type: bytes, data: bytes) -> bytes:
-        chunk = chunk_type + data
-        crc = zlib.crc32(chunk) & 0xFFFFFFFF
-        return struct.pack(">I", len(data)) + chunk + struct.pack(">I", crc)
-    
-    # PNG signature
-    signature = b'\x89PNG\r\n\x1a\n'
-    
-    # IHDR chunk
-    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    ihdr = create_png_chunk(b'IHDR', ihdr_data)
-    
-    # IDAT chunk (raw image data)
-    raw_data = b''
+    img = Image.new("RGB", (width, height))
+    pixels = img.load()
+    assert pixels is not None
     for row in range(height):
-        raw_data += b'\x00'  # filter byte
         for col in range(width):
             v = 255 if (row + col) % 2 == 0 else 0
-            raw_data += bytes([v, (col * 32) % 256, (row * 40) % 256])
-    
-    compressed = zlib.compress(raw_data)
-    idat = create_png_chunk(b'IDAT', compressed)
-    
-    # IEND chunk
-    iend = create_png_chunk(b'IEND', b'')
-    
-    with open(path, 'wb') as f:
-        f.write(signature + ihdr + idat + iend)
-    
+            pixels[col, row] = (v, (col * 32) % 256, (row * 40) % 256)
+    img.save(path, format="PNG")
     return path
 
 
-def sha256_file(path: Path) -> str:
-    """Compute SHA-256 hash of a file."""
-    h = hashlib.sha256()
-    with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
-            h.update(chunk)
-    return h.hexdigest()
+def _json_num(value: float) -> float | None:
+    """Map non-finite floats (NaN nodata) to null for strict JSON output."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
-def inspect_image(path: Path) -> dict:
-    """Inspect an image file and return inspection metadata."""
+def _json_list(values: Any) -> list:
+    """Flatten an array-like to a JSON-safe list (NaN → null)."""
+    import numpy as _np
+
+    flat = _np.asarray(values).ravel()
+    if flat.dtype.kind == "f":
+        return [_json_num(float(v)) for v in flat]
+    return [v.item() if hasattr(v, "item") else v for v in flat]
+
+
+def run_depth_only(width: int, height: int) -> dict:
+    """Depth-only path: synthetic input → DepthResult."""
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
     try:
-        from PIL import Image
-        with Image.open(path) as img:
-            width, height = img.size
-            mode = img.mode
-    except ImportError:
-        # Minimal PNG parsing without Pillow
-        width, height, mode = parse_png_dimensions(path)
-    
-    file_size = path.stat().st_size
-    checksum = sha256_file(path)
-    
-    return {
-        "handle": {
-            "source_path": str(path),
-            "display_name": path.name,
-            "file_size": file_size,
-            "sha256": checksum,
-        },
-        "detected_format": "png",
-        "width": width,
-        "height": height,
-        "band_count": 3 if mode == "RGB" else 1,
-        "dtype": "uint8",
-        "georeferencing": "non_georeferenced",
-        "spatial": {"kind": "not_applicable", "details": None},
-        "source_format_metadata": {},
-        "status": "valid",
-    }
-
-
-def parse_png_dimensions(path: Path) -> tuple:
-    """Parse PNG dimensions from file header."""
-    with open(path, 'rb') as f:
-        header = f.read(24)
-        if header[:8] != b'\x89PNG\r\n\x1a\n':
-            raise ValueError("Not a valid PNG file")
-        width = struct.unpack(">I", header[16:20])[0]
-        height = struct.unpack(">I", header[20:24])[0]
-    return width, height, "RGB"
-
-
-def run_backend(inspection: dict) -> dict:
-    """Run the backend and return the result."""
-    if USE_REAL_BACKEND:
-        # Use the actual depthwizard backend
-        real_inspection = InputInspection(
-            handle=InputHandle(**inspection["handle"]),
-            detected_format=inspection["detected_format"],
-            width=inspection["width"],
-            height=inspection["height"],
-            band_count=inspection.get("band_count"),
-            dtype=inspection.get("dtype"),
-            georeferencing=GeoreferencingLevel(inspection["georeferencing"]),
-            spatial=SpatialContext(**inspection["spatial"]),
-            source_format_metadata=inspection.get("source_format_metadata", {}),
-        )
-        backend = SyntheticDepthBackend()
-        result = backend.estimate_depth(real_inspection)
+        create_synthetic_png(width, height, tmp_path)
+        inspection = inspect_input(tmp_path)
+        result = SyntheticDepthBackend().estimate_depth(inspection)
         return result.model_dump()
-    else:
-        # Use self-contained fallback (identical formula)
-        return create_synthetic_result(
-            width=inspection["width"],
-            height=inspection["height"],
-            display_name=inspection["handle"]["display_name"],
-        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
-def main():
-    """Main entry point."""
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: backend_bridge.py <input_path> or --synthetic <width> <height>"}))
-        sys.exit(1)
-    
+def run_terrain(width: int, height: int) -> dict:
+    """Full terrain chain using only real backend subsystems."""
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
     try:
-        if sys.argv[1] == "--synthetic":
-            # Generate synthetic input
+        create_synthetic_png(width, height, tmp_path)
+        inspection = inspect_input(tmp_path)
+        depth = SyntheticDepthBackend().estimate_depth(inspection)
+
+        samples = CalibrationSamples(
+            predicted_values=DEV_PREDICTED,
+            reference_values=DEV_REFERENCE,
+            reference_id=DEV_REFERENCE_ID,
+            reference_units="meters",
+            target_semantics=DEV_TARGET_SEMANTICS,
+            source_checksum=inspection.handle.sha256,
+        )
+        calibration = ScaleOffsetCalibrator().calibrate(samples)
+
+        product = create_scientific_height_product(
+            depth, calibration, DEV_TARGET_SEMANTICS
+        )
+        grid = rasterize_height_product(product)
+        mesh = build_terrain_mesh(grid)
+
+        spatial_dump = mesh.spatial.model_dump()
+        provenance_dump = mesh.provenance.model_dump(mode="json")
+
+        return {
+            "kind": "terrain",
+            "depth_result": depth.model_dump(),
+            "dsm": {
+                "width": grid.width,
+                "height": grid.height,
+                "dtype": grid.dtype,
+                "units": grid.units,
+                "semantics": grid.semantics.value,
+                "values": _json_list(grid.array),
+                "valid_mask": [bool(v) for v in grid.valid_mask.ravel()],
+                "invalid_count": grid.invalid_count,
+                "nodata": None,
+                "georeferencing": grid.georeferencing.value,
+                "spatial": spatial_dump,
+            },
+            "mesh": {
+                "vertices": _json_list(mesh.vertices),
+                "indices": _json_list(mesh.indices),
+                "normals": _json_list(mesh.normals),
+                "uvs": _json_list(mesh.uvs),
+                "vertex_source_indices": _json_list(mesh.vertex_source_indices),
+                "vertex_count": mesh.vertex_count,
+                "triangle_count": mesh.triangle_count,
+                "valid_source_pixels": mesh.valid_source_pixels,
+                "invalid_source_pixels": mesh.invalid_source_pixels,
+                "skipped_cells": mesh.skipped_cells,
+                "coverage": float(mesh.coverage),
+                "frame": mesh.frame.value,
+                "origin_x": mesh.origin_x,
+                "origin_y": mesh.origin_y,
+                "width": mesh.width,
+                "height": mesh.height,
+                "units": mesh.units,
+                "semantics": mesh.semantics.value,
+                "georeferencing": mesh.georeferencing.value,
+                "spatial": spatial_dump,
+                "depth_model_name": mesh.depth_model_name,
+                "depth_model_version": mesh.depth_model_version,
+                "depth_checkpoint_id": mesh.depth_checkpoint_id,
+                "source_input_id": mesh.source_input_id,
+                "source_checksum": mesh.source_checksum,
+                "calibration_method": mesh.calibration_method,
+                "calibration_reference": mesh.calibration_reference,
+                "calibration_scale": mesh.calibration_scale,
+                "calibration_offset": mesh.calibration_offset,
+                "calibration_valid_samples": mesh.calibration_valid_samples,
+                "provenance": provenance_dump,
+            },
+        }
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def main() -> None:
+    """Main entry point: invoke the actual backend and serialize the result."""
+    if len(sys.argv) < 2:
+        print(json.dumps({
+            "error": "Usage: backend_bridge.py <input_path> | --synthetic <w> <h> | --terrain <w> <h>"
+        }))
+        sys.exit(1)
+
+    try:
+        if sys.argv[1] == "--terrain":
             width = int(sys.argv[2]) if len(sys.argv) > 2 else 8
             height = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-            
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                tmp_path = Path(tmp.name)
-            
-            create_synthetic_png(width, height, tmp_path)
-            inspection = inspect_image(tmp_path)
-            result = run_backend(inspection)
-            
-            # Clean up temp file
-            tmp_path.unlink(missing_ok=True)
-            
-            print(json.dumps(result))
+            print(json.dumps(run_terrain(width, height), allow_nan=False))
+        elif sys.argv[1] == "--synthetic":
+            width = int(sys.argv[2]) if len(sys.argv) > 2 else 8
+            height = int(sys.argv[3]) if len(sys.argv) > 3 else 8
+            print(json.dumps(run_depth_only(width, height)))
         else:
-            # Use provided input file
             input_path = Path(sys.argv[1])
             if not input_path.exists():
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
-            
-            inspection = inspect_image(input_path)
-            result = run_backend(inspection)
-            print(json.dumps(result))
+
+            inspection = inspect_input(input_path)
+            result = SyntheticDepthBackend().estimate_depth(inspection)
+            print(json.dumps(result.model_dump()))
+
     except Exception as e:
         print(json.dumps({"error": str(e), "type": type(e).__name__}))
         sys.exit(1)

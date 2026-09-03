@@ -1,6 +1,6 @@
 import type { LayerId, LayerDefinition, LayerState } from "./types";
 import type { SceneArtifact } from "../types/scene";
-import { ALL_LAYER_IDS, LAYER_LABELS, LAYER_DESCRIPTIONS } from "./types";
+import { ALL_LAYER_IDS, LAYER_LABELS, LAYER_DESCRIPTIONS, getSemanticLayerLabel, getSemanticLayerDescription } from "./types";
 
 function isLayerAvailable(artifact: SceneArtifact, layerId: LayerId): boolean {
   switch (layerId) {
@@ -24,18 +24,25 @@ function isLayerAvailable(artifact: SceneArtifact, layerId: LayerId): boolean {
 }
 
 export function createLayerState(artifact: SceneArtifact): LayerState {
-  const layers: LayerDefinition[] = ALL_LAYER_IDS.map((id) => ({
-    id,
-    label: LAYER_LABELS[id],
-    description: LAYER_DESCRIPTIONS[id],
-    visualizationType:
-      id === "wireframe" ? "line-overlay"
-      : id === "rgb" ? "texture"
-      : id === "slope" || id === "contours" || id === "reference" ? "line-overlay"
-      : "mesh-displacement",
-    available: isLayerAvailable(artifact, id),
-    enabled: false,
-  }));
+  const backendSemantics = artifact.metadata.backend?.elevation_semantics;
+  const semanticLabel = getSemanticLayerLabel(backendSemantics);
+  const semanticDescription = getSemanticLayerDescription(backendSemantics);
+
+  const layers: LayerDefinition[] = ALL_LAYER_IDS.map((id) => {
+    const isDsm = id === "dsm" && artifact.elevation != null;
+    return {
+      id,
+      label: isDsm ? semanticLabel : LAYER_LABELS[id],
+      description: isDsm ? semanticDescription : LAYER_DESCRIPTIONS[id],
+      visualizationType:
+        id === "wireframe" ? "line-overlay"
+        : id === "rgb" ? "texture"
+        : id === "slope" || id === "contours" || id === "reference" ? "line-overlay"
+        : "mesh-displacement",
+      available: isLayerAvailable(artifact, id),
+      enabled: false,
+    };
+  });
 
   const firstAvailable = layers.find((l) => l.available);
   if (firstAvailable) {

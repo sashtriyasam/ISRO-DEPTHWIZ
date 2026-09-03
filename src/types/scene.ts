@@ -23,13 +23,15 @@ export interface TextureData {
   height: number;
 }
 
+export type ElevationUnit = "meters" | "relative" | string;
+
 export interface ElevationData {
   grid: Float32Array;
   width: number;
   height: number;
   cellSize: number;
   noDataValue?: number;
-  unit: "meters";
+  unit: ElevationUnit;
 }
 
 export interface LayerPayloads {

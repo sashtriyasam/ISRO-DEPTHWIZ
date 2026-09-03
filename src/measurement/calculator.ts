@@ -3,7 +3,8 @@ import type { MeasurementMode, MeasurementPoint, MeasurementResult } from "./typ
 export function calculateMeasurement(
   mode: MeasurementMode,
   pointA: MeasurementPoint,
-  pointB: MeasurementPoint
+  pointB: MeasurementPoint,
+  options?: { units?: "meters" | "relative" | string; source?: "fixture-coordinate-system" | "backend" }
 ): MeasurementResult {
   const dx = pointA.displayPosition.x - pointB.displayPosition.x;
   const dz = pointA.displayPosition.z - pointB.displayPosition.z;
@@ -21,8 +22,8 @@ export function calculateMeasurement(
     horizontalDistance,
     verticalDifference,
     distance3D,
-    units: "meters",
-    source: "fixture-coordinate-system",
+    units: options?.units ?? "meters",
+    source: options?.source ?? "fixture-coordinate-system",
   };
 }
 
@@ -39,5 +40,6 @@ export function formatMeasurementValue(mode: MeasurementMode, result: Measuremen
       value = result.distance3D;
       break;
   }
-  return `${Math.abs(value).toFixed(3)} m`;
+  const unitLabel = result.units === "meters" ? " m" : result.units === "relative" ? "" : ` ${result.units}`;
+  return `${Math.abs(value).toFixed(3)}${unitLabel}`;
 }

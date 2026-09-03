@@ -44,6 +44,8 @@ function mapTransform(details: BackendSpatialDetails): GeoTransform | undefined 
   };
 }
 
+export const mapBackendTransform = mapTransform;
+
 function mapBounds(details: BackendSpatialDetails): BoundingBox3D | undefined {
   if (!details.bounds) return undefined;
   return {
@@ -59,7 +61,8 @@ function mapBounds(details: BackendSpatialDetails): BoundingBox3D | undefined {
 function createElevationFromDepthValues(
   depthValues: number[],
   width: number,
-  height: number
+  height: number,
+  depthScale: BackendDepthResult["depth_scale"]
 ): ElevationData {
   const grid = new Float32Array(depthValues.length);
   for (let i = 0; i < depthValues.length; i++) {
@@ -70,7 +73,7 @@ function createElevationFromDepthValues(
     width,
     height,
     cellSize: 1,
-    unit: "meters",
+    unit: depthScale === "metric" ? "meters" : "relative",
   };
 }
 
@@ -163,7 +166,7 @@ export function adaptBackendResult(result: BackendDepthResult): AdapterResult {
   const width = result.output_resolution.width;
   const height = result.output_resolution.height;
 
-  const elevation = createElevationFromDepthValues(result.depth_values, width, height);
+  const elevation = createElevationFromDepthValues(result.depth_values, width, height, result.depth_scale);
 
   const spatialDetails = result.spatial.kind === "present" ? result.spatial.details : undefined;
   const transform = spatialDetails ? mapTransform(spatialDetails) : undefined;
@@ -241,7 +244,7 @@ export function adaptCalibratedResult(
     width,
     height,
     cellSize: 1,
-    unit: "meters",
+    unit: result.depth_scale === "metric" ? "meters" : "relative",
   };
 
   const spatialDetails = result.spatial.kind === "present" ? result.spatial.details : undefined;

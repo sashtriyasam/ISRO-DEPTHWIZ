@@ -1,7 +1,9 @@
 import type { InspectionState } from "../../inspection/types";
+import type { SceneMetadata } from "../../types/scene";
 
 interface InspectorPanelProps {
   state: InspectionState;
+  metadata?: SceneMetadata;
   onClear?: () => void;
 }
 
@@ -10,7 +12,28 @@ function formatValue(v: number | undefined): string {
   return v.toFixed(3);
 }
 
-export function InspectorPanel({ state, onClear }: InspectorPanelProps) {
+function getSemanticLabel(metadata: SceneMetadata | undefined): string {
+  const semantics = metadata?.backend?.elevation_semantics;
+  switch (semantics) {
+    case "relative_depth":
+      return "Relative Depth";
+    case "relative_surface_rdsm":
+      return "rDSM";
+    case "height_agl_ndsm":
+      return "AGL";
+    case "absolute_elevation_dsm":
+      return "Elevation";
+    default:
+      return "Value";
+  }
+}
+
+function getUnitLabel(metadata: SceneMetadata | undefined): string {
+  if (metadata?.backend?.depth_scale === "metric") return " m";
+  return "";
+}
+
+export function InspectorPanel({ state, metadata, onClear }: InspectorPanelProps) {
   if (state.status === "empty") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
@@ -23,6 +46,8 @@ export function InspectorPanel({ state, onClear }: InspectorPanelProps) {
   }
 
   const { result } = state;
+  const semanticLabel = getSemanticLabel(metadata);
+  const unitLabel = getUnitLabel(metadata);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
@@ -40,12 +65,12 @@ export function InspectorPanel({ state, onClear }: InspectorPanelProps) {
         )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm)" }}>
-        <DataRow label="Elevation" value={`${formatValue(result.scientific.elevation)} m`} />
+        <DataRow label={semanticLabel} value={`${formatValue(result.scientific.elevation)}${unitLabel}`} />
         {result.scientific.rdsm !== undefined && (
-          <DataRow label="rDSM" value={`${formatValue(result.scientific.rdsm)} m`} />
+          <DataRow label="rDSM" value={`${formatValue(result.scientific.rdsm)}${unitLabel}`} />
         )}
         {result.scientific.agl !== undefined && (
-          <DataRow label="AGL" value={`${formatValue(result.scientific.agl)} m`} />
+          <DataRow label="AGL" value={`${formatValue(result.scientific.agl)}${unitLabel}`} />
         )}
         <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
         <DataRow label="Position X" value={`${formatValue(result.position.x)} m`} />

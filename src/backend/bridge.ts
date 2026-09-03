@@ -1,5 +1,6 @@
-import type { BackendDepthResult } from "./types";
+import type { BackendDepthResult, BackendTerrainProduct } from "./types";
 import { adaptBackendResult, type AdapterResult } from "./adapter";
+import { adaptTerrainProduct } from "./meshAdapter";
 
 export interface BridgeError {
   code: string;
@@ -59,6 +60,26 @@ function validateTransportShape(data: unknown): BackendDepthResult {
   return obj as unknown as BackendDepthResult;
 }
 
+function validateTerrainShape(data: unknown): BackendTerrainProduct {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("Transport data is not an object");
+  }
+  const obj = data as Record<string, unknown>;
+  if (obj.kind !== "terrain") {
+    throw new Error(`Expected terrain product, got kind '${String(obj.kind)}'`);
+  }
+  if (!obj.dsm || typeof obj.dsm !== "object") {
+    throw new Error("Missing or invalid dsm section");
+  }
+  if (!obj.mesh || typeof obj.mesh !== "object") {
+    throw new Error("Missing or invalid mesh section");
+  }
+  if (!obj.depth_result || typeof obj.depth_result !== "object") {
+    throw new Error("Missing or invalid depth_result section");
+  }
+  return obj as unknown as BackendTerrainProduct;
+}
+
 export interface BackendBridgeOptions {
   pythonPath?: string;
   bridgeScript?: string;
@@ -86,6 +107,46 @@ export class BackendBridge {
     return this.execute([inputPath]);
   }
 
+  async executeTerrain(width = 8, height = 8): Promise<BridgeResult> {
+    const errors: BridgeError[] = [];
+    const warnings: string[] = [];
+
+    if (!this.isNode) {
+      errors.push({
+        code: "BROWSER_ENVIRONMENT",
+        message: "Backend bridge requires Node.js environment (Tauri/Electron)",
+        phase: "process",
+      });
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const jsonData = await this.spawnPython(["--terrain", String(width), String(height)]);
+      let validated: BackendTerrainProduct;
+      try {
+        validated = validateTerrainShape(jsonData);
+      } catch (err) {
+        errors.push({
+          code: "TRANSPORT_INVALID",
+          message: err instanceof Error ? err.message : "Invalid terrain transport data",
+          phase: "transport",
+        });
+        return { success: false, errors, warnings };
+      }
+      const adapterResult = adaptTerrainProduct(validated);
+      if (!adapterResult.success) {
+        for (const e of adapterResult.errors) {
+          errors.push({ code: e.code, message: e.message, phase: "adapter" });
+        }
+        return { success: false, errors, warnings };
+      }
+      warnings.push(...adapterResult.warnings);
+      return { success: true, artifact: adapterResult.artifact, errors: [], warnings };
+    } catch (err) {
+      return this.toProcessError(err);
+    }
+  }
+
   private async execute(args: string[]): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
@@ -103,30 +164,36 @@ export class BackendBridge {
       const jsonData = await this.spawnPython(args);
       return this.processTransportData(jsonData, errors, warnings);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-
-      if (message.includes("ENOENT") || message.includes("spawn")) {
-        errors.push({
-          code: "BACKEND_UNAVAILABLE",
-          message: "Python executable not found or not accessible",
-          phase: "process",
-        });
-      } else if (message.includes("timeout")) {
-        errors.push({
-          code: "BACKEND_TIMEOUT",
-          message: `Backend execution timed out after ${this.timeoutMs}ms`,
-          phase: "process",
-        });
-      } else {
-        errors.push({
-          code: "BACKEND_ERROR",
-          message,
-          phase: "process",
-        });
-      }
-
-      return { success: false, errors, warnings };
+      return this.toProcessError(err);
     }
+  }
+
+  private toProcessError(err: unknown): BridgeResult {
+    const errors: BridgeError[] = [];
+    const warnings: string[] = [];
+    const message = err instanceof Error ? err.message : String(err);
+
+    if (message.includes("ENOENT") || message.includes("spawn")) {
+      errors.push({
+        code: "BACKEND_UNAVAILABLE",
+        message: "Python executable not found or not accessible",
+        phase: "process",
+      });
+    } else if (message.includes("timeout")) {
+      errors.push({
+        code: "BACKEND_TIMEOUT",
+        message: `Backend execution timed out after ${this.timeoutMs}ms`,
+        phase: "process",
+      });
+    } else {
+      errors.push({
+        code: "BACKEND_ERROR",
+        message,
+        phase: "process",
+      });
+    }
+
+    return { success: false, errors, warnings };
   }
 
   private async spawnPython(args: string[]): Promise<unknown> {
