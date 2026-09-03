@@ -38,6 +38,10 @@ _SUFFIX_MAP.update(
     }
 )
 
+#: Public allow-list of supported filename suffixes (single source of
+#: truth; service capabilities and validators reuse this).
+SUPPORTED_SUFFIXES: tuple[str, ...] = tuple(sorted(_SUFFIX_MAP))
+
 
 def sniff_signature(header: bytes) -> DetectedFormat | None:
     """Identify a supported format from leading file bytes (no I/O)."""
