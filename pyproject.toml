@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0,<3",
+    "Pillow>=11,<13",
+    "rasterio>=1.4,<2",
 ]
 
 [project.optional-dependencies]
@@ -17,6 +19,7 @@ dev = [
     "pytest>=8",
     "mypy>=1",
     "ruff>=0.4",
+    "numpy>=1.24",
 ]
 
 [tool.setuptools.packages.find]
@@ -44,3 +47,9 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = ["numpy", "numpy.*"]
 ignore_errors = true
+
+# rasterio ships no stubs/py.typed (verified with rasterio 1.5.1):
+# skip type analysis of its imports instead of failing the run.
+[[tool.mypy.overrides]]
+module = ["rasterio", "rasterio.*"]
+ignore_missing_imports = true
