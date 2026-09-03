@@ -4,6 +4,7 @@ export interface SceneArtifact {
   mesh: MeshData;
   texture?: TextureData;
   elevation?: ElevationData;
+  layers?: LayerPayloads;
   metadata: SceneMetadata;
 }
 
@@ -29,6 +30,11 @@ export interface ElevationData {
   cellSize: number;
   noDataValue?: number;
   unit: "meters";
+}
+
+export interface LayerPayloads {
+  rdsm?: ElevationData;
+  agl?: ElevationData;
 }
 
 export interface SceneMetadata {

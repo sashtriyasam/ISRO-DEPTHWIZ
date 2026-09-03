@@ -1,19 +1,23 @@
-import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { AppShell } from "../components/AppShell/AppShell";
 import { Viewer, type ViewerHandle } from "../viewer/Viewer";
 import { StatusBar } from "../components/StatusBar/StatusBar";
 import { CameraControls } from "../components/CameraControls/CameraControls";
+import { LayerControls } from "../components/LayerControls/LayerControls";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ArtifactLoader, FixtureSource } from "../artifact";
+import { createLayerState, setActiveLayer } from "../layers";
 import type { ArtifactState } from "../artifact/types";
 import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
+import type { LayerId, LayerState } from "../layers/types";
 
 export function App() {
   const [artifact, setArtifact] = useState<SceneArtifact | null>(null);
   const [artifactState, setArtifactState] = useState<ArtifactState>("idle");
   const [cameraMode, setCameraMode] = useState<CameraMode | null>(null);
+  const [layerState, setLayerState] = useState<LayerState | null>(null);
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
 
@@ -23,6 +27,7 @@ export function App() {
     loaderRef.current.load(source).then(
       (result) => {
         setArtifact(result.artifact);
+        setLayerState(createLayerState(result.artifact));
         setArtifactState("ready");
       },
       (err) => {
@@ -31,6 +36,10 @@ export function App() {
       }
     );
   }, []);
+
+  const activeLayerId = useMemo(() => {
+    return layerState?.activeLayerId ?? "dsm";
+  }, [layerState]);
 
   const handleCameraReady = useCallback(() => {
     setCameraMode("orbit");
@@ -63,15 +72,20 @@ export function App() {
     viewerRef.current?.getCameraManager()?.reset();
   }, []);
 
+  const handleLayerSelect = useCallback((layerId: LayerId) => {
+    setLayerState((prev) => prev ? setActiveLayer(prev, layerId) : prev);
+  }, []);
+
   return (
     <StrictMode>
       <AppShell
         header={<Header />}
         viewport={
-          artifact ? (
+          artifact && layerState ? (
             <Viewer
               ref={viewerRef}
               scene={artifact}
+              layerId={activeLayerId}
               onCameraReady={handleCameraReady}
             />
           ) : (
@@ -87,6 +101,12 @@ export function App() {
               onFrameScene={handleFrameScene}
               onReset={handleReset}
             />
+            {layerState && (
+              <LayerControls
+                layerState={layerState}
+                onLayerSelect={handleLayerSelect}
+              />
+            )}
             <SceneInfo
               artifact={artifact}
               state={artifactState}

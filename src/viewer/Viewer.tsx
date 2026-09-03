@@ -1,11 +1,14 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import * as THREE from "three";
 import type { SceneArtifact } from "../types/scene";
+import type { LayerId } from "../layers/types";
+import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
 import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
 
 interface ViewerProps {
   scene: SceneArtifact;
+  layerId: LayerId;
   onCameraReady?: (manager: CameraManager) => void;
 }
 
@@ -14,76 +17,22 @@ export interface ViewerHandle {
   loadArtifact: (artifact: SceneArtifact) => void;
 }
 
-function createMeshFromArtifact(artifact: SceneArtifact): {
+interface MeshGroup {
   mesh: THREE.Mesh;
-  wireframe: THREE.LineSegments;
+  wireframe?: THREE.LineSegments;
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
-} {
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(artifact.mesh.vertices, 3)
-  );
-  geometry.setIndex(new THREE.BufferAttribute(artifact.mesh.indices, 1));
-  if (artifact.mesh.normals) {
-    geometry.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(artifact.mesh.normals, 3)
-    );
-  } else {
-    geometry.computeVertexNormals();
-  }
-  if (artifact.mesh.uvs) {
-    geometry.setAttribute(
-      "uv",
-      new THREE.Float32BufferAttribute(artifact.mesh.uvs, 2)
-    );
-  }
-
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x4a7a4a,
-    roughness: 0.85,
-    metalness: 0.05,
-    flatShading: false,
-    side: THREE.DoubleSide,
-  });
-
-  const mesh = new THREE.Mesh(geometry, material);
-
-  const wireframe = new THREE.LineSegments(
-    new THREE.WireframeGeometry(geometry),
-    new THREE.LineBasicMaterial({ color: 0x2a4a2a, opacity: 0.15, transparent: true })
-  );
-
-  return { mesh, wireframe, geometry, material };
 }
 
-function disposeMeshGroup(group: {
-  mesh: THREE.Mesh;
-  wireframe: THREE.LineSegments;
-  geometry: THREE.BufferGeometry;
-  material: THREE.Material;
-}) {
-  group.geometry.dispose();
-  group.material.dispose();
-  group.wireframe.geometry.dispose();
-  (group.wireframe.material as THREE.Material).dispose();
-}
-
-export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, onCameraReady }, ref) {
+export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ scene, layerId, onCameraReady }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer | null;
     camera: THREE.PerspectiveCamera | null;
     threeScene: THREE.Scene | null;
     cameraManager: CameraManager | null;
-    currentMeshGroup: {
-      mesh: THREE.Mesh;
-      wireframe: THREE.LineSegments;
-      geometry: THREE.BufferGeometry;
-      material: THREE.Material;
-    } | null;
+    currentLayerId: LayerId | null;
+    currentMeshGroup: MeshGroup | null;
     animationId: number;
     disposed: boolean;
   }>({
@@ -91,6 +40,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     camera: null,
     threeScene: null,
     cameraManager: null,
+    currentLayerId: null,
     currentMeshGroup: null,
     animationId: 0,
     disposed: false,
@@ -104,18 +54,25 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
       if (state.currentMeshGroup) {
         state.threeScene.remove(state.currentMeshGroup.mesh);
-        state.threeScene.remove(state.currentMeshGroup.wireframe);
-        disposeMeshGroup(state.currentMeshGroup);
+        if (state.currentMeshGroup.wireframe) {
+          state.threeScene.remove(state.currentMeshGroup.wireframe);
+        }
+        disposeLayerMesh(state.currentMeshGroup);
         state.currentMeshGroup = null;
+        state.currentLayerId = null;
       }
 
-      const group = createMeshFromArtifact(artifact);
-      state.threeScene.add(group.mesh);
-      state.threeScene.add(group.wireframe);
-      state.currentMeshGroup = group;
+      const group = createLayerMesh(artifact, state.currentLayerId ?? "dsm");
+      if (group) {
+        state.threeScene.add(group.mesh);
+        if (group.wireframe) {
+          state.threeScene.add(group.wireframe);
+        }
+        state.currentMeshGroup = group;
 
-      const bounds = computeDisplayBounds([group.mesh]);
-      state.cameraManager.frameBounds(bounds);
+        const bounds = computeDisplayBounds([group.mesh]);
+        state.cameraManager.frameBounds(bounds);
+      }
     },
   }));
 
@@ -155,12 +112,17 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x362a28, 0.3);
     threeScene.add(hemisphereLight);
 
-    const group = createMeshFromArtifact(scene);
-    threeScene.add(group.mesh);
-    threeScene.add(group.wireframe);
-    state.currentMeshGroup = group;
+    const group = createLayerMesh(scene, layerId);
+    if (group) {
+      threeScene.add(group.mesh);
+      if (group.wireframe) {
+        threeScene.add(group.wireframe);
+      }
+      state.currentMeshGroup = group;
+      state.currentLayerId = layerId;
+    }
 
-    const bounds = computeDisplayBounds([group.mesh]);
+    const bounds = group ? computeDisplayBounds([group.mesh]) : computeDisplayBounds([]);
     const cameraManager = new CameraManager(camera, renderer.domElement);
     cameraManager.setInitial(
       new THREE.Vector3(6, 5, 6),
@@ -202,7 +164,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       cameraManager.dispose();
 
       if (state.currentMeshGroup) {
-        disposeMeshGroup(state.currentMeshGroup);
+        disposeLayerMesh(state.currentMeshGroup);
         state.currentMeshGroup = null;
       }
 
@@ -217,7 +179,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.threeScene = null;
       state.cameraManager = null;
     };
-  }, [scene, onCameraReady]);
+  }, [scene, layerId, onCameraReady]);
 
   return (
     <div
