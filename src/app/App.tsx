@@ -11,6 +11,7 @@ import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPane
 import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ArtifactLoader, FixtureSource } from "../artifact";
+import { BackendArtifactSource } from "../backend/source";
 import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
 import { calculateMeasurement } from "../measurement/calculator";
@@ -35,11 +36,14 @@ export function App() {
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>("distance");
   const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
   const [profileState, setProfileState] = useState<ProfileState>({ status: "empty" });
+  const [sourceType, setSourceType] = useState<"fixture" | "backend">("fixture");
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
 
   useEffect(() => {
-    const source = new FixtureSource();
+    const source = sourceType === "backend"
+      ? new BackendArtifactSource()
+      : new FixtureSource();
     setArtifactState("loading");
     loaderRef.current.load(source).then(
       (result) => {
@@ -48,11 +52,11 @@ export function App() {
         setArtifactState("ready");
       },
       (err) => {
-        console.error("Failed to load fixture:", err);
+        console.error("Failed to load artifact:", err);
         setArtifactState("error");
       }
     );
-  }, []);
+  }, [sourceType]);
 
   const activeLayerId = useMemo(() => {
     return layerState?.activeLayerId ?? "dsm";
@@ -269,6 +273,12 @@ export function App() {
         }
         panel={
           <SidePanel>
+            <SourceControl
+              sourceType={sourceType}
+              onSourceChange={setSourceType}
+              artifact={artifact}
+              state={artifactState}
+            />
             <CameraControls
               currentMode={cameraMode}
               onFrameScene={handleFrameScene}
@@ -328,6 +338,55 @@ function SidePanel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ padding: "var(--spacing-md)", display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       {children}
+    </div>
+  );
+}
+
+function SourceControl({
+  sourceType,
+  onSourceChange,
+  artifact,
+  state,
+}: {
+  sourceType: "fixture" | "backend";
+  onSourceChange: (type: "fixture" | "backend") => void;
+  artifact: SceneArtifact | null;
+  state: ArtifactState;
+}) {
+  return (
+    <div className="panel-section">
+      <div className="panel-section-header">Source</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer" }}>
+          <input
+            type="radio"
+            name="source"
+            checked={sourceType === "fixture"}
+            onChange={() => onSourceChange("fixture")}
+          />
+          <span>Development Fixture</span>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer" }}>
+          <input
+            type="radio"
+            name="source"
+            checked={sourceType === "backend"}
+            onChange={() => onSourceChange("backend")}
+          />
+          <span>Synthetic Backend</span>
+        </label>
+      </div>
+      {state === "ready" && artifact?.metadata.backend && (
+        <div style={{ marginTop: "var(--spacing-xs)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+          <div>Backend: {artifact.metadata.backend.model_name}</div>
+          <div>Version: {artifact.metadata.backend.model_version ?? "unknown"}</div>
+          <div>Scale: {artifact.metadata.backend.depth_scale}</div>
+          <div>Semantics: {artifact.metadata.backend.elevation_semantics}</div>
+          {artifact.metadata.backend.depth_scale === "relative" && (
+            <div style={{ color: "var(--color-warning)" }}>Relative depth (not metric)</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

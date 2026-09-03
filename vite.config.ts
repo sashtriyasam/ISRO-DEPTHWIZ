@@ -17,6 +17,9 @@ export default defineConfig({
     target: "es2022",
     outDir: "dist",
     sourcemap: true,
+    rollupOptions: {
+      external: ["child_process"],
+    },
   },
   test: {
     globals: true,
