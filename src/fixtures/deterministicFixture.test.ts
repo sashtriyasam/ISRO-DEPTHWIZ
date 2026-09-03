@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { createDeterministicFixture } from "./deterministicFixture";
-import type { SceneArtifact } from "../types/scene";
+import { createDeterministicFixture } from "../fixtures/deterministicFixture";
 
 describe("deterministicFixture", () => {
-  const fixture = createDeterministicFixture() as SceneArtifact;
+  const fixture = createDeterministicFixture();
 
   it("has correct id and source", () => {
     expect(fixture.id).toBe("dev-fixture-001");

@@ -1,16 +1,36 @@
-import { StrictMode, useCallback, useRef, useState } from "react";
+import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { AppShell } from "../components/AppShell/AppShell";
 import { Viewer, type ViewerHandle } from "../viewer/Viewer";
-import { useTestFixture } from "../fixtures/useTestFixture";
 import { StatusBar } from "../components/StatusBar/StatusBar";
 import { CameraControls } from "../components/CameraControls/CameraControls";
+import { SceneInfo } from "../components/SceneInfo/SceneInfo";
+import { ArtifactLoader, FixtureSource } from "../artifact";
+import type { ArtifactState } from "../artifact/types";
+import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
 
 export function App() {
-  const fixture = useTestFixture();
+  const [artifact, setArtifact] = useState<SceneArtifact | null>(null);
+  const [artifactState, setArtifactState] = useState<ArtifactState>("idle");
+  const [cameraMode, setCameraMode] = useState<CameraMode | null>(null);
   const viewerRef = useRef<ViewerHandle>(null);
-  const [cameraMode, setCameraMode] = useState<CameraMode | null>("orbit");
+  const loaderRef = useRef(new ArtifactLoader());
+
+  useEffect(() => {
+    const source = new FixtureSource();
+    setArtifactState("loading");
+    loaderRef.current.load(source).then(
+      (result) => {
+        setArtifact(result.artifact);
+        setArtifactState("ready");
+      },
+      (err) => {
+        console.error("Failed to load fixture:", err);
+        setArtifactState("error");
+      }
+    );
+  }, []);
 
   const handleCameraReady = useCallback(() => {
     setCameraMode("orbit");
@@ -18,9 +38,8 @@ export function App() {
 
   const handleFrameScene = useCallback(() => {
     const manager = viewerRef.current?.getCameraManager();
-    if (!manager) return;
-    const b = fixture.metadata.bounds;
-    if (!b) return;
+    if (!manager || !artifact?.metadata.bounds) return;
+    const b = artifact.metadata.bounds;
     const center = new THREE.Vector3(
       (b.minX + b.maxX) / 2,
       (b.minY + b.maxY) / 2,
@@ -38,7 +57,7 @@ export function App() {
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     manager.frameBounds({ center, size, sphere, box });
-  }, [fixture]);
+  }, [artifact]);
 
   const handleReset = useCallback(() => {
     viewerRef.current?.getCameraManager()?.reset();
@@ -49,11 +68,17 @@ export function App() {
       <AppShell
         header={<Header />}
         viewport={
-          <Viewer
-            ref={viewerRef}
-            scene={fixture}
-            onCameraReady={handleCameraReady}
-          />
+          artifact ? (
+            <Viewer
+              ref={viewerRef}
+              scene={artifact}
+              onCameraReady={handleCameraReady}
+            />
+          ) : (
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}>
+              {artifactState === "loading" ? "Loading artifact..." : artifactState === "error" ? "Failed to load artifact" : ""}
+            </div>
+          )
         }
         panel={
           <SidePanel>
@@ -61,6 +86,11 @@ export function App() {
               currentMode={cameraMode}
               onFrameScene={handleFrameScene}
               onReset={handleReset}
+            />
+            <SceneInfo
+              artifact={artifact}
+              state={artifactState}
+              sourceLabel="Development Fixture"
             />
           </SidePanel>
         }
@@ -85,23 +115,6 @@ function SidePanel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ padding: "var(--spacing-md)", display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       {children}
-      <div>
-        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "var(--spacing-sm)" }}>
-          Scene Info
-        </div>
-        <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-secondary)" }}>
-          Deterministic test fixture
-        </div>
-      </div>
-      <div>
-        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "var(--spacing-sm)" }}>
-          Status
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm)" }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-status-ok)" }} />
-          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-status-ok)" }}>Ready</span>
-        </div>
-      </div>
     </div>
   );
 }
