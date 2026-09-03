@@ -24,6 +24,8 @@ from depthwizard.contracts.spatial import (
     SpatialDetails,
     SpatialKind,
 )
+from depthwizard.ingestion.formats import DetectedFormat
+from depthwizard.ingestion.models import InputHandle, InputInspection
 
 
 def _relative_result(**overrides: Any) -> DepthResult:
@@ -187,15 +189,28 @@ def test_unavailable_spatial_carries_no_details() -> None:
 
 def test_backend_protocol_boundary() -> None:
     expected = _relative_result()
+    inspection = InputInspection(
+        handle=InputHandle(
+            source_path="x.png",
+            display_name="x.png",
+            file_size=12,
+            sha256="0" * 64,
+        ),
+        detected_format=DetectedFormat.PNG,
+        width=4,
+        height=3,
+        georeferencing=GeoreferencingLevel.NON_GEOREFERENCED,
+        spatial=SpatialContext(kind=SpatialKind.NOT_APPLICABLE),
+    )
 
     class StubBackend:
         model_name = "stub"
         model_version: str | None = None
         checkpoint_id: str | None = None
 
-        def estimate_depth(self, input_id: str) -> DepthResult:
-            assert input_id == "input-001"
+        def estimate_depth(self, inspection: InputInspection) -> DepthResult:
+            assert inspection.handle.display_name == "x.png"
             return expected
 
     backend: DepthBackend = StubBackend()
-    assert backend.estimate_depth("input-001") == expected
+    assert backend.estimate_depth(inspection) == expected

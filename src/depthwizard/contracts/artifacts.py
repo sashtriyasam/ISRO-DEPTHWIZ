@@ -15,7 +15,7 @@ a georeferenced level.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -26,6 +26,9 @@ from depthwizard.contracts.semantics import (
     GeoreferencingLevel,
 )
 from depthwizard.contracts.spatial import SpatialContext, SpatialKind
+
+if TYPE_CHECKING:
+    from depthwizard.ingestion.models import InputInspection
 
 METRIC_UNIT = "meters"
 
@@ -142,10 +145,16 @@ class DepthBackend(Protocol):
         """Checkpoint identifier, if known."""
         ...
 
-    def estimate_depth(self, input_id: str) -> DepthResult:
-        """Run inference for a previously registered input id.
+    def estimate_depth(self, inspection: InputInspection) -> DepthResult:
+        """Run inference for an already-validated input inspection.
 
-        Implementations perform real inference in later tasks. The contract
-        only fixes the boundary: an identified input maps to a DepthResult.
+        Implementations consume the validated ``InputInspection`` value
+        object (dimensions, checksum, spatial semantics) instead of an
+        opaque string id, so backends stay stateless: no registry, cache
+        or lookup is needed to execute. Changed from ``input_id: str``
+        in the S5 milestone for exactly this reason — a string id would
+        force every backend to resolve inputs through hidden state.
+        Real inference (future model adapters) implements this same
+        boundary.
         """
         ...
