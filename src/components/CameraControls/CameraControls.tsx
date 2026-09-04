@@ -54,7 +54,8 @@ export function CameraControls({ currentMode, onModeChange, onFrameScene, onRese
           style={buttonStyle}
           onClick={onFrameScene}
           aria-label="Frame scene"
-          title="Frame the entire scene in view"
+          title={navigationLocked ? "Unavailable during flythrough playback" : "Frame the entire scene in view"}
+          disabled={navigationLocked}
         >
           Frame Scene
         </button>
@@ -62,11 +63,17 @@ export function CameraControls({ currentMode, onModeChange, onFrameScene, onRese
           style={buttonStyle}
           onClick={onReset}
           aria-label="Reset camera"
-          title="Reset camera to initial position"
+          title={navigationLocked ? "Unavailable during flythrough playback" : "Reset camera to initial position"}
+          disabled={navigationLocked}
         >
           Reset
         </button>
       </div>
+      {navigationLocked && (
+        <div style={{ marginTop: "var(--spacing-xs)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+          Camera controls resume after flythrough Stop.
+        </div>
+      )}
     </div>
   );
 }

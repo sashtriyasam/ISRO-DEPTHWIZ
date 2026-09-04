@@ -5,9 +5,10 @@ interface ProfilePanelProps {
   state: ProfileState;
   onStartProfile: () => void;
   onClear: () => void;
+  startDisabled?: boolean;
 }
 
-export function ProfilePanel({ state, onStartProfile, onClear }: ProfilePanelProps) {
+export function ProfilePanel({ state, onStartProfile, onClear, startDisabled = false }: ProfilePanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       <div style={sectionLabelStyle}>Elevation Profile</div>
@@ -16,7 +17,13 @@ export function ProfilePanel({ state, onStartProfile, onClear }: ProfilePanelPro
           <>
             <StatusRow label="Point A" value="Select point" muted />
             <StatusRow label="Point B" value="Select point" muted />
-            <button style={startButtonStyle} onClick={onStartProfile} aria-label="Start elevation profile">
+            <button
+              style={startButtonStyle}
+              onClick={onStartProfile}
+              aria-label="Start elevation profile"
+              title={startDisabled ? "Unavailable during flythrough playback" : "Start elevation profile"}
+              disabled={startDisabled}
+            >
               Start
             </button>
           </>

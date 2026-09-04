@@ -167,6 +167,39 @@ describe("TrajectoryCameraController", () => {
     controller.dispose();
   });
 
+  it("reaches identical poses at different playback speeds", () => {
+    const runToEnd = (speed: 0.5 | 1 | 2) => {
+      const { camera, controller } = createController();
+      controller.activate();
+      controller.setSpeed(speed);
+      controller.play();
+      advance(controller, 200);
+      const pose = camera.position.clone();
+      const quat = controller.getState();
+      controller.dispose();
+      return { pose, target: quat.target };
+    };
+    const slow = runToEnd(0.5);
+    const fast = runToEnd(2);
+    expect(slow.pose.distanceTo(fast.pose)).toBeLessThan(1e-6);
+    expect(slow.target.distanceTo(fast.target)).toBeLessThan(1e-6);
+  });
+
+  it("accepts speed changes while paused", () => {
+    const { controller } = createController();
+    controller.activate();
+    controller.play();
+    advance(controller, 5);
+    controller.pause();
+    controller.setSpeed(0.5);
+    expect(controller.playbackSpeed).toBe(0.5);
+    const pausedAt = controller.playbackTimeMs;
+    controller.resume();
+    advance(controller, 10);
+    expect(controller.playbackTimeMs).toBeGreaterThan(pausedAt);
+    controller.dispose();
+  });
+
   it("restarts from the beginning after completion", () => {
     const { controller } = createController();
     controller.activate();

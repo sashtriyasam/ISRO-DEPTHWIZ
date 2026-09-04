@@ -8,9 +8,10 @@ interface MeasurementPanelProps {
   onModeChange: (mode: MeasurementMode) => void;
   onStartMeasurement: () => void;
   onClear: () => void;
+  startDisabled?: boolean;
 }
 
-export function MeasurementPanel({ state, mode, onModeChange, onStartMeasurement, onClear }: MeasurementPanelProps) {
+export function MeasurementPanel({ state, mode, onModeChange, onStartMeasurement, onClear, startDisabled = false }: MeasurementPanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       <div style={sectionLabelStyle}>Measurement</div>
@@ -41,6 +42,8 @@ export function MeasurementPanel({ state, mode, onModeChange, onStartMeasurement
               style={startButtonStyle}
               onClick={onStartMeasurement}
               aria-label="Start measurement"
+              title={startDisabled ? "Unavailable during flythrough playback" : "Start measurement"}
+              disabled={startDisabled}
             >
               Start
             </button>

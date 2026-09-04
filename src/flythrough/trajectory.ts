@@ -9,6 +9,9 @@ export interface EvaluatedPose {
 const UP = new THREE.Vector3(0, 1, 0);
 
 function orientationForSegment(from: THREE.Vector3, to: THREE.Vector3): THREE.Quaternion {
+  if (from.distanceToSquared(to) < 1e-12) {
+    return new THREE.Quaternion();
+  }
   const matrix = new THREE.Matrix4().lookAt(from, to, UP);
   return new THREE.Quaternion().setFromRotationMatrix(matrix);
 }

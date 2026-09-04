@@ -50,6 +50,8 @@ export function FlythroughPanel({
 }: FlythroughPanelProps) {
   const canPlay = waypoints.length >= 2;
   const isActive = status === "playing" || status === "paused";
+  const segmentCount = Math.max(0, waypoints.length - 1);
+  const currentSegment = Math.min(Math.max(0, currentIndex), Math.max(0, segmentCount - 1)) + 1;
   const durationMs =
     waypoints.length >= 2
       ? totalDurationMs({
@@ -70,10 +72,11 @@ export function FlythroughPanel({
           <div style={mutedStyle}>Add at least one more waypoint to enable playback.</div>
         )}
         {waypoints.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+          <div role="list" aria-label="Flythrough waypoints" style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
             {waypoints.map((waypoint, index) => (
               <div
                 key={waypoint.id}
+                role="listitem"
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--spacing-sm)" }}
               >
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-primary)" }}>
@@ -83,9 +86,9 @@ export function FlythroughPanel({
                 <button
                   style={actionButtonStyle}
                   onClick={() => onRemoveWaypoint(waypoint.id)}
-                  disabled={status === "playing"}
+                  disabled={isActive}
                   aria-label={`Remove waypoint ${index + 1}`}
-                  title={`Remove waypoint ${index + 1}`}
+                  title={isActive ? "Stop playback to edit waypoints" : `Remove waypoint ${index + 1}`}
                 >
                   Remove
                 </button>
@@ -96,7 +99,9 @@ export function FlythroughPanel({
         {canPlay && (
           <div style={mutedStyle}>
             Duration ~{(durationMs / 1000).toFixed(0)}s
-            {isActive ? ` · Waypoint ${Math.min(currentIndex + 1, waypoints.length)} of ${waypoints.length}` : ""}
+            {isActive
+              ? ` · Segment ${currentSegment} of ${segmentCount} · Waypoint ${Math.min(currentIndex + 1, waypoints.length)} of ${waypoints.length}`
+              : ""}
           </div>
         )}
         {status === "playing" && <div style={mutedStyle}>Flythrough playing…</div>}
@@ -105,9 +110,9 @@ export function FlythroughPanel({
           <button
             style={actionButtonStyle}
             onClick={onAddWaypoint}
-            disabled={!canCapture || status === "playing"}
+            disabled={!canCapture || isActive}
             aria-label="Add waypoint from current camera"
-            title="Capture the current camera position as a waypoint"
+            title={isActive ? "Stop playback to edit waypoints" : "Capture the current camera position as a waypoint"}
           >
             Add Waypoint
           </button>
@@ -115,9 +120,9 @@ export function FlythroughPanel({
             <button
               style={actionButtonStyle}
               onClick={onClear}
-              disabled={status === "playing"}
+              disabled={isActive}
               aria-label="Clear waypoints"
-              title="Remove all waypoints"
+              title={isActive ? "Stop playback to edit waypoints" : "Remove all waypoints"}
             >
               Clear
             </button>

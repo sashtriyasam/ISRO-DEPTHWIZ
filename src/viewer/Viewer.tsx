@@ -12,6 +12,7 @@ import { TrajectoryCameraController } from "../camera/TrajectoryController";
 import { computeDisplayBounds } from "../camera/sceneBounds";
 import type { CameraMode, DisplayBounds } from "../camera/types";
 import type { FlythroughTrajectory, PlaybackSpeed, WaypointPosition } from "../flythrough/types";
+import { buildPreviewGroup, disposePreviewGroup } from "../flythrough/preview";
 import { resolveInspection } from "../inspection/resolver";
 
 type InteractionMode = "inspect" | "measure" | "profile";
@@ -47,7 +48,7 @@ export interface ViewerHandle {
   stopFlythrough: () => void;
   resetFlythrough: () => void;
   setFlythroughSpeed: (speed: PlaybackSpeed) => void;
-  setFlythroughPreview: (points: WaypointPosition[] | null) => void;
+  setFlythroughPreview: (points: WaypointPosition[] | null, currentIndex?: number) => void;
   clearSelection: () => void;
   clearMeasurementGraphics: () => void;
   clearProfileGraphics: () => void;
@@ -89,7 +90,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     renderingModeRef: RenderingMode;
     lastBoundsRef: DisplayBounds | null;
     trajectoryControllerRef: TrajectoryCameraController | null;
-    previewLineRef: THREE.Line | null;
+    previewGroupRef: THREE.Group | null;
     previousCameraModeRef: CameraMode;
   }>({
     renderer: null,
@@ -118,7 +119,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     renderingModeRef: "shaded",
     lastBoundsRef: null,
     trajectoryControllerRef: null,
-    previewLineRef: null,
+    previewGroupRef: null,
     previousCameraModeRef: "orbit",
   });
 
@@ -340,10 +341,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     setFlythroughSpeed: (speed: PlaybackSpeed) => {
       stateRef.current.trajectoryControllerRef?.setSpeed(speed);
     },
-    setFlythroughPreview: (points: WaypointPosition[] | null) => {
+    setFlythroughPreview: (points: WaypointPosition[] | null, currentIndex = 0) => {
       const state = stateRef.current;
       if (state.disposed || !state.threeScene) return;
-      setPreviewLine(state, points);
+      setPreviewLine(state, points, currentIndex);
     },
     clearSelection: () => {
       const state = stateRef.current;
@@ -495,13 +496,12 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.currentMeshGroup = null;
       }
 
-      if (state.previewLineRef) {
-        if (state.previewLineRef.parent) {
-          state.previewLineRef.parent.remove(state.previewLineRef);
+      if (state.previewGroupRef) {
+        if (state.previewGroupRef.parent) {
+          state.previewGroupRef.parent.remove(state.previewGroupRef);
         }
-        state.previewLineRef.geometry.dispose();
-        (state.previewLineRef.material as THREE.Material).dispose();
-        state.previewLineRef = null;
+        disposePreviewGroup(state.previewGroupRef);
+        state.previewGroupRef = null;
       }
       state.trajectoryControllerRef = null;
 
@@ -583,32 +583,24 @@ function clearProfileGraphics(state: {
 function setPreviewLine(
   state: {
     threeScene: THREE.Scene | null;
-    previewLineRef: THREE.Line | null;
+    previewGroupRef: THREE.Group | null;
+    lastBoundsRef: DisplayBounds | null;
   },
-  points: WaypointPosition[] | null
+  points: WaypointPosition[] | null,
+  currentIndex: number
 ): void {
-  if (state.previewLineRef && state.threeScene) {
-    state.threeScene.remove(state.previewLineRef);
-    state.previewLineRef.geometry.dispose();
-    (state.previewLineRef.material as THREE.Material).dispose();
-    state.previewLineRef = null;
+  if (state.previewGroupRef && state.threeScene) {
+    state.threeScene.remove(state.previewGroupRef);
+    disposePreviewGroup(state.previewGroupRef);
+    state.previewGroupRef = null;
   }
   if (!points || points.length < 2 || !state.threeScene) return;
-  const geometry = new THREE.BufferGeometry().setFromPoints(
-    points.map((p) => new THREE.Vector3(p.x, p.y, p.z))
-  );
-  const material = new THREE.LineBasicMaterial({
-    color: 0x44ccff,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  });
-  const line = new THREE.Line(geometry, material);
-  line.renderOrder = 999;
-  line.frustumCulled = false;
-  line.userData.pickable = false;
-  state.threeScene.add(line);
-  state.previewLineRef = line;
+  const size = state.lastBoundsRef?.size;
+  const reference = Math.max(size?.x ?? 1, size?.y ?? 1, size?.z ?? 1, 1);
+  const built = buildPreviewGroup(points, currentIndex, reference * 0.012);
+  if (!built) return;
+  state.threeScene.add(built.group);
+  state.previewGroupRef = built.group;
 }
 
 function replaceMeshGroup(
@@ -779,3 +771,4 @@ function computeScaledBounds(mesh: THREE.Mesh, verticalScale: number) {
 
   return { center, size, sphere, box: scaledBox };
 }
+

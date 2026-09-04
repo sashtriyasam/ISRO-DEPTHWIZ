@@ -47,11 +47,33 @@ describe("FlythroughPanel", () => {
 
   it("lists waypoints with remove actions", () => {
     const onRemoveWaypoint = vi.fn();
-    render(<FlythroughPanel {...baseProps({ waypoints: waypoints(2), onRemoveWaypoint })} />);
+    const { container } = render(<FlythroughPanel {...baseProps({ waypoints: waypoints(2), onRemoveWaypoint })} />);
     expect(screen.getByText("Waypoint 1")).toBeInTheDocument();
     expect(screen.getByText("Waypoint 2")).toBeInTheDocument();
+    expect(container.querySelector('[role="list"][aria-label="Flythrough waypoints"]')).not.toBeNull();
+    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Remove waypoint 1" }));
     expect(onRemoveWaypoint).toHaveBeenCalledWith("wp-1");
+  });
+
+  it("locks editing while paused to prevent stale controller paths", () => {
+    render(<FlythroughPanel {...baseProps({ waypoints: waypoints(2), status: "paused" })} />);
+    const add = screen.getByRole("button", { name: "Add waypoint from current camera" });
+    const remove = screen.getByRole("button", { name: "Remove waypoint 1" });
+    const clear = screen.getByRole("button", { name: "Clear waypoints" });
+    expect(add).toBeDisabled();
+    expect(remove).toBeDisabled();
+    expect(clear).toBeDisabled();
+    expect(add.getAttribute("title")).toBe("Stop playback to edit waypoints");
+    expect(remove.getAttribute("title")).toBe("Stop playback to edit waypoints");
+  });
+
+  it("shows segment progress during playback", () => {
+    render(
+      <FlythroughPanel {...baseProps({ waypoints: waypoints(4), status: "playing", currentIndex: 1 })} />
+    );
+    expect(screen.getByText(/Segment 2 of 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Waypoint 2 of 4/)).toBeInTheDocument();
   });
 
   it("captures waypoints on demand, never automatically", () => {

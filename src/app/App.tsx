@@ -174,10 +174,11 @@ export function App() {
   const waypointsRef = useRef<FlythroughWaypoint[]>([]);
   waypointsRef.current = waypoints;
 
-  const syncFlythroughPreview = useCallback((points: FlythroughWaypoint[]) => {
+  const syncFlythroughPreview = useCallback((points: FlythroughWaypoint[], currentIndex = 0) => {
     if (points.length >= 2) {
       viewerRef.current?.setFlythroughPreview(
-        previewPoints({ id: "preview", waypoints: points, segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS }).map((p) => ({ x: p.x, y: p.y, z: p.z }))
+        previewPoints({ id: "preview", waypoints: points, segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS }).map((p) => ({ x: p.x, y: p.y, z: p.z })),
+        currentIndex
       );
     } else {
       viewerRef.current?.setFlythroughPreview(null);
@@ -224,7 +225,7 @@ export function App() {
   playbackSpeedRef.current = playbackSpeed;
 
   const handleAddWaypoint = useCallback(() => {
-    if (playbackStatusRef.current === "playing") {
+    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
       return;
     }
     const manager = viewerRef.current?.getCameraManager();
@@ -248,7 +249,7 @@ export function App() {
   }, [syncFlythroughPreview]);
 
   const handleRemoveWaypoint = useCallback((id: string) => {
-    if (playbackStatusRef.current === "playing") {
+    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
       return;
     }
     const next = waypointsRef.current.filter((waypoint) => waypoint.id !== id);
@@ -259,7 +260,7 @@ export function App() {
   }, [syncFlythroughPreview]);
 
   const handleClearWaypoints = useCallback(() => {
-    if (playbackStatusRef.current === "playing") {
+    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
       return;
     }
     viewerRef.current?.setFlythroughPreview(null);
@@ -274,6 +275,7 @@ export function App() {
       return;
     }
     trajectoryCounterRef.current += 1;
+    clearAnalysisState();
     const started = viewerRef.current?.startFlythrough(
       {
         id: `traj-${trajectoryCounterRef.current}`,
@@ -282,7 +284,10 @@ export function App() {
       },
       {
         speed: playbackSpeedRef.current,
-        onWaypointIndex: (index) => setFlythroughIndex(index),
+        onWaypointIndex: (index) => {
+          setFlythroughIndex(index);
+          syncFlythroughPreview(waypointsRef.current, index);
+        },
         onCompleted: () => {
           viewerRef.current?.stopFlythrough();
           setPlaybackStatus("completed");
@@ -291,9 +296,10 @@ export function App() {
     );
     if (started) {
       setFlythroughIndex(0);
+      syncFlythroughPreview(points, 0);
       setPlaybackStatus("playing");
     }
-  }, []);
+  }, [clearAnalysisState, syncFlythroughPreview]);
 
   const handlePauseFlythrough = useCallback(() => {
     viewerRef.current?.pauseFlythrough();
@@ -619,11 +625,13 @@ export function App() {
               onModeChange={handleMeasurementModeChange}
               onStartMeasurement={handleStartMeasurement}
               onClear={handleClearMeasurement}
+              startDisabled={playbackStatus === "playing" || playbackStatus === "paused"}
             />
             <ProfilePanel
               state={profileState}
               onStartProfile={handleStartProfile}
               onClear={handleClearProfile}
+              startDisabled={playbackStatus === "playing" || playbackStatus === "paused"}
             />
             <InspectorPanel
               state={inspectionState}
@@ -671,4 +679,5 @@ function SidePanel({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
 
