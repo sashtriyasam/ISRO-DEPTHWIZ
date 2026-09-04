@@ -4,6 +4,16 @@ import { AppShell } from "../components/AppShell/AppShell";
 import { Viewer, type ViewerHandle } from "../viewer/Viewer";
 import { StatusBar } from "../components/StatusBar/StatusBar";
 import { CameraControls } from "../components/CameraControls/CameraControls";
+import { FlythroughPanel } from "../components/FlythroughPanel/FlythroughPanel";
+import {
+  DEFAULT_PLAYBACK_SPEED,
+  DEFAULT_SEGMENT_DURATION_MS,
+  trajectoryStatusForCount,
+  type FlythroughWaypoint,
+  type PlaybackSpeed,
+  type PlaybackStatus,
+} from "../flythrough/types";
+import { previewPoints } from "../flythrough/trajectory";
 import { LayerControls } from "../components/LayerControls/LayerControls";
 import { RenderingControls } from "../components/RenderingControls/RenderingControls";
 import { HeightExaggeration } from "../components/HeightExaggeration/HeightExaggeration";
@@ -44,6 +54,14 @@ export function App() {
   const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
   const [profileState, setProfileState] = useState<ProfileState>({ status: "empty" });
   const [processing, setProcessing] = useState<ProcessingState>({ status: "idle" });
+  const [waypoints, setWaypoints] = useState<FlythroughWaypoint[]>([]);
+  const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>("idle");
+  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(DEFAULT_PLAYBACK_SPEED);
+  const [flythroughIndex, setFlythroughIndex] = useState(0);
+  const waypointCounterRef = useRef(0);
+  const trajectoryCounterRef = useRef(0);
+  const playbackStatusRef = useRef<PlaybackStatus>("idle");
+  playbackStatusRef.current = playbackStatus;
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
   const operationRef = useRef<{ sourceId: string; controller: AbortController } | null>(null);
@@ -98,6 +116,10 @@ export function App() {
         setLayerState(createLayerState(outcome.artifact));
         setArtifactState("ready");
         clearAnalysisState();
+        viewerRef.current?.setFlythroughPreview(null);
+        setWaypoints([]);
+        setPlaybackStatus("idle");
+        setFlythroughIndex(0);
       } else if (outcome.kind === "failed" && !hadArtifact) {
         setArtifactState("error");
       }
@@ -149,11 +171,29 @@ export function App() {
     viewerRef.current?.setCameraMode(mode);
   }, []);
 
+  const waypointsRef = useRef<FlythroughWaypoint[]>([]);
+  waypointsRef.current = waypoints;
+
+  const syncFlythroughPreview = useCallback((points: FlythroughWaypoint[]) => {
+    if (points.length >= 2) {
+      viewerRef.current?.setFlythroughPreview(
+        previewPoints({ id: "preview", waypoints: points, segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS }).map((p) => ({ x: p.x, y: p.y, z: p.z }))
+      );
+    } else {
+      viewerRef.current?.setFlythroughPreview(null);
+    }
+  }, []);
+
   const handleCameraReady = useCallback(() => {
     const desired = desiredCameraModeRef.current;
     setCameraMode(desired);
     viewerRef.current?.setCameraMode(desired);
-  }, []);
+    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
+      setPlaybackStatus(waypointsRef.current.length >= 2 ? "ready" : "idle");
+      setFlythroughIndex(0);
+    }
+    syncFlythroughPreview(waypointsRef.current);
+  }, [syncFlythroughPreview]);
 
   const handleCameraModeChange = useCallback((mode: CameraMode) => {
     if (mode === "first-person") {
@@ -179,6 +219,123 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [cameraMode, applyCameraMode]);
+
+  const playbackSpeedRef = useRef<PlaybackSpeed>(DEFAULT_PLAYBACK_SPEED);
+  playbackSpeedRef.current = playbackSpeed;
+
+  const handleAddWaypoint = useCallback(() => {
+    if (playbackStatusRef.current === "playing") {
+      return;
+    }
+    const manager = viewerRef.current?.getCameraManager();
+    if (!manager) {
+      return;
+    }
+    const state = manager.getState();
+    if (!state) {
+      return;
+    }
+    waypointCounterRef.current += 1;
+    const waypoint: FlythroughWaypoint = {
+      id: `wp-${waypointCounterRef.current}`,
+      position: { x: state.position.x, y: state.position.y, z: state.position.z },
+      target: { x: state.target.x, y: state.target.y, z: state.target.z },
+    };
+    const next = [...waypointsRef.current, waypoint];
+    setWaypoints(next);
+    syncFlythroughPreview(next);
+    setPlaybackStatus(trajectoryStatusForCount(next.length));
+  }, [syncFlythroughPreview]);
+
+  const handleRemoveWaypoint = useCallback((id: string) => {
+    if (playbackStatusRef.current === "playing") {
+      return;
+    }
+    const next = waypointsRef.current.filter((waypoint) => waypoint.id !== id);
+    setWaypoints(next);
+    syncFlythroughPreview(next);
+    setPlaybackStatus(trajectoryStatusForCount(next.length));
+    setFlythroughIndex(0);
+  }, [syncFlythroughPreview]);
+
+  const handleClearWaypoints = useCallback(() => {
+    if (playbackStatusRef.current === "playing") {
+      return;
+    }
+    viewerRef.current?.setFlythroughPreview(null);
+    setWaypoints([]);
+    setPlaybackStatus("idle");
+    setFlythroughIndex(0);
+  }, []);
+
+  const handlePlayFlythrough = useCallback(() => {
+    const points = waypointsRef.current;
+    if (points.length < 2) {
+      return;
+    }
+    trajectoryCounterRef.current += 1;
+    const started = viewerRef.current?.startFlythrough(
+      {
+        id: `traj-${trajectoryCounterRef.current}`,
+        waypoints: points,
+        segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS,
+      },
+      {
+        speed: playbackSpeedRef.current,
+        onWaypointIndex: (index) => setFlythroughIndex(index),
+        onCompleted: () => {
+          viewerRef.current?.stopFlythrough();
+          setPlaybackStatus("completed");
+        },
+      }
+    );
+    if (started) {
+      setFlythroughIndex(0);
+      setPlaybackStatus("playing");
+    }
+  }, []);
+
+  const handlePauseFlythrough = useCallback(() => {
+    viewerRef.current?.pauseFlythrough();
+    setPlaybackStatus("paused");
+  }, []);
+
+  const handleResumeFlythrough = useCallback(() => {
+    viewerRef.current?.resumeFlythrough();
+    setPlaybackStatus("playing");
+  }, []);
+
+  const handleStopFlythrough = useCallback(() => {
+    viewerRef.current?.stopFlythrough();
+    setPlaybackStatus(waypointsRef.current.length >= 2 ? "ready" : "idle");
+    setFlythroughIndex(0);
+  }, []);
+
+  const handleResetFlythrough = useCallback(() => {
+    viewerRef.current?.resetFlythrough();
+    setPlaybackStatus(waypointsRef.current.length >= 2 ? "ready" : "idle");
+    setFlythroughIndex(0);
+  }, []);
+
+  const handleFlythroughSpeed = useCallback((speed: PlaybackSpeed) => {
+    setPlaybackSpeed(speed);
+    viewerRef.current?.setFlythroughSpeed(speed);
+  }, []);
+
+  useEffect(() => {
+    if (playbackStatus !== "playing" && playbackStatus !== "paused") {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === "Escape") {
+        viewerRef.current?.stopFlythrough();
+        setPlaybackStatus(waypointsRef.current.length >= 2 ? "ready" : "idle");
+        setFlythroughIndex(0);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [playbackStatus]);
 
   const handleFrameScene = useCallback(() => {
     const manager = viewerRef.current?.getCameraManager();
@@ -420,6 +577,24 @@ export function App() {
               onModeChange={handleCameraModeChange}
               onFrameScene={handleFrameScene}
               onReset={handleReset}
+              navigationLocked={playbackStatus === "playing" || playbackStatus === "paused"}
+            />
+            <FlythroughPanel
+              waypoints={waypoints}
+              status={playbackStatus}
+              speed={playbackSpeed}
+              currentIndex={flythroughIndex}
+              canCapture={cameraMode !== "trajectory" && artifact !== null}
+              navigationLocked={playbackStatus === "playing" || playbackStatus === "paused"}
+              onAddWaypoint={handleAddWaypoint}
+              onRemoveWaypoint={handleRemoveWaypoint}
+              onClear={handleClearWaypoints}
+              onPlay={handlePlayFlythrough}
+              onPause={handlePauseFlythrough}
+              onResume={handleResumeFlythrough}
+              onStop={handleStopFlythrough}
+              onReset={handleResetFlythrough}
+              onSpeedChange={handleFlythroughSpeed}
             />
             <HeightExaggeration
               current={exaggeration}

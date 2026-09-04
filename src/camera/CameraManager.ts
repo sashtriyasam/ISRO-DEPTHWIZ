@@ -20,7 +20,20 @@ export class CameraManager {
     this.initialPosition = position.clone();
   }
 
+  activateController(controller: CameraController): void {
+    if (this.activeController) {
+      this.activeController.deactivate();
+      this.activeController.dispose();
+      this.activeController = null;
+    }
+    this.activeController = controller;
+    this.activeController.activate();
+  }
+
   activate(mode: CameraMode, target: THREE.Vector3, bounds: DisplayBounds): void {
+    if (mode === "trajectory") {
+      return;
+    }
     if (this.activeController) {
       this.activeController.deactivate();
       this.activeController.dispose();

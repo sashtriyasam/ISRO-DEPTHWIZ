@@ -1,25 +1,26 @@
-import { CAMERA_MODES, type CameraMode } from "../../camera/types";
+import { MANUAL_CAMERA_MODES, type ManualCameraMode } from "../../camera/types";
 
 interface CameraControlsProps {
-  currentMode: CameraMode | null;
-  onModeChange: (mode: CameraMode) => void;
+  currentMode: ManualCameraMode | "trajectory" | null;
+  onModeChange: (mode: ManualCameraMode) => void;
   onFrameScene: () => void;
   onReset: () => void;
+  navigationLocked?: boolean;
 }
 
-const MODE_LABELS: Record<CameraMode, string> = {
+const MODE_LABELS: Record<ManualCameraMode, string> = {
   orbit: "Orbit",
   "first-person": "First Person",
   aerial: "Aerial",
 };
 
-export function CameraControls({ currentMode, onModeChange, onFrameScene, onReset }: CameraControlsProps) {
+export function CameraControls({ currentMode, onModeChange, onFrameScene, onReset, navigationLocked = false }: CameraControlsProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       <div>
         <div style={sectionLabelStyle}>Camera</div>
         <div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
-          {CAMERA_MODES.map((mode) => {
+          {MANUAL_CAMERA_MODES.map((mode) => {
             const active = currentMode === mode;
             return (
               <button
@@ -33,6 +34,7 @@ export function CameraControls({ currentMode, onModeChange, onFrameScene, onRese
                 aria-pressed={active}
                 title={`${MODE_LABELS[mode]} mode${active ? " (active)" : ""}`}
                 onClick={() => onModeChange(mode)}
+                disabled={navigationLocked}
               >
                 {MODE_LABELS[mode]}
               </button>

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import * as THREE from "three";
 import { CameraManager } from "./CameraManager";
-import { CAMERA_MODES, isCameraMode } from "./types";
+import { TrajectoryCameraController } from "./TrajectoryController";
+import { DEFAULT_SEGMENT_DURATION_MS } from "../flythrough/types";
+import { CAMERA_MODES, MANUAL_CAMERA_MODES, isCameraMode } from "./types";
 
 function createMockDomElement() {
   return {
@@ -27,8 +29,8 @@ function testBounds() {
 }
 
 describe("camera modes", () => {
-  it("declares orbit, first-person, and aerial modes", () => {
-    expect(CAMERA_MODES).toEqual(["orbit", "first-person", "aerial"]);
+  it("declares orbit, first-person, aerial, and trajectory modes", () => {
+    expect(CAMERA_MODES).toEqual(["orbit", "first-person", "aerial", "trajectory"]);
     expect(isCameraMode("orbit")).toBe(true);
     expect(isCameraMode("first-person")).toBe(true);
     expect(isCameraMode("aerial")).toBe(true);
@@ -64,7 +66,7 @@ describe("mode switching", () => {
     const manager = new CameraManager(camera, domElement);
     const bounds = testBounds();
     try {
-      for (const mode of CAMERA_MODES) {
+      for (const mode of MANUAL_CAMERA_MODES) {
         manager.activate(mode, bounds.center.clone(), bounds);
         expect(() => manager.frameBounds(bounds)).not.toThrow();
         expect(() => manager.reset()).not.toThrow();
@@ -78,12 +80,60 @@ describe("mode switching", () => {
     }
   });
 
+  it("keeps the active controller when trajectory is requested without data", () => {
+    const camera = new THREE.PerspectiveCamera(50, 800 / 600, 0.1, 100);
+    const domElement = createMockDomElement();
+    const manager = new CameraManager(camera, domElement);
+    const bounds = testBounds();
+    try {
+      manager.activate("orbit", bounds.center.clone(), bounds);
+      manager.activate("trajectory", bounds.center.clone(), bounds);
+      expect(manager.getMode()).toBe("orbit");
+    } finally {
+      manager.dispose();
+    }
+  });
+
+  it("injects trajectory controllers through the same seam", () => {
+    const camera = new THREE.PerspectiveCamera(50, 800 / 600, 0.1, 100);
+    const domElement = createMockDomElement();
+    const manager = new CameraManager(camera, domElement);
+    const bounds = testBounds();
+    try {
+      manager.activate("orbit", bounds.center.clone(), bounds);
+      expect(manager.getMode()).toBe("orbit");
+      const controller = new TrajectoryCameraController({
+        camera,
+        domElement,
+        target: bounds.center.clone(),
+        bounds,
+        trajectory: {
+          id: "traj-1",
+          waypoints: [
+            { id: "wp-1", position: { x: 0, y: 4, z: 7 }, target: { x: 0, y: 0, z: 0 } },
+            { id: "wp-2", position: { x: 4, y: 4, z: 7 }, target: { x: 0, y: 0, z: 0 } },
+          ],
+          segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS,
+        },
+      });
+      manager.activateController(controller);
+      expect(manager.getMode()).toBe("trajectory");
+      expect(() => manager.update()).not.toThrow();
+      manager.activate("orbit", bounds.center.clone(), bounds);
+      expect(manager.getMode()).toBe("orbit");
+      const remove = domElement.removeEventListener as unknown as ReturnType<typeof vi.fn>;
+      expect(remove.mock.calls.length).toBeGreaterThan(0);
+    } finally {
+      manager.dispose();
+    }
+  });
+
   it("uses fresh bounds after artifact replacement in every mode", () => {
     const camera = new THREE.PerspectiveCamera(50, 800 / 600, 0.1, 100);
     const domElement = createMockDomElement();
     const manager = new CameraManager(camera, domElement);
     try {
-      for (const mode of CAMERA_MODES) {
+      for (const mode of MANUAL_CAMERA_MODES) {
         manager.activate(mode, new THREE.Vector3(), testBounds());
         const before = camera.position.clone();
         const bigger = {
@@ -100,3 +150,4 @@ describe("mode switching", () => {
     }
   });
 });
+

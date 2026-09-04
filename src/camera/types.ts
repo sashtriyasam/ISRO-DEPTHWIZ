@@ -1,8 +1,16 @@
 import * as THREE from "three";
 
-export type CameraMode = "orbit" | "first-person" | "aerial";
+export type ManualCameraMode = "orbit" | "first-person" | "aerial";
 
-export const CAMERA_MODES: readonly CameraMode[] = ["orbit", "first-person", "aerial"];
+export const MANUAL_CAMERA_MODES: readonly ManualCameraMode[] = [
+  "orbit",
+  "first-person",
+  "aerial",
+];
+
+export type CameraMode = ManualCameraMode | "trajectory";
+
+export const CAMERA_MODES: readonly CameraMode[] = [...MANUAL_CAMERA_MODES, "trajectory"];
 
 export function isCameraMode(value: string): value is CameraMode {
   return (CAMERA_MODES as readonly string[]).includes(value);

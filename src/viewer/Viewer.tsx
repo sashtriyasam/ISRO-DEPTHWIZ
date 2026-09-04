@@ -8,8 +8,10 @@ import type { MeasurementPoint } from "../measurement/types";
 import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
 import type { RenderingMode } from "../layers/types";
 import { CameraManager } from "../camera/CameraManager";
+import { TrajectoryCameraController } from "../camera/TrajectoryController";
 import { computeDisplayBounds } from "../camera/sceneBounds";
 import type { CameraMode, DisplayBounds } from "../camera/types";
+import type { FlythroughTrajectory, PlaybackSpeed, WaypointPosition } from "../flythrough/types";
 import { resolveInspection } from "../inspection/resolver";
 
 type InteractionMode = "inspect" | "measure" | "profile";
@@ -32,6 +34,20 @@ export interface ViewerHandle {
   getCameraMode: () => CameraMode;
   setRenderingMode: (mode: RenderingMode) => void;
   getRenderingMode: () => RenderingMode;
+  startFlythrough: (
+    trajectory: FlythroughTrajectory,
+    options?: {
+      speed?: PlaybackSpeed;
+      onCompleted?: () => void;
+      onWaypointIndex?: (index: number) => void;
+    }
+  ) => boolean;
+  pauseFlythrough: () => void;
+  resumeFlythrough: () => void;
+  stopFlythrough: () => void;
+  resetFlythrough: () => void;
+  setFlythroughSpeed: (speed: PlaybackSpeed) => void;
+  setFlythroughPreview: (points: WaypointPosition[] | null) => void;
   clearSelection: () => void;
   clearMeasurementGraphics: () => void;
   clearProfileGraphics: () => void;
@@ -72,6 +88,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     cameraModeRef: CameraMode;
     renderingModeRef: RenderingMode;
     lastBoundsRef: DisplayBounds | null;
+    trajectoryControllerRef: TrajectoryCameraController | null;
+    previewLineRef: THREE.Line | null;
+    previousCameraModeRef: CameraMode;
   }>({
     renderer: null,
     camera: null,
@@ -98,12 +117,15 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     cameraModeRef: "orbit",
     renderingModeRef: "shaded",
     lastBoundsRef: null,
+    trajectoryControllerRef: null,
+    previewLineRef: null,
+    previousCameraModeRef: "orbit",
   });
 
   const handlePointerDown = useCallback((event: PointerEvent) => {
     const state = stateRef.current;
     if (state.disposed || !state.camera || !state.threeScene || !state.currentMeshGroup || !state.currentArtifact) return;
-    if (state.cameraModeRef === "first-person") return;
+    if (state.cameraModeRef === "first-person" || state.cameraModeRef === "trajectory") return;
 
     const container = containerRef.current;
     if (!container) return;
@@ -260,6 +282,69 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.renderingModeRef = mode;
       replaceMeshGroup(state, state.currentArtifact, state.currentLayerId ?? "dsm");
     },
+    startFlythrough: (trajectory, options) => {
+      const state = stateRef.current;
+      const container = containerRef.current;
+      if (state.disposed || !state.cameraManager || !state.lastBoundsRef || !container) return false;
+      if (trajectory.waypoints.length < 2) return false;
+      if (state.cameraModeRef !== "trajectory") {
+        state.previousCameraModeRef = state.cameraModeRef;
+      }
+      const bounds = state.lastBoundsRef;
+      const controller = new TrajectoryCameraController({
+        camera: state.camera!,
+        domElement: container,
+        target: bounds.center.clone(),
+        bounds: {
+          center: bounds.center.clone(),
+          size: bounds.size.clone(),
+          sphere: bounds.sphere.clone(),
+          box: bounds.box.clone(),
+        },
+        trajectory,
+        speed: options?.speed,
+        onCompleted: options?.onCompleted,
+        onWaypointIndex: options?.onWaypointIndex,
+      });
+      state.cameraManager.activateController(controller);
+      state.trajectoryControllerRef = controller;
+      state.cameraModeRef = "trajectory";
+      controller.play();
+      return true;
+    },
+    pauseFlythrough: () => {
+      stateRef.current.trajectoryControllerRef?.pause();
+    },
+    resumeFlythrough: () => {
+      stateRef.current.trajectoryControllerRef?.resume();
+    },
+    resetFlythrough: () => {
+      stateRef.current.trajectoryControllerRef?.resetToStart();
+    },
+    stopFlythrough: () => {
+      const state = stateRef.current;
+      const controller = state.trajectoryControllerRef;
+      state.trajectoryControllerRef = null;
+      if (!controller || state.disposed || !state.cameraManager || !state.lastBoundsRef) return;
+      controller.stop();
+      const restore = state.previousCameraModeRef;
+      state.cameraModeRef = restore;
+      const bounds = state.lastBoundsRef;
+      state.cameraManager.activate(restore, bounds.center.clone(), {
+        center: bounds.center.clone(),
+        size: bounds.size.clone(),
+        sphere: bounds.sphere.clone(),
+        box: bounds.box.clone(),
+      });
+    },
+    setFlythroughSpeed: (speed: PlaybackSpeed) => {
+      stateRef.current.trajectoryControllerRef?.setSpeed(speed);
+    },
+    setFlythroughPreview: (points: WaypointPosition[] | null) => {
+      const state = stateRef.current;
+      if (state.disposed || !state.threeScene) return;
+      setPreviewLine(state, points);
+    },
     clearSelection: () => {
       const state = stateRef.current;
       if (state.selectionMarker && state.threeScene) {
@@ -410,6 +495,16 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.currentMeshGroup = null;
       }
 
+      if (state.previewLineRef) {
+        if (state.previewLineRef.parent) {
+          state.previewLineRef.parent.remove(state.previewLineRef);
+        }
+        state.previewLineRef.geometry.dispose();
+        (state.previewLineRef.material as THREE.Material).dispose();
+        state.previewLineRef = null;
+      }
+      state.trajectoryControllerRef = null;
+
       renderer.dispose();
 
       if (renderer.domElement.parentElement) {
@@ -483,6 +578,37 @@ function clearProfileGraphics(state: {
     state.profileLine.geometry.dispose();
     state.profileLine = null;
   }
+}
+
+function setPreviewLine(
+  state: {
+    threeScene: THREE.Scene | null;
+    previewLineRef: THREE.Line | null;
+  },
+  points: WaypointPosition[] | null
+): void {
+  if (state.previewLineRef && state.threeScene) {
+    state.threeScene.remove(state.previewLineRef);
+    state.previewLineRef.geometry.dispose();
+    (state.previewLineRef.material as THREE.Material).dispose();
+    state.previewLineRef = null;
+  }
+  if (!points || points.length < 2 || !state.threeScene) return;
+  const geometry = new THREE.BufferGeometry().setFromPoints(
+    points.map((p) => new THREE.Vector3(p.x, p.y, p.z))
+  );
+  const material = new THREE.LineBasicMaterial({
+    color: 0x44ccff,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  });
+  const line = new THREE.Line(geometry, material);
+  line.renderOrder = 999;
+  line.frustumCulled = false;
+  line.userData.pickable = false;
+  state.threeScene.add(line);
+  state.previewLineRef = line;
 }
 
 function replaceMeshGroup(
