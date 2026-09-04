@@ -31,6 +31,13 @@ export function ProfileChart({ profile }: ProfileChartProps) {
   const plotWidth = width - PADDING.left - PADDING.right;
   const plotHeight = height - PADDING.top - PADDING.bottom;
 
+  const unitSuffix = profile.units === "meters" ? "m" : profile.units;
+  const valueLabel = profile.elevationSemantics === "relative_depth"
+    ? "Relative depth"
+    : profile.elevationSemantics === "height_agl_ndsm"
+      ? "Height"
+      : "Elevation";
+
   if (profile.points.length === 0) return null;
 
   const minDist = 0;
@@ -63,7 +70,7 @@ export function ProfileChart({ profile }: ProfileChartProps) {
         viewBox={`0 0 ${width} ${height}`}
         style={{ display: "block" }}
         role="img"
-        aria-label={`Elevation profile from point A to point B, path length ${profile.totalDistance.toFixed(2)} m, minimum elevation ${profile.minElevation.toFixed(2)} m, maximum elevation ${profile.maxElevation.toFixed(2)} m`}
+        aria-label={`${valueLabel} profile from point A to point B, path length ${profile.totalDistance.toFixed(2)}, minimum ${profile.minElevation.toFixed(2)}, maximum ${profile.maxElevation.toFixed(2)}, units ${unitSuffix}`}
       >
         <rect x={PADDING.left} y={PADDING.top} width={plotWidth} height={plotHeight} fill="var(--color-bg-tertiary)" rx={2} />
 
@@ -91,10 +98,10 @@ export function ProfileChart({ profile }: ProfileChartProps) {
         <circle cx={distToX(profile.totalDistance)} cy={elevToY(profile.points[profile.points.length - 1].elevation)} r={3} fill="#44ff88" />
 
         <text x={width / 2} y={height - 2} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9} fontFamily="var(--font-mono)">
-          Distance (m)
+          Distance ({unitSuffix})
         </text>
         <text x={5} y={height / 2} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9} fontFamily="var(--font-mono)" transform={`rotate(-90, 5, ${height / 2})`}>
-          Elevation (m)
+          {valueLabel} ({unitSuffix})
         </text>
       </svg>
     </div>

@@ -67,7 +67,7 @@ export function SceneInfo({ artifact, state, sourceLabel }: SceneInfoProps) {
             <div>
               <div style={sectionLabelStyle}>Elevation Grid</div>
               <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-secondary)" }}>
-                {artifact.elevation.width}x{artifact.elevation.height} ({artifact.elevation.cellSize}m cells)
+                {artifact.elevation.width}x{artifact.elevation.height} ({gridCellLabel(artifact.elevation.cellSize, artifact.elevation.unit)})
               </div>
             </div>
           )}
@@ -91,6 +91,13 @@ export function SceneInfo({ artifact, state, sourceLabel }: SceneInfoProps) {
       )}
     </div>
   );
+}
+
+function gridCellLabel(cellSize: number, unit: string): string {
+  if (unit === "meters") {
+    return `${cellSize} m cells`;
+  }
+  return `${cellSize} grid units (${unit})`;
 }
 
 function productLabel(semantics: string): string {

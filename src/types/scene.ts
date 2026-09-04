@@ -47,6 +47,23 @@ export interface BackendOrigin {
   georeferencing: string;
   calibration_method?: string;
   calibration_reference?: string;
+  calibration_scale?: number;
+  calibration_offset?: number;
+  input_id?: string;
+  input_checksum?: string;
+  software_version?: string;
+  semantic_meaning?: string;
+}
+
+export interface SpatialDetails {
+  gsd?: number;
+  nodata?: number | null;
+  rasterWidth?: number;
+  rasterHeight?: number;
+  spatialUnits?: string;
+  source?: string;
+  affine?: [number, number, number, number, number, number];
+  spatialBounds?: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export interface SceneMetadata {
@@ -60,6 +77,7 @@ export interface SceneMetadata {
   source: "deterministic-fixture" | "backend";
   description?: string;
   backend?: BackendOrigin;
+  spatialDetails?: SpatialDetails;
 }
 
 export interface GeoTransform {

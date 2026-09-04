@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import type { AdapterError } from "./adapter";
 import { mapBackendTransform } from "./adapter";
+import { mapSpatialDetails, applyProvenance } from "./spatialMeta";
 
 export interface MeshAdapterResult {
   success: boolean;
@@ -244,8 +245,11 @@ export function adaptTerrainProduct(product: BackendTerrainProduct): MeshAdapter
     georeferencing: mesh.georeferencing,
     calibration_method: mesh.calibration_method,
     calibration_reference: mesh.calibration_reference,
+    calibration_scale: mesh.calibration_scale,
+    calibration_offset: mesh.calibration_offset,
   };
   if (mesh.depth_model_version) backend.model_version = mesh.depth_model_version;
+  applyProvenance(backend, mesh.provenance);
 
   const metadata: SceneMetadata = {
     source: "backend",
@@ -255,6 +259,8 @@ export function adaptTerrainProduct(product: BackendTerrainProduct): MeshAdapter
   };
   if (crs) metadata.CRS = crs;
   if (transform) metadata.transform = transform;
+  const extraSpatial = spatialDetails ? mapSpatialDetails(spatialDetails) : undefined;
+  if (extraSpatial) metadata.spatialDetails = extraSpatial;
 
   warnings.push(
     `Backend terrain mesh: ${mesh.vertex_count} vertices, ${mesh.triangle_count} triangles (frame: ${mesh.frame})`

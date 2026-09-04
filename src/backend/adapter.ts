@@ -4,6 +4,7 @@ import type {
   BackendSpatialDetails,
   BackendCalibrationResult,
 } from "./types";
+import { mapSpatialDetails, applyProvenance } from "./spatialMeta";
 
 export interface AdapterError {
   code: string;
@@ -182,6 +183,7 @@ export function adaptBackendResult(result: BackendDepthResult): AdapterResult {
     georeferencing: result.georeferencing,
   };
   if (result.model_version) backend.model_version = result.model_version;
+  applyProvenance(backend, result.provenance);
 
   const metadata: SceneArtifact["metadata"] = {
     source,
@@ -195,6 +197,8 @@ export function adaptBackendResult(result: BackendDepthResult): AdapterResult {
   if (crs) metadata.CRS = crs;
   if (transform) metadata.transform = transform;
   if (bounds) metadata.bounds = bounds;
+  const extraSpatial = spatialDetails ? mapSpatialDetails(spatialDetails) : undefined;
+  if (extraSpatial) metadata.spatialDetails = extraSpatial;
 
   if (result.depth_scale === "relative") {
     warnings.push("Depth values are RELATIVE — not calibrated to metres");
@@ -259,8 +263,11 @@ export function adaptCalibratedResult(
     georeferencing: result.georeferencing,
     calibration_method: calibration.method,
     calibration_reference: calibration.reference_id,
+    calibration_scale: calibration.scale,
+    calibration_offset: calibration.offset,
   };
   if (result.model_version) backend.model_version = result.model_version;
+  applyProvenance(backend, result.provenance);
 
   const metadata: SceneArtifact["metadata"] = {
     source: "backend",
@@ -274,6 +281,8 @@ export function adaptCalibratedResult(
   if (crs) metadata.CRS = crs;
   if (transform) metadata.transform = transform;
   if (bounds) metadata.bounds = bounds;
+  const extraSpatial = spatialDetails ? mapSpatialDetails(spatialDetails) : undefined;
+  if (extraSpatial) metadata.spatialDetails = extraSpatial;
 
   warnings.push(`Calibrated via ${calibration.method}: scale=${calibration.scale}, offset=${calibration.offset}`);
   warnings.push(`Calibration RMSE: ${calibration.rmse}, R²: ${calibration.r_squared}`);

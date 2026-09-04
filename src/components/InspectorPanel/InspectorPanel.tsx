@@ -72,10 +72,14 @@ export function InspectorPanel({ state, metadata, onClear }: InspectorPanelProps
         {result.scientific.agl !== undefined && (
           <DataRow label="AGL" value={`${formatValue(result.scientific.agl)}${unitLabel}`} />
         )}
+        {metadata?.CRS && (
+          <DataRow label="CRS" value={metadata.CRS} />
+        )}
         <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
-        <DataRow label="Position X" value={`${formatValue(result.position.x)} m`} />
-        <DataRow label="Position Y" value={`${formatValue(result.position.y)} m`} />
-        <DataRow label="Position Z" value={`${formatValue(result.position.z)} m`} />
+        <div style={positionLabelStyle}>Display position (scene units)</div>
+        <DataRow label="Display X" value={formatValue(result.position.x)} />
+        <DataRow label="Display Y" value={formatValue(result.position.y)} />
+        <DataRow label="Display Z" value={formatValue(result.position.z)} />
         <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
         <DataRow label="U" value={formatValue(result.uv.u)} />
         <DataRow label="V" value={formatValue(result.uv.v)} />
@@ -100,6 +104,12 @@ const sectionLabelStyle: React.CSSProperties = {
   color: "var(--color-text-muted)",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
+};
+
+const positionLabelStyle: React.CSSProperties = {
+  fontSize: "var(--font-size-xs)",
+  color: "var(--color-text-muted)",
+  fontStyle: "italic",
 };
 
 const clearButtonStyle: React.CSSProperties = {

@@ -9,6 +9,7 @@ import { HeightExaggeration } from "../components/HeightExaggeration/HeightExagg
 import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
 import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
+import { MetadataPanel } from "../components/MetadataPanel/MetadataPanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
 import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
@@ -399,6 +400,10 @@ export function App() {
               state={inspectionState}
               metadata={artifact?.metadata}
               onClear={handleClearInspection}
+            />
+            <MetadataPanel
+              artifact={artifact}
+              activeLayerId={activeLayerId}
             />
             <SceneInfo
               artifact={artifact}
