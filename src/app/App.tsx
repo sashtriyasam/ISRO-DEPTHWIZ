@@ -27,6 +27,13 @@ import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
 import { ArtifactLoader } from "../artifact";
 import type { ArtifactSource } from "../artifact/types";
 import { runProcessingOperation, type ProcessingState } from "../processing";
+import { SessionStatus } from "../components/SessionStatus/SessionStatus";
+import {
+  deriveSessionDirty,
+  deriveSessionPhase,
+  pendingSelections,
+  resetSession,
+} from "../session/session";
 import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
 import { calculateMeasurement } from "../measurement/calculator";
@@ -87,6 +94,20 @@ export function App() {
     if (active) {
       active.controller.abort();
     }
+    if (
+      pendingSelections({
+        measurement: measurementState,
+        profile: profileState,
+        inspection: inspectionState,
+      })
+    ) {
+      viewerRef.current?.clearSelection();
+      setInspectionState({ status: "empty" });
+      setMeasurementState({ status: "empty" });
+      viewerRef.current?.clearMeasurementGraphics();
+      setProfileState({ status: "empty" });
+      viewerRef.current?.clearProfileGraphics();
+    }
     const controller = new AbortController();
     operationRef.current = { sourceId: source.id, controller };
     operationCounterRef.current += 1;
@@ -124,7 +145,7 @@ export function App() {
         setArtifactState("error");
       }
     })();
-  }, [clearAnalysisState]);
+  }, [clearAnalysisState, measurementState, profileState, inspectionState]);
 
   useEffect(() => {
     return () => {
@@ -259,15 +280,52 @@ export function App() {
     setFlythroughIndex(0);
   }, [syncFlythroughPreview]);
 
-  const handleClearWaypoints = useCallback(() => {
-    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
-      return;
-    }
+  const clearFlythroughState = useCallback(() => {
     viewerRef.current?.setFlythroughPreview(null);
     setWaypoints([]);
     setPlaybackStatus("idle");
     setFlythroughIndex(0);
   }, []);
+
+  const handleClearWaypoints = useCallback(() => {
+    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
+      return;
+    }
+    clearFlythroughState();
+  }, [clearFlythroughState]);
+
+  const sessionPhase = useMemo(
+    () => deriveSessionPhase({ hasArtifact: artifact !== null, processing }),
+    [artifact, processing]
+  );
+
+  const sessionDirty = useMemo(
+    () =>
+      deriveSessionDirty({
+        waypoints,
+        measurement: measurementState,
+        profile: profileState,
+      }),
+    [waypoints, measurementState, profileState]
+  );
+
+  const handleResetWorkspace = useCallback(() => {
+    resetSession({
+      abortOperation: () => {
+        operationRef.current?.controller.abort();
+        operationRef.current = null;
+      },
+      setProcessingIdle: () => setProcessing({ status: "idle" }),
+      clearArtifact: () => {
+        setArtifact(null);
+        setArtifactState("idle");
+      },
+      clearLayers: () => setLayerState(null),
+      clearAnalysis: clearAnalysisState,
+      clearFlythrough: clearFlythroughState,
+      resetCameraToOrbit: () => applyCameraMode("orbit"),
+    });
+  }, [clearAnalysisState, clearFlythroughState, applyCameraMode]);
 
   const handlePlayFlythrough = useCallback(() => {
     const points = waypointsRef.current;
@@ -560,6 +618,16 @@ export function App() {
         }
         panel={
           <SidePanel>
+            <SessionStatus
+              phase={sessionPhase}
+              dirty={sessionDirty}
+              canReset={
+                artifact !== null ||
+                waypoints.length > 0 ||
+                processing.status !== "idle"
+              }
+              onReset={handleResetWorkspace}
+            />
             <InputWorkspace
               processingRunning={processing.status === "running"}
               onGenerate={handleGenerate}
