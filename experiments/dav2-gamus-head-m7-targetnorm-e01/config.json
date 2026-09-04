@@ -1,0 +1,15 @@
+{
+  "checkpoint": null,
+  "device": "cpu",
+  "epochs": 30,
+  "experiment_id": "dav2-gamus-head-m7-targetnorm-e01",
+  "input_size": 518,
+  "lr": 0.001,
+  "manifest": "manifests/gamus.m4.manifest.json",
+  "root": null,
+  "seed": 0,
+  "target_mode": "zscore",
+  "train_samples": null,
+  "val_split": "val",
+  "weight_decay": 0.0
+}

@@ -1,9 +1,9 @@
 """
-Deterministic training loop for the M4 adaptation head (research only).
+Deterministic training loop for the M4/M7 adaptation head (research only).
 
 - Backbone frozen (asserted every epoch); only head parameters optimize.
-- Masked L1 on raw meters; negatives preserved; no augmentation baseline.
-- Train split fits; VAL split selects (best val MAE); TEST never touched here.
+- Masked L1 on raw or normalized meters; negatives preserved; no augmentation.
+- Train split fits; VAL split selects (best val MAE); TEST never touched.
 - Logs JSONL per epoch; saves best-val head checkpoint (git-ignored dir).
 - Determinism: torch/python/numpy seeds, single-worker ordering, no shuffle
   (sorted manifest order) — reported as reproducible configuration, not
@@ -16,9 +16,9 @@ import json
 import random
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from depthwizard.adapt.loss import masked_l1
+from depthwizard.adapt.loss import masked_l1, TargetScale
 
 
 def set_deterministic(seed: int) -> None:
@@ -36,7 +36,37 @@ def set_deterministic(seed: int) -> None:
         pass
 
 
-def train_one_epoch(model: Any, samples: list[dict], optimizer: Any, out_hw: tuple[int, int] = (1024, 1024)) -> dict[str, Any]:
+def _compute_target_stats(samples: list[dict]) -> tuple[float, float]:
+    """Compute mean and std of valid target pixels from training samples.
+
+    Uses float64 for accumulation to minimize numerical error.
+    Returns (mean, std) of valid finite target pixels.
+    """
+    import numpy as np  # type: ignore
+
+    all_valid = []
+    for s in samples:
+        h = np.asarray(s["height"], dtype=np.float64)
+        mask = np.isfinite(h)
+        if mask.any():
+            all_valid.append(h[mask])
+    if not all_valid:
+        raise ValueError("No valid target pixels found in training data")
+    all_vals = np.concatenate(all_valid)
+    mean = float(all_vals.mean())
+    std = float(all_vals.std())
+    if std <= 0.0:
+        raise ValueError("Target standard deviation is zero or negative")
+    return mean, std
+
+
+def train_one_epoch(
+    model: Any,
+    samples: list[dict],
+    optimizer: Any,
+    target_scale: TargetScale,
+    out_hw: tuple[int, int] = (1024, 1024),
+) -> dict[str, Any]:
     """One epoch over sorted train samples (batch=1 tile; 1024px tiles)."""
     torch = _require_torch()
     model.assert_frozen()
@@ -47,7 +77,9 @@ def train_one_epoch(model: Any, samples: list[dict], optimizer: Any, out_hw: tup
         optimizer.zero_grad(set_to_none=True)
         pred = model.forward(s["image"], out_hw=out_hw).unsqueeze(0)  # (1,1,H,W)
         tgt = torch.as_tensor(s["height"], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        loss, n_valid = masked_l1(pred, tgt)
+        # Normalize target
+        tgt_norm = target_scale.forward(tgt)
+        loss, n_valid = masked_l1(pred, tgt_norm)
         loss.backward()
         # Guard: backbone must not accumulate grads (frozen => no grad_fn path).
         for p in model.backbone.parameters():
@@ -60,8 +92,13 @@ def train_one_epoch(model: Any, samples: list[dict], optimizer: Any, out_hw: tup
     return {"loss": total_loss / denom, "mae": total_loss / denom, "n_valid": total_valid}
 
 
-def evaluate_split(model: Any, samples: list[dict], out_hw: tuple[int, int] = (1024, 1024)) -> dict[str, Any]:
-    """Validation: forward-only metric means (no grad, no weight updates)."""
+def evaluate_split(
+    model: Any,
+    samples: list[dict],
+    target_scale: TargetScale,
+    out_hw: tuple[int, int] = (1024, 1024),
+) -> dict[str, Any]:
+    """Validation: forward-only metric means in meters (inverse normalization applied)."""
     import numpy as np  # type: ignore
 
     torch = _require_torch()
@@ -75,15 +112,18 @@ def evaluate_split(model: Any, samples: list[dict], out_hw: tuple[int, int] = (1
             pred = model.forward(s["image"], out_hw=out_hw).detach()
             tgt = torch.as_tensor(np.asarray(s["height"], dtype=np.float32))
             pred2 = pred.squeeze(0)
-            mask = torch.isfinite(pred2) & torch.isfinite(tgt)
+            # Inverse normalize prediction to meters for metric computation
+            pred_m = target_scale.inverse(pred2)
+            tgt_m = tgt
+            mask = torch.isfinite(pred_m) & torch.isfinite(tgt_m)
             if int(mask.sum()) == 0:
                 continue
-            d = (pred2[mask] - tgt[mask]).double()
+            d = (pred_m[mask] - tgt_m[mask]).double()
             sum_abs += float(d.abs().sum())
             sum_sq += float((d ** 2).sum())
             n += int(mask.sum())
-            preds_all.append(np.asarray(pred2[mask].cpu()))
-            tgts_all.append(np.asarray(tgt[mask].cpu()))
+            preds_all.append(np.asarray(pred_m[mask].cpu()))
+            tgts_all.append(np.asarray(tgt_m[mask].cpu()))
     if n == 0:
         raise ValueError("evaluate_split: zero valid pixels")
     out = {"loss": sum_abs / n, "mae": sum_abs / n, "rmse": (sum_sq / n) ** 0.5, "n_valid": n}
@@ -105,6 +145,7 @@ def train_adapted_model(
     seed: int = 0,
     selection_metric: str = "mae",
     out_hw: tuple[int, int] = (1024, 1024),
+    target_scale: Optional[TargetScale] = None,
 ) -> dict[str, Any]:
     """Full training with best-val selection. Returns summary (JSON-serializable)."""
     torch = _require_torch()
@@ -113,6 +154,16 @@ def train_adapted_model(
     out.mkdir(parents=True, exist_ok=True)
     ckpt_dir = out / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+    # Compute target normalization stats from TRAIN data only (no leakage).
+    if target_scale is None:
+        # Default to raw meters (M4/M5 behavior)
+        target_scale = TargetScale(mode="raw")
+    elif target_scale.mode == "zscore" and (target_scale.mu == 0.0 and target_scale.sigma == 1.0):
+        # Compute stats from train data if not provided
+        mean, std = _compute_target_stats(train_samples)
+        target_scale = TargetScale(mode="zscore", mu=mean, sigma=std)
+
     optimizer = torch.optim.Adam([p for p in model.head.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
     log_path = out / "log.jsonl"
     best = {"epoch": -1, "value": float("inf")}
@@ -120,8 +171,8 @@ def train_adapted_model(
     t0 = time.perf_counter()
     with log_path.open("w", encoding="utf-8") as logf:
         for epoch in range(epochs):
-            tr = train_one_epoch(model, train_samples, optimizer, out_hw=out_hw)
-            va = evaluate_split(model, val_samples, out_hw=out_hw)
+            tr = train_one_epoch(model, train_samples, optimizer, target_scale, out_hw=out_hw)
+            va = evaluate_split(model, val_samples, target_scale, out_hw=out_hw)
             row = {
                 "epoch": epoch,
                 "train_loss": tr["loss"],
@@ -153,6 +204,7 @@ def train_adapted_model(
         "best_value": best["value"],
         "history": history,
         "train_time_s": time.perf_counter() - t0,
+        "target_scale": target_scale.config(),
     }
     (out / "train_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary
@@ -162,5 +214,5 @@ def _require_torch() -> Any:
     try:
         import torch  # type: ignore
     except Exception as e:
-        raise RuntimeError(f"torch is required for M4 adaptation (pip install -e .[dav2]): {e}") from e
+        raise RuntimeError(f"torch is required for M4/M7 adaptation (pip install -e .[dav2]): {e}") from e
     return torch

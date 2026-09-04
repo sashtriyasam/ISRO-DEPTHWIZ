@@ -1,0 +1,17 @@
+{
+  "manifest": "manifests/gamus.m4.manifest.json",
+  "experiment_id": "dav2-gamus-head-m7-targetnorm-e01",
+  "train_samples": null,
+  "val_split": "val",
+  "epochs": 30,
+  "lr": 0.001,
+  "weight_decay": 0.0,
+  "seed": 0,
+  "device": "cpu",
+  "input_size": 518,
+  "checkpoint": null,
+  "root": "data/gamus",
+  "visuals": false,
+  "target_mode": "zscore",
+  "comment": "Single-factor target normalization experiment (M5 with zscore). All other factors identical to M5."
+}

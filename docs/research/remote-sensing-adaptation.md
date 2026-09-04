@@ -166,3 +166,44 @@ Backbone: `DepthAnythingV2-Small` @ `03876f86...` (Apache-2.0); upstream code @ 
 ---
 
 *Full report: `docs/research/m6-geographic-validation.md`*
+
+---
+
+# M7 — Target Normalization Experiment (z-score on M5)
+
+**Branch:** `feat/shravan-dav2-target-normalization` · **Experiment:** `experiments/dav2-gamus-head-m7-targetnorm-e01`
+**Full report:** `docs/research/m7-target-normalization.md` (this section summarizes; numbers identical).
+
+- **Controlled change:** target normalization only (`raw` → `zscore`); all else frozen to M5.
+- **M5 model:** Frozen DA-V2-Small + lightweight head (23k params), trained on 24 DC tiles, 30 epochs.
+- **Normalization:** z-score with μ=9.54, σ=10.53 computed from TRAIN pixels only (no leakage).
+- **Protocol:** Frozen M5 checkpoint (epoch 23); direct metric evaluation; same masking/metrics as M5.
+- **Reproduction:** M5 checkpoint byte-identical; M5 artifacts untouched.
+
+### Results Summary
+
+| Metric | M5 (Raw) | M7 (Z-Score) | Δ |
+|---|---|---|---|
+| **Val MAE (m)** | **5.150** | **5.536** | **+0.386 (+7.5%)** |
+| Val RMSE (m) | 7.369 | 7.492 | +0.123 |
+| Pearson | 0.631 | 0.613 | -0.018 |
+| Spearman | 0.586 | 0.532 | -0.054 |
+| Best epoch | 23 | 8 | -15 |
+
+### Key Findings
+
+- **M7 val MAE (5.536 m) > M5 val MAE (5.150 m)** — z-score normalization **degraded** overall performance by 7.5%
+- **Convergence speed:** M7 peaks at epoch 8 vs M5 at epoch 23 — faster but lower ceiling
+- **Low-height improvement:** Ground/low-veg MAE better (z-score upweights low-magnitude)
+- **Tall-structure degradation:** Tree/building MAE worse — z-score downweights tail
+- **Residual bias:** M7 mean residual −3.67 m vs M5 −0.76 m — stronger under-prediction
+
+### Outcome: **C — Normalization does not improve overall validation**
+
+Z-score normalization reweights loss by 1/σ ≈ 0.095, reducing gradient signal from tall structures. While low-height bins improve, the tail degrades severely. M5 raw L1 better balances the long-tailed GAMUS distribution.
+
+**Outcome C — Normalization does not improve overall validation.** M5 remains the reference.
+
+### Next Experiment (per decision tree)
+
+> Outcome C → Next: investigate **geographically diverse training data** as the next single factor, keeping M5's raw-meter L1 loss and architecture frozen.

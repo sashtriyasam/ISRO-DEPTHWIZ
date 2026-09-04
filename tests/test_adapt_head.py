@@ -186,8 +186,9 @@ def test_raw_meter_scale_identity():
     t = torch.tensor([[[[-5.0, 0.0, 44.5]]]])
     assert torch.equal(sc.forward(t), t) and torch.equal(sc.inverse(t), t)
     assert sc.config()["normalization"].startswith("none")
-    with pytest.raises(ValueError, match="raw meters only"):
-        TargetScale("zscore")
+    # zscore mode is now supported (M7), so no error expected
+    ts_z = TargetScale("zscore", mu=0.0, sigma=1.0)
+    assert ts_z.config()["mode"] == "zscore"
 
 
 def test_training_uses_raw_meters():
@@ -229,7 +230,7 @@ def test_train_summary_serializable(tmp_path):
     assert s["best_epoch"] == 0 and "history" in s
     json.loads((tmp_path / "train_summary.json").read_text(encoding="utf-8"))
     assert (tmp_path / "checkpoints" / "best.pt").is_file()
-    va = evaluate_split(m, tiny, out_hw=(16, 16))
+    va = evaluate_split(m, tiny, TargetScale(mode="raw"), out_hw=(16, 16))
     assert va["mae"] >= 0 and va["n_valid"] == 2 * 256
 
 

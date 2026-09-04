@@ -2,7 +2,7 @@
 
 **Single-View Height Estimation and 3D Flythrough**
 
-Shravan ML/data track — Milestone 6: geographic validation of frozen M5 adapted model (M5 current reference; geographic generalization partially demonstrated).
+Shravan ML/data track — Milestone 7: target normalization experiment on frozen M5 (z-score, M5 current reference).
 
 M1/M2 established and verified the dataset contract; M3 froze the relative-depth baseline. M4 adds masked-L1 training of a ~23k-param head on frozen features with val-selected checkpoints. No backbone fine-tuning, calibration/DSM, or Three.js visualization is included.
 
@@ -26,6 +26,7 @@ See:
 - `docs/research/remote-sensing-adaptation.md` — M4 adaptation report (Stage A results, ablations deferred)
 - `docs/research/m5-extended-training.md` — M5 single-factor report (epochs 15 -> 30; current reference)
 - `docs/research/m6-geographic-validation.md` — M6 geographic validation report (frozen M5 eval)
+- `docs/research/m7-target-normalization.md` — M7 target normalization report (z-score vs raw)
 - `docs/research/dataset-foundation-repro.md` — how to reproduce manifest / dev subset / validation
 - `docs/data-provenance.md` — license & provenance
 - `configs/gamus.example.json` — example configuration
@@ -73,4 +74,4 @@ All tests use synthetic fixtures under `tests/` and run without the real GAMUS d
 
 ## Branch
 
-`feat/shravan-m5-geographic-validation` (M5: `feat/shravan-dav2-gamus-extended-training`, M4: `feat/shravan-dav2-gamus-adaptation`)
+`feat/shravan-dav2-target-normalization` (M6: `feat/shravan-m5-geographic-validation`, M5: `feat/shravan-dav2-gamus-extended-training`)

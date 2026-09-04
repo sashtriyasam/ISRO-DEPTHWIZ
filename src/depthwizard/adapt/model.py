@@ -21,6 +21,7 @@ from depthwizard.adapt.features import (
     preprocess_rgb,
 )
 from depthwizard.adapt.head import HeightHead, build_head, count_parameters, forward_head
+from depthwizard.adapt.loss import TargetScale
 
 OUTPUT_SEMANTICS = "gamus-ndsm-agl-metric (research evaluation only; not calibrated elevation)"
 
@@ -28,7 +29,13 @@ OUTPUT_SEMANTICS = "gamus-ndsm-agl-metric (research evaluation only; not calibra
 class AdaptedDepthModel:
     """Frozen backbone + lightweight head. Backbone params require_grad False forever."""
 
-    def __init__(self, backbone: Any, head: Optional[Any] = None, input_size: int = 518) -> None:
+    def __init__(
+        self,
+        backbone: Any,
+        head: Optional[Any] = None,
+        input_size: int = 518,
+        target_scale: Optional[TargetScale] = None,
+    ) -> None:
         self.backbone = backbone
         if head is None:
             raise ValueError("AdaptedDepthModel requires an explicit head (use from_backend or pass build_head())")
@@ -37,6 +44,7 @@ class AdaptedDepthModel:
         self.input_size = int(input_size)
         self.feature_tap = FEATURE_TAP
         self.output_semantics = OUTPUT_SEMANTICS
+        self.target_scale = target_scale or TargetScale(mode="raw")
         freeze_report = freeze_backbone(self.backbone)
         self.backbone_params = freeze_report
         if self.head is not None:
@@ -72,7 +80,7 @@ class AdaptedDepthModel:
         return extract_backbone_features(self.backbone, rgb_uint8, self.input_size)
 
     def forward(self, rgb_uint8: Any, out_hw: tuple[int, int] = (1024, 1024)) -> Any:
-        """RGB uint8 HWC -> (1,H,W) meter prediction tensor (grad enabled for head)."""
+        """RGB uint8 HWC -> (1,H,W) prediction tensor in model's output space (grad enabled for head)."""
         torch = _require_torch()
         self.assert_frozen()
         self.backbone.eval()
@@ -81,7 +89,7 @@ class AdaptedDepthModel:
         return forward_head(self.head_holder, feats, out_hw).squeeze(0)
 
     def predict_height(self, rgb_uint8: Any, out_hw: tuple[int, int] = (1024, 1024)) -> Any:
-        """No-grad inference -> numpy (H,W) meters. Metadata lives with caller."""
+        """No-grad inference -> numpy (H,W) meters. Applies inverse target normalization if configured."""
         torch = _require_torch()
         import numpy as np  # type: ignore
 
@@ -89,7 +97,8 @@ class AdaptedDepthModel:
         self.head.eval()
         with torch.no_grad():
             out = self.forward(rgb_uint8, out_hw)
-        return np.asarray(out.detach().cpu()).reshape(out_hw[0], out_hw[1])
+        # Apply inverse target normalization to get meters
+        return np.asarray(self.target_scale.inverse(out.detach()).cpu()).reshape(out_hw[0], out_hw[1])
 
     def save_head(self, path: Path | str, extra: Optional[dict] = None) -> Path:
         """Persist head state + config (backbone weights referenced, never copied)."""
@@ -117,5 +126,5 @@ def _require_torch() -> Any:
     try:
         import torch  # type: ignore
     except Exception as e:
-        raise RuntimeError(f"torch is required for M4 adaptation (pip install -e .[dav2]): {e}") from e
+        raise RuntimeError(f"torch is required for M4/M7 adaptation (pip install -e .[dav2]): {e}") from e
     return torch

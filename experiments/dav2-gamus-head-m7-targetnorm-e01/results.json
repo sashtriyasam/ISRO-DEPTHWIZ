@@ -1,0 +1,306 @@
+{
+  "dataset": {
+    "manifest": "manifests/gamus.m4.manifest.json",
+    "source": "earthflow/GAMUS",
+    "target": "nDSM/AGL meters, raw, unclipped",
+    "test_used": false,
+    "train_ids": [
+      "DC_01_25",
+      "DC_02_24",
+      "DC_02_25",
+      "DC_02_27",
+      "DC_03_23",
+      "DC_03_24",
+      "DC_03_25",
+      "DC_03_27",
+      "DC_03_28",
+      "DC_04_24",
+      "DC_04_25",
+      "DC_04_26",
+      "DC_04_28",
+      "DC_05_20",
+      "DC_05_21",
+      "DC_05_26",
+      "DC_05_27",
+      "DC_05_29",
+      "DC_06_20",
+      "DC_06_21",
+      "DC_06_26",
+      "DC_06_27",
+      "DC_06_28",
+      "DC_06_29"
+    ],
+    "val_ids": [
+      "DC_02_26",
+      "DC_04_23",
+      "DC_04_27",
+      "DC_08_31",
+      "DC_09_33",
+      "DC_10_30",
+      "DC_11_16",
+      "DC_11_33"
+    ]
+  },
+  "experiment_id": "dav2-gamus-head-m7-targetnorm-e01",
+  "generated_utc": "2026-09-04T10:56:40.191699+00:00",
+  "kind": "adaptation-stage-A (frozen backbone + trainable head; target=zscore; research only)",
+  "m3_reference_same_val": {
+    "aligned_mae_mean": 5.798264068318237,
+    "note": "M3 frozen relative baseline + per-image affine research eval on the same val tiles; different output semantics from M7 direct meters \u2014 NOT apples-to-apples.",
+    "per_sample": [
+      {
+        "mae": 7.517393480141888,
+        "pearson": -0.29236325298626786,
+        "rmse": 9.359447610819567,
+        "sample_id": "DC_02_26",
+        "spearman": -0.15792261833668783
+      },
+      {
+        "mae": 9.019946284141731,
+        "pearson": -0.1906449698974361,
+        "rmse": 10.881146702129767,
+        "sample_id": "DC_04_23",
+        "spearman": -0.13935641811860064
+      },
+      {
+        "mae": 4.879436205071589,
+        "pearson": 0.11368861524991371,
+        "rmse": 6.244324671619393,
+        "sample_id": "DC_04_27",
+        "spearman": 0.2185209569660683
+      },
+      {
+        "mae": 5.139075476793134,
+        "pearson": 0.10043164125381893,
+        "rmse": 6.237085394317089,
+        "sample_id": "DC_08_31",
+        "spearman": 0.18323064545629886
+      },
+      {
+        "mae": 4.1633107676879995,
+        "pearson": 0.3424452546768155,
+        "rmse": 5.069223768517884,
+        "sample_id": "DC_09_33",
+        "spearman": 0.2851419188377371
+      },
+      {
+        "mae": 4.635920912363227,
+        "pearson": 0.519919781302118,
+        "rmse": 5.827457282208674,
+        "sample_id": "DC_10_30",
+        "spearman": 0.4294356347542275
+      },
+      {
+        "mae": 5.662609545314162,
+        "pearson": 0.05738144088486442,
+        "rmse": 6.92724144514473,
+        "sample_id": "DC_11_16",
+        "spearman": 0.17567040434021072
+      },
+      {
+        "mae": 5.368419875032167,
+        "pearson": -0.11398163245259245,
+        "rmse": 6.656528847231191,
+        "sample_id": "DC_11_33",
+        "spearman": -0.05054316586309842
+      }
+    ]
+  },
+  "memory": "not measured",
+  "model": {
+    "backbone": "DepthAnythingV2-Small (frozen; requires_grad False asserted)",
+    "backbone_total": 24785089,
+    "backbone_trainable": 0,
+    "checkpoint_id": "depth-anything/Depth-Anything-V2-Small:depth_anything_v2_vits.pth",
+    "feature_tap": "depth_head.scratch.output_conv1",
+    "head": "conv3x3(64->32)+BN+ReLU, conv3x3(32->16)+BN+ReLU, conv1x1(16->1), bilinear to 1024",
+    "head_total": 23201,
+    "head_trainable": 23201,
+    "output_semantics": "gamus-ndsm-agl-metric (research evaluation only; not calibrated elevation)",
+    "total": 24808290,
+    "trainable": 23201
+  },
+  "software": {
+    "PIL": "12.3.0",
+    "cuda_available": "False",
+    "cv2": "5.0.0",
+    "h5py": "3.16.0",
+    "numpy": "2.5.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.3",
+    "torch": "2.14.0+cpu",
+    "torchvision": "0.29.0+cpu"
+  },
+  "training": {
+    "augmentation": "none",
+    "best_epoch": 8,
+    "best_value": 5.535794950003774,
+    "epochs": 30,
+    "loss": "masked L1 on normalized meters (finite pred AND finite target; negatives kept)",
+    "lr": 0.001,
+    "optimizer": "Adam",
+    "seed": 0,
+    "selection": "best val MAE",
+    "target_normalization": {
+      "mode": "zscore",
+      "mu": 0.0,
+      "normalization": "zscore (train pixels only)",
+      "sigma": 1.0
+    },
+    "train_time_s": 793.8298087000148,
+    "weight_decay": 0.0
+  },
+  "validation": {
+    "correlation": {
+      "pearson": 0.6127585734496407,
+      "spearman": 0.5319636331932661
+    },
+    "error": {
+      "mae": 8.13817819650039,
+      "median": 4.997206836938858,
+      "n": 8388608,
+      "p90": 21.82129718121141,
+      "p95": 28.33014964163303,
+      "rmse": 12.162325641765799
+    },
+    "height_bins": {
+      "0-1m": {
+        "fraction": 0.362186074256897,
+        "mae": 0.6521722189748721,
+        "median": 0.6479763388633728,
+        "n": 3038237,
+        "p90": 1.107542037963867,
+        "p95": 1.2606108665466302,
+        "rmse": 0.7444564624644909
+      },
+      "1-5m": {
+        "fraction": 0.14895057678222656,
+        "mae": 3.381783260980127,
+        "median": 3.451885098591447,
+        "n": 1249488,
+        "p90": 4.96977519467473,
+        "p95": 5.214794489741325,
+        "rmse": 3.591049363447934
+      },
+      "10-20m": {
+        "fraction": 0.18653452396392822,
+        "mae": 14.384842517439532,
+        "median": 14.143981039524078,
+        "n": 1564765,
+        "p90": 18.329223102331163,
+        "p95": 19.04717168211937,
+        "rmse": 14.648460661983085
+      },
+      "20-30m": {
+        "fraction": 0.07979083061218262,
+        "mae": 23.830929588338858,
+        "median": 23.58666157722473,
+        "n": 669334,
+        "p90": 27.974511396884918,
+        "p95": 28.619765758514404,
+        "rmse": 23.996827447730347
+      },
+      "30+m": {
+        "fraction": 0.044286370277404785,
+        "mae": 33.26987712873211,
+        "median": 32.76832032203674,
+        "n": 371501,
+        "p90": 37.47367715835571,
+        "p95": 38.8878088593483,
+        "rmse": 33.39790651683479
+      },
+      "5-10m": {
+        "fraction": 0.17745494842529297,
+        "mae": 7.529746441036061,
+        "median": 7.475953851826489,
+        "n": 1488600,
+        "p90": 9.484434835612774,
+        "p95": 9.876131585985423,
+        "rmse": 7.659075506376858
+      }
+    },
+    "n_pixels": 8388608,
+    "n_valid": 8388608,
+    "negative_target_pixels": {
+      "mae": 4.894905449914782,
+      "median": 4.986744157038629,
+      "n": 6683,
+      "p90": 5.389687496423721,
+      "p95": 5.485516998171806,
+      "rmse": 4.946043982094485
+    },
+    "per_class": {
+      "buildings": {
+        "id": 3,
+        "mae": 7.553060362251358,
+        "median": 6.578198403120041,
+        "n": 1823097,
+        "p90": 14.571078822016732,
+        "p95": 18.218923581019045,
+        "rmse": 9.192237988553291
+      },
+      "ground": {
+        "id": 1,
+        "mae": 0.6682276926362408,
+        "median": 0.6152886152267456,
+        "n": 1063646,
+        "p90": 1.0557857751846313,
+        "p95": 1.1916959881782532,
+        "rmse": 1.110897313183223
+      },
+      "low vegetation": {
+        "id": 2,
+        "mae": 1.1145637190280928,
+        "median": 0.8085281774401665,
+        "n": 769540,
+        "p90": 2.6349234044551846,
+        "p95": 3.104451406002044,
+        "rmse": 1.4415347038599846
+      },
+      "others/background": {
+        "id": 0,
+        "mae": 4.109444059127828,
+        "median": 4.236824452877045,
+        "n": 11128,
+        "p90": 7.5224770963192,
+        "p95": 8.02481096982956,
+        "rmse": 5.45907628192571
+      },
+      "road": {
+        "id": 5,
+        "mae": 3.522886233387432,
+        "median": 0.9087458550930023,
+        "n": 1902723,
+        "p90": 12.643110752105713,
+        "p95": 17.606478029489512,
+        "rmse": 6.75446773059984
+      },
+      "tree": {
+        "id": 6,
+        "mae": 16.396362882599753,
+        "median": 14.665305137634277,
+        "n": 2815747,
+        "p90": 30.858972081542014,
+        "p95": 33.677491140365596,
+        "rmse": 18.814112808569565
+      },
+      "water": {
+        "id": 4,
+        "mae": 4.675396742028716,
+        "median": 5.022141946479678,
+        "n": 2727,
+        "p90": 5.468756037950516,
+        "p95": 5.62242938876152,
+        "rmse": 5.104476465659287
+      }
+    },
+    "residual": {
+      "mean": -8.103234294725354,
+      "p5": -28.330149641633035,
+      "p95": -0.07494796626269862,
+      "std": 9.069716587696703
+    },
+    "valid_coverage": 1.0
+  },
+  "wall_time_s": 816.9453532000189
+}
