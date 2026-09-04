@@ -2,9 +2,9 @@
 
 **Single-View Height Estimation and 3D Flythrough**
 
-Shravan ML/data track — Milestone 7: target normalization experiment on frozen M5 (z-score, M5 current reference).
+Shravan ML/data track — Milestone 8: geographic training diversity experiment on frozen M5 raw-meter model (M5 current reference).
 
-M1/M2 established and verified the dataset contract; M3 froze the relative-depth baseline. M4 adds masked-L1 training of a ~23k-param head on frozen features with val-selected checkpoints. No backbone fine-tuning, calibration/DSM, or Three.js visualization is included.
+M1/M2 established and verified the dataset contract; M3 froze the relative-depth baseline. M4 adds masked-L1 training of a ~23k-param head on frozen features with val-selected checkpoints. M5 extends training to 30 epochs. M6 evaluates geographic generalization. M7 tests z-score target normalization. M8 tests geographic training diversity (8/8/8 city train composition). No backbone fine-tuning, calibration/DSM, or Three.js visualization is included.
 
 ## Quick start (no dataset or weights required)
 
@@ -74,4 +74,4 @@ All tests use synthetic fixtures under `tests/` and run without the real GAMUS d
 
 ## Branch
 
-`feat/shravan-dav2-target-normalization` (M6: `feat/shravan-m5-geographic-validation`, M5: `feat/shravan-dav2-gamus-extended-training`)
+`feat/shravan-dav2-geographic-diversity` (M7: `feat/shravan-dav2-target-normalization`, M6: `feat/shravan-m5-geographic-validation`)

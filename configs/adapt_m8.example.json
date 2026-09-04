@@ -1,0 +1,18 @@
+{
+  "manifest": "manifests/gamus.m4.manifest.json",
+  "experiment_id": "dav2-gamus-head-m8-diversity-e01",
+  "train_samples": null,
+  "val_split": "val",
+  "epochs": 30,
+  "lr": 0.001,
+  "weight_decay": 0.0,
+  "seed": 0,
+  "device": "cpu",
+  "input_size": 518,
+  "checkpoint": null,
+  "root": "data/gamus",
+  "visuals": false,
+  "target_mode": "raw",
+  "city_composition": "8 DC + 8 PHL + 8 NYC",
+  "comment": "Geographic training diversity experiment (M8). 24 train tiles: 8 DC + 8 PHL + 8 NYC from train split. Same 8 DC val tiles as M5. Target mode: raw meters. All other factors frozen to M5."
+}
