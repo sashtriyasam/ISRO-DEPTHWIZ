@@ -10,8 +10,10 @@ import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
 import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
+import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
 import { ArtifactLoader, FixtureSource } from "../artifact";
 import { BackendArtifactSource } from "../backend/source";
+import { runProcessingOperation, type ProcessingState } from "../processing";
 import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
 import { calculateMeasurement } from "../measurement/calculator";
@@ -37,26 +39,78 @@ export function App() {
   const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
   const [profileState, setProfileState] = useState<ProfileState>({ status: "empty" });
   const [sourceType, setSourceType] = useState<"fixture" | "backend">("fixture");
+  const [processing, setProcessing] = useState<ProcessingState>({ status: "idle" });
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
+  const operationRef = useRef<{ sourceId: string; controller: AbortController } | null>(null);
+  const operationCounterRef = useRef(0);
+  const artifactRef = useRef<SceneArtifact | null>(null);
+  artifactRef.current = artifact;
 
-  useEffect(() => {
-    const source = sourceType === "backend"
+  const startOperation = useCallback((nextSourceType: "fixture" | "backend") => {
+    const source = nextSourceType === "backend"
       ? new BackendArtifactSource()
       : new FixtureSource();
-    setArtifactState("loading");
-    loaderRef.current.load(source).then(
-      (result) => {
-        setArtifact(result.artifact);
-        setLayerState(createLayerState(result.artifact));
+    const active = operationRef.current;
+    if (active && active.sourceId === source.id) {
+      return;
+    }
+    if (active) {
+      active.controller.abort();
+    }
+    const controller = new AbortController();
+    operationRef.current = { sourceId: source.id, controller };
+    operationCounterRef.current += 1;
+    const operationId = `op-${operationCounterRef.current}`;
+    void (async () => {
+      const hadArtifact = artifactRef.current !== null;
+      if (!hadArtifact) {
+        setArtifactState("loading");
+      }
+      const outcome = await runProcessingOperation(
+        { status: "idle" },
+        {
+          source,
+          loader: loaderRef.current,
+          operationId,
+          previousAvailable: hadArtifact,
+          signal: controller.signal,
+        },
+        setProcessing
+      );
+      if (operationRef.current?.controller !== controller) {
+        return;
+      }
+      operationRef.current = null;
+      if (outcome.kind === "ready") {
+        setArtifact(outcome.artifact);
+        setLayerState(createLayerState(outcome.artifact));
         setArtifactState("ready");
-      },
-      (err) => {
-        console.error("Failed to load artifact:", err);
+      } else if (outcome.kind === "failed" && !hadArtifact) {
         setArtifactState("error");
       }
-    );
-  }, [sourceType]);
+    })();
+  }, []);
+
+  useEffect(() => {
+    startOperation(sourceType);
+    return () => {
+      operationRef.current?.controller.abort();
+      operationRef.current = null;
+    };
+  }, [sourceType, startOperation]);
+
+  const handleCancelOperation = useCallback(() => {
+    operationRef.current?.controller.abort();
+  }, []);
+
+  const handleRetryOperation = useCallback(() => {
+    startOperation(sourceType);
+  }, [sourceType, startOperation]);
+
+  const handleDismissOperation = useCallback(() => {
+    setProcessing({ status: "idle" });
+  }, []);
 
   const activeLayerId = useMemo(() => {
     return layerState?.activeLayerId ?? "dsm";
@@ -291,6 +345,12 @@ export function App() {
               artifact={artifact}
               state={artifactState}
             />
+            <ProcessingPanel
+              state={processing}
+              onCancel={handleCancelOperation}
+              onRetry={handleRetryOperation}
+              onDismiss={handleDismissOperation}
+            />
             <CameraControls
               currentMode={cameraMode}
               onFrameScene={handleFrameScene}
@@ -326,7 +386,15 @@ export function App() {
             <SceneInfo
               artifact={artifact}
               state={artifactState}
-              sourceLabel="Development Fixture"
+              sourceLabel={
+                artifact?.metadata.backend
+                  ? "Synthetic Development Backend"
+                  : artifact
+                    ? "Development Fixture"
+                    : sourceType === "backend"
+                      ? "Synthetic Development Backend"
+                      : "Development Fixture"
+              }
             />
           </SidePanel>
         }
@@ -386,7 +454,7 @@ function SourceControl({
             checked={sourceType === "backend"}
             onChange={() => onSourceChange("backend")}
           />
-          <span>Synthetic Backend</span>
+          <span>Synthetic Development Backend</span>
         </label>
       </div>
       {state === "ready" && artifact?.metadata.backend && (

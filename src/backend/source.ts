@@ -1,6 +1,16 @@
 import type { SceneArtifact } from "../types/scene";
-import type { ArtifactSource } from "../artifact/types";
-import { BackendBridge, type BridgeResult } from "./bridge";
+import type { ArtifactSource, ArtifactLoadOptions } from "../artifact/types";
+import { BackendBridge, type BridgeError, type BridgeExecutionHooks, type BridgeResult } from "./bridge";
+
+export class BackendOperationError extends Error {
+  readonly bridgeErrors: BridgeError[];
+
+  constructor(bridgeErrors: BridgeError[]) {
+    super(`Backend execution failed: ${bridgeErrors.map((e) => `[${e.phase}] ${e.message}`).join("; ")}`);
+    this.name = "BackendOperationError";
+    this.bridgeErrors = bridgeErrors;
+  }
+}
 
 export type BackendSourceMode = "depth" | "terrain";
 
@@ -33,15 +43,18 @@ export class BackendArtifactSource implements ArtifactSource {
     this.label = "Synthetic Backend";
   }
 
-  async load(): Promise<SceneArtifact> {
+  async load(options?: ArtifactLoadOptions): Promise<SceneArtifact> {
+    const hooks: BridgeExecutionHooks = {
+      signal: options?.signal,
+      onStage: options?.onStage,
+    };
     const result: BridgeResult =
       this.mode === "terrain"
-        ? await this.bridge.executeTerrain(this.width, this.height)
-        : await this.bridge.executeSynthetic(this.width, this.height);
+        ? await this.bridge.executeTerrain(this.width, this.height, hooks)
+        : await this.bridge.executeSynthetic(this.width, this.height, hooks);
 
     if (!result.success || !result.artifact) {
-      const errorMessages = result.errors.map((e) => `[${e.phase}] ${e.message}`).join("; ");
-      throw new Error(`Backend execution failed: ${errorMessages}`);
+      throw new BackendOperationError(result.errors);
     }
 
     return result.artifact;

@@ -1,12 +1,12 @@
-import type { ArtifactSource, ArtifactLoadResult, ArtifactError } from "./types";
+import type { ArtifactSource, ArtifactLoadResult, ArtifactError, ArtifactLoadOptions } from "./types";
 
 export class ArtifactLoader {
   private currentSource: ArtifactSource | null = null;
 
-  async load(source: ArtifactSource): Promise<ArtifactLoadResult> {
+  async load(source: ArtifactSource, options?: ArtifactLoadOptions): Promise<ArtifactLoadResult> {
     this.currentSource = source;
     try {
-      const artifact = await source.load();
+      const artifact = await source.load(options);
       return { artifact, source };
     } catch (err) {
       const error: ArtifactError = {

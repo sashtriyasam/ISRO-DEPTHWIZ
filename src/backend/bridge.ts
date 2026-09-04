@@ -80,10 +80,22 @@ function validateTerrainShape(data: unknown): BackendTerrainProduct {
   return obj as unknown as BackendTerrainProduct;
 }
 
+export interface BridgeExecutionHooks {
+  onStage?: (stage: string) => void;
+  signal?: AbortSignal;
+}
+
 export interface BackendBridgeOptions {
   pythonPath?: string;
   bridgeScript?: string;
   timeoutMs?: number;
+}
+
+export class OperationCancelledError extends Error {
+  constructor() {
+    super("Operation cancelled");
+    this.name = "OperationCancelledError";
+  }
 }
 
 export class BackendBridge {
@@ -99,15 +111,15 @@ export class BackendBridge {
     this.isNode = typeof process !== "undefined" && typeof process.versions !== "undefined" && typeof process.versions.node !== "undefined";
   }
 
-  async executeSynthetic(width = 8, height = 8): Promise<BridgeResult> {
-    return this.execute(["--synthetic", String(width), String(height)]);
+  async executeSynthetic(width = 8, height = 8, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
+    return this.execute(["--synthetic", String(width), String(height)], hooks);
   }
 
-  async executeWithInput(inputPath: string): Promise<BridgeResult> {
-    return this.execute([inputPath]);
+  async executeWithInput(inputPath: string, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
+    return this.execute([inputPath], hooks);
   }
 
-  async executeTerrain(width = 8, height = 8): Promise<BridgeResult> {
+  async executeTerrain(width = 8, height = 8, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
@@ -120,8 +132,13 @@ export class BackendBridge {
       return { success: false, errors, warnings };
     }
 
+    if (hooks.signal?.aborted) {
+      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      return { success: false, errors, warnings };
+    }
+
     try {
-      const jsonData = await this.spawnPython(["--terrain", String(width), String(height)]);
+      const jsonData = await this.spawnPython(["--terrain", String(width), String(height)], hooks);
       let validated: BackendTerrainProduct;
       try {
         validated = validateTerrainShape(jsonData);
@@ -147,7 +164,7 @@ export class BackendBridge {
     }
   }
 
-  private async execute(args: string[]): Promise<BridgeResult> {
+  private async execute(args: string[], hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
@@ -160,8 +177,13 @@ export class BackendBridge {
       return { success: false, errors, warnings };
     }
 
+    if (hooks.signal?.aborted) {
+      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      return { success: false, errors, warnings };
+    }
+
     try {
-      const jsonData = await this.spawnPython(args);
+      const jsonData = await this.spawnPython(args, hooks);
       return this.processTransportData(jsonData, errors, warnings);
     } catch (err) {
       return this.toProcessError(err);
@@ -171,6 +193,12 @@ export class BackendBridge {
   private toProcessError(err: unknown): BridgeResult {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
+
+    if (err instanceof OperationCancelledError) {
+      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      return { success: false, errors, warnings };
+    }
+
     const message = err instanceof Error ? err.message : String(err);
 
     if (message.includes("ENOENT") || message.includes("spawn")) {
@@ -196,23 +224,45 @@ export class BackendBridge {
     return { success: false, errors, warnings };
   }
 
-  private async spawnPython(args: string[]): Promise<unknown> {
+  private async spawnPython(args: string[], hooks: BridgeExecutionHooks = {}): Promise<unknown> {
     const { spawn } = await import("child_process");
-    
+
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
       let killed = false;
+      let settled = false;
 
       const proc = spawn(this.pythonPath, [this.bridgeScript, ...args], {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
       });
 
+      const settle = (fn: () => void) => {
+        if (!settled) {
+          settled = true;
+          fn();
+        }
+      };
+
+      const onAbort = () => {
+        killed = true;
+        proc.kill();
+        settle(() => reject(new OperationCancelledError()));
+      };
+      if (hooks.signal) {
+        if (hooks.signal.aborted) {
+          proc.kill();
+          reject(new OperationCancelledError());
+          return;
+        }
+        hooks.signal.addEventListener("abort", onAbort, { once: true });
+      }
+
       const timer = setTimeout(() => {
         killed = true;
         proc.kill();
-        reject(new Error("timeout"));
+        settle(() => reject(new Error("timeout")));
       }, this.timeoutMs);
 
       proc.stdout?.on("data", (chunk: Buffer) => {
@@ -220,33 +270,43 @@ export class BackendBridge {
       });
 
       proc.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
+        const text = chunk.toString();
+        stderr += text;
+        if (hooks.onStage) {
+          for (const line of text.split(/\r?\n/)) {
+            if (line.startsWith("STAGE ")) {
+              hooks.onStage(line.slice("STAGE ".length).trim());
+            }
+          }
+        }
       });
 
       proc.on("close", (code) => {
         clearTimeout(timer);
+        hooks.signal?.removeEventListener("abort", onAbort);
         if (killed) return;
 
         if (code !== 0) {
-          reject(new Error(`Python process exited with code ${code}: ${stderr}`));
+          settle(() => reject(new Error(`Python process exited with code ${code}: ${stderr}`)));
           return;
         }
 
         try {
           const data = JSON.parse(stdout);
           if (data && typeof data === "object" && "error" in data) {
-            reject(new Error(`Backend error: ${(data as Record<string, unknown>).error}`));
+            settle(() => reject(new Error(`Backend error: ${(data as Record<string, unknown>).error}`)));
             return;
           }
-          resolve(data);
+          settle(() => resolve(data));
         } catch {
-          reject(new Error(`Failed to parse backend output: ${stdout.slice(0, 200)}`));
+          settle(() => reject(new Error(`Failed to parse backend output: ${stdout.slice(0, 200)}`)));
         }
       });
 
       proc.on("error", (err) => {
         clearTimeout(timer);
-        reject(err);
+        hooks.signal?.removeEventListener("abort", onAbort);
+        settle(() => reject(err));
       });
     });
   }

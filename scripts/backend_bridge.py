@@ -113,6 +113,16 @@ def _json_list(values: Any) -> list:
     return [v.item() if hasattr(v, "item") else v for v in flat]
 
 
+def emit_stage(name: str) -> None:
+    """Report a genuinely completed backend stage (stderr, never stdout).
+
+    Consumers parse lines starting with ``STAGE ``. A line is emitted
+    only after the corresponding backend stage has actually finished —
+    never speculatively, never on a timer.
+    """
+    print(f"STAGE {name}", file=sys.stderr, flush=True)
+
+
 def run_depth_only(width: int, height: int) -> dict:
     """Depth-only path: synthetic input → DepthResult."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -120,7 +130,9 @@ def run_depth_only(width: int, height: int) -> dict:
     try:
         create_synthetic_png(width, height, tmp_path)
         inspection = inspect_input(tmp_path)
+        emit_stage("preprocessing")
         result = SyntheticDepthBackend().estimate_depth(inspection)
+        emit_stage("inference_running")
         return result.model_dump()
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -133,7 +145,9 @@ def run_terrain(width: int, height: int) -> dict:
     try:
         create_synthetic_png(width, height, tmp_path)
         inspection = inspect_input(tmp_path)
+        emit_stage("preprocessing")
         depth = SyntheticDepthBackend().estimate_depth(inspection)
+        emit_stage("inference_running")
 
         samples = CalibrationSamples(
             predicted_values=DEV_PREDICTED,
@@ -145,17 +159,27 @@ def run_terrain(width: int, height: int) -> dict:
         )
         calibration = ScaleOffsetCalibrator().calibrate(samples)
 
+        emit_stage("calibrating")
         product = create_scientific_height_product(
             depth, calibration, DEV_TARGET_SEMANTICS
         )
         grid = rasterize_height_product(product)
+        emit_stage("dsm_generation")
         mesh = build_terrain_mesh(grid)
+        emit_stage("mesh_generation")
 
         spatial_dump = mesh.spatial.model_dump()
         provenance_dump = mesh.provenance.model_dump(mode="json")
 
         return {
             "kind": "terrain",
+            "stages": [
+                "preprocessing",
+                "inference_running",
+                "calibrating",
+                "dsm_generation",
+                "mesh_generation",
+            ],
             "depth_result": depth.model_dump(),
             "dsm": {
                 "width": grid.width,
