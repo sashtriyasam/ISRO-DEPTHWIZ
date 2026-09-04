@@ -40,13 +40,12 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from dw_serialize import serialize_terrain
+from typing import Any
 
 # ---------------------------------------------------------------------------
-# Import the ACTUAL depthwizard backend — no fallback, no duplicate formulas
+# Import the ACTUAL depthwizard backend — no fallback, no duplicate formulas.
+# Serialization uses the canonical depthwizard.integration layer, never a
+# bridge-owned copy of the wire shape.
 # ---------------------------------------------------------------------------
 
 try:
@@ -59,6 +58,7 @@ try:
     from depthwizard.dsm.rasterize import rasterize_height_product
     from depthwizard.height import create_scientific_height_product
     from depthwizard.ingestion.api import inspect_input
+    from depthwizard.integration import terrain_product, to_json_text
     from depthwizard.mesh.build import build_terrain_mesh
 except ImportError as exc:
     print(
@@ -112,7 +112,7 @@ def emit_stage(name: str) -> None:
     print(f"STAGE {name}", file=sys.stderr, flush=True)
 
 
-def run_depth_only(width: int, height: int) -> dict:
+def run_depth_only(width: int, height: int) -> dict[str, Any]:
     """Depth-only path: synthetic input → DepthResult."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -122,12 +122,12 @@ def run_depth_only(width: int, height: int) -> dict:
         emit_stage("preprocessing")
         result = SyntheticDepthBackend().estimate_depth(inspection)
         emit_stage("inference_running")
-        return result.model_dump()
+        return dict(result.model_dump())
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
-def run_terrain(width: int, height: int) -> dict:
+def run_terrain(width: int, height: int) -> dict[str, Any]:
     """Full terrain chain on a generated synthetic input."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -159,7 +159,7 @@ def parse_target_semantics(value: str | None) -> ElevationSemantics:
     return target
 
 
-def run_terrain_on_path(input_path: Path, target_value: str | None = None) -> dict:
+def run_terrain_on_path(input_path: Path, target_value: str | None = None) -> dict[str, Any]:
     """Full terrain chain on a real input file using only real backend subsystems."""
     target = parse_target_semantics(target_value)
     inspection = inspect_input(input_path)
@@ -184,10 +184,21 @@ def run_terrain_on_path(input_path: Path, target_value: str | None = None) -> di
     mesh = build_terrain_mesh(grid)
     emit_stage("mesh_generation")
 
-    return serialize_terrain(depth, grid, mesh)
+    # Canonical serialization only: the transport shape is owned by
+    # depthwizard.integration, never reconstructed here. The stages list
+    # records the stages this script genuinely executed, in order.
+    payload: dict[str, Any] = json.loads(to_json_text(terrain_product(depth, grid, mesh)))
+    payload["stages"] = [
+        "preprocessing",
+        "inference_running",
+        "calibrating",
+        "dsm_generation",
+        "mesh_generation",
+    ]
+    return payload
 
 
-def run_capabilities() -> dict:
+def run_capabilities() -> dict[str, Any]:
     """Report actual backend input capabilities (no input needed)."""
     from depthwizard.ingestion.formats import SUPPORTED_SUFFIXES
 
@@ -197,7 +208,7 @@ def run_capabilities() -> dict:
     }
 
 
-def run_inspect(input_path: Path) -> dict:
+def run_inspect(input_path: Path) -> dict[str, Any]:
     """Validate one real input file with the actual backend ingestion."""
     from depthwizard.errors import DepthWizardError
 

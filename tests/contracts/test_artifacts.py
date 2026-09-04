@@ -56,6 +56,9 @@ def test_enums_are_stable() -> None:
         "relative_surface_rdsm",
         "height_agl_ndsm",
         "absolute_elevation_dsm",
+        # Added in S8: ground/terrain reference meaning (DEM). Not a
+        # surface model; calibration targets intentionally exclude it.
+        "terrain_elevation",
     }
     assert {m.value for m in SpatialKind} == {
         "present",

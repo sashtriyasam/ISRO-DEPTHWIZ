@@ -91,16 +91,11 @@ def inspect_pillow(path: Path, display: str, claimed: DetectedFormat) -> RasterF
 def _affine_from_rasterio(transform: Affine) -> AffineTransform:
     """Map a rasterio Affine to the foundation contract (GDAL tag order).
 
-    rasterio/affine use x = a*col + b*row + c, while the contract stores
-    GDAL geotransform order x = a + b*col + c*row.
+    Delegates to the shared geospatial converter (single mapping).
     """
-    a = float(transform.a)
-    b = float(transform.b)
-    c = float(transform.c)
-    d = float(transform.d)
-    e = float(transform.e)
-    f = float(transform.f)
-    return AffineTransform(a=c, b=a, c=b, d=f, e=d, f=e)
+    from depthwizard.geospatial.transforms import from_affine
+
+    return from_affine(transform)
 
 
 def inspect_geotiff(path: Path, display: str) -> RasterFacts:
