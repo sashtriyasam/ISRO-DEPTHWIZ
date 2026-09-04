@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { CameraController, CameraMode, DisplayBounds } from "./types";
 import { OrbitCameraController } from "./OrbitController";
+import { FirstPersonCameraController } from "./FirstPersonController";
+import { AerialCameraController } from "./AerialController";
 
 export class CameraManager {
   private activeController: CameraController | null = null;
@@ -18,7 +20,20 @@ export class CameraManager {
     this.initialPosition = position.clone();
   }
 
+  activateController(controller: CameraController): void {
+    if (this.activeController) {
+      this.activeController.deactivate();
+      this.activeController.dispose();
+      this.activeController = null;
+    }
+    this.activeController = controller;
+    this.activeController.activate();
+  }
+
   activate(mode: CameraMode, target: THREE.Vector3, bounds: DisplayBounds): void {
+    if (mode === "trajectory") {
+      return;
+    }
     if (this.activeController) {
       this.activeController.deactivate();
       this.activeController.dispose();
@@ -28,6 +43,22 @@ export class CameraManager {
     switch (mode) {
       case "orbit":
         this.activeController = new OrbitCameraController({
+          camera: this.camera,
+          domElement: this.domElement,
+          target,
+          bounds,
+        });
+        break;
+      case "first-person":
+        this.activeController = new FirstPersonCameraController({
+          camera: this.camera,
+          domElement: this.domElement,
+          target,
+          bounds,
+        });
+        break;
+      case "aerial":
+        this.activeController = new AerialCameraController({
           camera: this.camera,
           domElement: this.domElement,
           target,

@@ -1,4 +1,4 @@
-import type { SceneArtifact, ElevationData } from "../types/scene";
+import type { SceneArtifact, ElevationData, LayerPayloads } from "../types/scene";
 
 const GRID_SIZE = 8;
 const CELL_SIZE = 1.0;
@@ -17,6 +17,26 @@ function createSyntheticHeightGrid(): Float32Array {
     }
   }
   return grid;
+}
+
+function createSyntheticRDSM(dsmGrid: Float32Array): Float32Array {
+  const rdsm = new Float32Array(dsmGrid.length);
+  let min = Infinity;
+  for (let i = 0; i < dsmGrid.length; i++) {
+    if (dsmGrid[i] < min) min = dsmGrid[i];
+  }
+  for (let i = 0; i < dsmGrid.length; i++) {
+    rdsm[i] = dsmGrid[i] - min;
+  }
+  return rdsm;
+}
+
+function createSyntheticAGL(dsmGrid: Float32Array): Float32Array {
+  const agl = new Float32Array(dsmGrid.length);
+  for (let i = 0; i < dsmGrid.length; i++) {
+    agl[i] = Math.max(0, dsmGrid[i] * 0.3 + 0.05 * Math.sin(i * 0.5));
+  }
+  return agl;
 }
 
 function buildMeshFromGrid(
@@ -111,18 +131,30 @@ function buildMeshFromGrid(
   return { vertices, indices, normals, uvs };
 }
 
+function createElevationData(grid: Float32Array): ElevationData {
+  return {
+    grid,
+    width: GRID_SIZE,
+    height: GRID_SIZE,
+    cellSize: CELL_SIZE,
+    unit: "meters",
+  };
+}
+
 export function createDeterministicFixture(): SceneArtifact {
   const grid = createSyntheticHeightGrid();
   const { vertices, indices, normals, uvs } = buildMeshFromGrid(grid, GRID_SIZE, CELL_SIZE);
 
   const halfExtent = ((GRID_SIZE - 1) * CELL_SIZE) / 2;
 
-  const elevation: ElevationData = {
-    grid,
-    width: GRID_SIZE,
-    height: GRID_SIZE,
-    cellSize: CELL_SIZE,
-    unit: "meters",
+  const elevation = createElevationData(grid);
+
+  const rdsmGrid = createSyntheticRDSM(grid);
+  const aglGrid = createSyntheticAGL(grid);
+
+  const layers: LayerPayloads = {
+    rdsm: createElevationData(rdsmGrid),
+    agl: createElevationData(aglGrid),
   };
 
   return {
@@ -137,6 +169,7 @@ export function createDeterministicFixture(): SceneArtifact {
       indexCount: (GRID_SIZE - 1) * (GRID_SIZE - 1) * 6,
     },
     elevation,
+    layers,
     metadata: {
       CRS: "TEST-CRS-001",
       transform: {

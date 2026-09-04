@@ -13,19 +13,23 @@ export class OrbitCameraController implements CameraController {
   private camera: THREE.PerspectiveCamera;
   private initialState: { position: THREE.Vector3; target: THREE.Vector3 };
 
+  protected initialDirection: THREE.Vector3;
+
   constructor(options: CameraControllerOptions) {
     this.camera = options.camera;
     this.controls = new OrbitControls(options.camera, options.domElement);
+    this.initialDirection = options.initialDirection?.clone().normalize() ?? new THREE.Vector3(1, 0.8, 1).normalize();
 
+    const tuning = options.controls ?? {};
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
-    this.controls.rotateSpeed = 0.8;
-    this.controls.zoomSpeed = 1.0;
-    this.controls.panSpeed = 0.8;
-    this.controls.minDistance = MIN_DISTANCE;
-    this.controls.maxDistance = MAX_DISTANCE;
-    this.controls.maxPolarAngle = Math.PI * 0.85;
-    this.controls.minPolarAngle = 0.05;
+    this.controls.rotateSpeed = tuning.rotateSpeed ?? 0.8;
+    this.controls.zoomSpeed = tuning.zoomSpeed ?? 1.0;
+    this.controls.panSpeed = tuning.panSpeed ?? 0.8;
+    this.controls.minDistance = tuning.minDistance ?? MIN_DISTANCE;
+    this.controls.maxDistance = tuning.maxDistance ?? MAX_DISTANCE;
+    this.controls.maxPolarAngle = tuning.maxPolarAngle ?? Math.PI * 0.85;
+    this.controls.minPolarAngle = tuning.minPolarAngle ?? 0.05;
     this.controls.target.copy(options.target);
     this.controls.update();
 
@@ -71,7 +75,8 @@ export class OrbitCameraController implements CameraController {
     const { position, target } = computeFrameCameraPosition(
       { center: bounds.center, size: bounds.size, sphere: bounds.sphere, box: bounds.box },
       this.camera.fov,
-      this.camera.aspect
+      this.camera.aspect,
+      this.initialDirection
     );
     this.camera.position.copy(position);
     this.controls.target.copy(target);

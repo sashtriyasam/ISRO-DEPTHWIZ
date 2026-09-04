@@ -17,11 +17,17 @@ export default defineConfig({
     target: "es2022",
     outDir: "dist",
     sourcemap: true,
+    rollupOptions: {
+      external: ["child_process"],
+    },
   },
   test: {
     globals: true,
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Backend-spawning integration tests run real Python subprocesses;
+    // the default 5s budget flakes under parallel load.
+    testTimeout: 60000,
   },
 });
