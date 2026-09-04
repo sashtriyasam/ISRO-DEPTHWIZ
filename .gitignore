@@ -18,10 +18,12 @@ hf_cache/
 
 # Checkpoints / predictions
 checkpoints/
+models/
 *.ckpt
 *.pth
 *.pt
 *.bin
+*.safetensors
 predictions/
 outputs/
 

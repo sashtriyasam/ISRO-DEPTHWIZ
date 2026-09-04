@@ -1,0 +1,25 @@
+{
+  "backend": {
+    "backend": "depth-anything-v2-small",
+    "checkpoint_id": "depth-anything/Depth-Anything-V2-Small:depth_anything_v2_vits.pth",
+    "checkpoint_path": "checkpoints/depth_anything_v2_vits.pth",
+    "checkpoint_sha": "03876f8651c73a60fe4c2c48294e09fcb6838fcf",
+    "device": "cpu",
+    "encoder": "vits",
+    "input_size": 518,
+    "model": "DepthAnythingV2-Small",
+    "seed": 0,
+    "torch_version": "2.14.0+cpu",
+    "upstream_revision": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
+  },
+  "checkpoint": null,
+  "device": "cpu",
+  "input_size": 518,
+  "manifest": "manifests/gamus.manifest.json",
+  "max_samples": null,
+  "root": null,
+  "sample_ids": null,
+  "seed": 0,
+  "split": "train",
+  "subset": null
+}

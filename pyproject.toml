@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "depthwizard"
-version = "0.1.0.m2"
+version = "0.1.0.m3"
 description = "DepthWizard — Single-View Height Estimation and 3D Flythrough (SIH 26175) — dataset foundation"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,6 +15,7 @@ dependencies = []
 [project.optional-dependencies]
 h5 = ["h5py", "numpy"]
 dev = ["pytest>=7", "h5py", "numpy", "Pillow"]
+dav2 = ["torch", "torchvision", "opencv-python"]
 
 [project.urls]
 Repository = "https://github.com/EarthNets/RSI-MMSegmentation"

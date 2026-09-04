@@ -1,0 +1,131 @@
+{
+  "aggregate": {
+    "aligned_mae_mean": 9.301603724985446,
+    "aligned_rmse_mean": 10.921083605209724,
+    "inference_time_s_mean": 0.6782024666657284,
+    "inference_time_s_total": 2.034607399997185,
+    "model_load_s": 1.8587725999968825,
+    "pearson_mean": -0.067424745243794,
+    "spearman_mean": 0.07650785569416549,
+    "valid_coverage_mean": 1.0,
+    "wall_time_s": 5.611624500001199
+  },
+  "bring_up": true,
+  "bring_up_note": "Bring-up / smoke evaluation only \u2014 not the final benchmark.",
+  "dataset": {
+    "manifest": "manifests/gamus.manifest.json",
+    "sample_ids": [
+      "DC_01_25",
+      "DC_02_24",
+      "DC_02_25"
+    ],
+    "source": "earthflow/GAMUS",
+    "split": "train",
+    "subset": null,
+    "target_semantics": "nDSM/AGL ground truth (meters; NOT DSM/elevation)"
+  },
+  "evaluation": {
+    "mask": "finite prediction AND finite target; negatives kept (M2 sentinel-candidate rule)",
+    "metrics_note": "MAE/RMSE are post-alignment only; raw relative-vs-meter MAE never computed (Rule F)",
+    "protocol": "per-image-affine-eval-v1 (evaluation only, not calibration)"
+  },
+  "experiment_kind": "frozen-baseline (inference only; NOT calibrated height)",
+  "generated_utc": "2026-09-04T06:44:22.045562+00:00",
+  "memory": "not measured",
+  "model": {
+    "backend": "depth-anything-v2-small",
+    "checkpoint_id": "depth-anything/Depth-Anything-V2-Small:depth_anything_v2_vits.pth",
+    "checkpoint_path": "checkpoints/depth_anything_v2_vits.pth",
+    "checkpoint_sha": "03876f8651c73a60fe4c2c48294e09fcb6838fcf",
+    "device": "cpu",
+    "encoder": "vits",
+    "input_size": 518,
+    "model": "DepthAnythingV2-Small",
+    "seed": 0,
+    "torch_version": "2.14.0+cpu",
+    "upstream_revision": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
+  },
+  "n_samples": 3,
+  "per_sample": [
+    {
+      "affine_a": -9.933999352478047,
+      "affine_b": 20.643193888610345,
+      "affine_degenerate": false,
+      "aligned_mae": 10.292476313907365,
+      "aligned_rmse": 11.844889407983112,
+      "finite_coverage": 1.0,
+      "inference_time_s": 0.6527008999983082,
+      "n_valid": 1048576,
+      "pearson": -0.1583802386335395,
+      "pred_max": 1.8395788669586182,
+      "pred_mean": 0.9694057177810009,
+      "pred_min": 0.6567450165748596,
+      "pred_shape": [
+        1024,
+        1024
+      ],
+      "pred_std": 0.19126008466412547,
+      "sample_id": "DC_01_25",
+      "spearman": 0.002826709946043301,
+      "split": "train",
+      "valid_coverage": 1.0
+    },
+    {
+      "affine_a": -5.493335466217467,
+      "affine_b": 19.81590026430654,
+      "affine_degenerate": false,
+      "aligned_mae": 11.579930131094331,
+      "aligned_rmse": 12.972111287741543,
+      "finite_coverage": 1.0,
+      "inference_time_s": 0.6934438000025693,
+      "n_valid": 1048576,
+      "pearson": -0.13700297368347522,
+      "pred_max": 2.486929178237915,
+      "pred_mean": 0.9253239083251117,
+      "pred_min": 0.39798837900161743,
+      "pred_shape": [
+        1024,
+        1024
+      ],
+      "pred_std": 0.32660218689897635,
+      "sample_id": "DC_02_24",
+      "spearman": -0.0542174824907215,
+      "split": "train",
+      "valid_coverage": 1.0
+    },
+    {
+      "affine_a": 3.0938757065659876,
+      "affine_b": 3.178934392852865,
+      "affine_degenerate": false,
+      "aligned_mae": 6.03240472995464,
+      "aligned_rmse": 7.946250119904517,
+      "finite_coverage": 1.0,
+      "inference_time_s": 0.6884626999963075,
+      "n_valid": 1048576,
+      "pearson": 0.09310897658563273,
+      "pred_max": 1.8298425674438477,
+      "pred_mean": 0.9019158712046931,
+      "pred_min": 0.48247456550598145,
+      "pred_shape": [
+        1024,
+        1024
+      ],
+      "pred_std": 0.24018265418369997,
+      "sample_id": "DC_02_25",
+      "spearman": 0.28091433962717466,
+      "split": "train",
+      "valid_coverage": 1.0
+    }
+  ],
+  "software": {
+    "PIL": "12.3.0",
+    "cuda_available": "False",
+    "cv2": "5.0.0",
+    "h5py": "3.16.0",
+    "numpy": "2.5.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.3",
+    "torch": "2.14.0+cpu",
+    "torchvision": "0.29.0+cpu"
+  }
+}

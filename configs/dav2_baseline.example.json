@@ -1,0 +1,14 @@
+{
+  "manifest": "manifests/gamus.manifest.json",
+  "split": "train",
+  "sample_ids": null,
+  "subset": null,
+  "max_samples": 3,
+  "device": "cpu",
+  "input_size": 518,
+  "checkpoint": null,
+  "seed": 0,
+  "root": "data/gamus",
+  "visuals": false,
+  "comment": "Null checkpoint resolves to checkpoints/depth_anything_v2_vits.pth (or DW_DAV2_CKPT). Null sample_ids/subset selects the whole split (cap with max_samples)."
+}

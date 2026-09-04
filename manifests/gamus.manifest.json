@@ -1,0 +1,46 @@
+{
+  "records": [
+    {
+      "checksum": null,
+      "height": 1024,
+      "height_dtype": "float32",
+      "height_path": "heights/train/DC_01_25_AGL.h5",
+      "image_dtype": "uint8",
+      "image_path": "images/train/DC_01_25_RGB.h5",
+      "label_path": "classes/train/DC_01_25_CLS.h5",
+      "sample_id": "DC_01_25",
+      "source": "gamus",
+      "split": "train",
+      "width": 1024
+    },
+    {
+      "checksum": null,
+      "height": 1024,
+      "height_dtype": "float32",
+      "height_path": "heights/train/DC_02_24_AGL.h5",
+      "image_dtype": "uint8",
+      "image_path": "images/train/DC_02_24_RGB.h5",
+      "label_path": "classes/train/DC_02_24_CLS.h5",
+      "sample_id": "DC_02_24",
+      "source": "gamus",
+      "split": "train",
+      "width": 1024
+    },
+    {
+      "checksum": null,
+      "height": 1024,
+      "height_dtype": "float32",
+      "height_path": "heights/train/DC_02_25_AGL.h5",
+      "image_dtype": "uint8",
+      "image_path": "images/train/DC_02_25_RGB.h5",
+      "label_path": "classes/train/DC_02_25_CLS.h5",
+      "sample_id": "DC_02_25",
+      "source": "gamus",
+      "split": "train",
+      "width": 1024
+    }
+  ],
+  "root": "data/gamus",
+  "source": "gamus",
+  "version": "1.0"
+}
