@@ -120,3 +120,49 @@ Backbone: `DepthAnythingV2-Small` @ `03876f86...` (Apache-2.0); upstream code @ 
   (0-1m +1.875, ground +1.812) - capacity shift, not protocol breach.
 - Outcome A (M4 under-trained); late oscillation past ~23 noted. **M5 is the current adaptation reference.**
 - Next: exactly one of (train-only target normalization) or (geographic validation study).
+
+---
+
+# M6 — Geographic Validation of Frozen M5 Adapted Model
+
+**Branch:** `feat/shravan-m5-geographic-validation` · **Experiment:** `experiments/m6-geographic-eval`  
+**Full report:** `docs/research/m6-geographic-validation.md` (this section summarizes; numbers identical).
+
+- **Controlled change:** geographic evaluation data only; model frozen (M5 epoch 23 checkpoint). No training.
+- **M5 model:** Frozen DA-V2-Small + lightweight head (23k params), trained on 24 DC tiles, 30 epochs.
+- **Evaluation data:** 142 tiles across 3 cities (DC 18, NYC 50, PHL 50) from val+test splits; manifest `gamus.m6.geographic.json`.
+- **Protocol:** Frozen M5 checkpoint (epoch 23); direct metric evaluation (no affine alignment); same masking/metrics as M5.
+- **Reproduction:** M5 checkpoint byte-identical pre/post; M4/M5 artifacts untouched; config diff verified.
+
+### Results Summary
+
+| Metric | DC (in-city) | PHL (cross) | NYC (cross) | Macro Avg | Micro Avg | Gap |
+|---|---|---|---|---|---|---|
+| MAE (m) | 5.272 | **3.957** | 5.824 | 5.018 | 4.949 | **−0.382** |
+| RMSE (m) | 7.608 | 6.139 | 8.025 | 7.257 | 7.218 | — |
+| Pearson | 0.582 | 0.193 | 0.227 | 0.334 | 0.381 | — |
+| Spearman | 0.551 | 0.285 | 0.279 | 0.372 | 0.363 | — |
+
+### Key Findings
+
+- **Cross-city MAE (4.89 m) < In-city DC MAE (5.27 m)** → generalization gap = **−0.38 m** (cross-city better).
+- **PHL outperforms DC** (3.96 vs 5.27 MAE) — strong transfer to Philadelphia.
+- **NYC degrades** (5.82 MAE, +10% vs DC) — New York is the outlier.
+- **Height bins:** 30+m bin MAE: DC 16.9, NYC 29.5, PHL 29.8 — tall structures remain challenging.
+- **Per-class:** PHL best on ground (2.46), road (2.30), water (5.88); NYC best on "others" (2.72, dominates pixel count).
+- **Residuals:** DC systematic under-prediction (−3.67 m); PHL near-zero bias (+0.42 m); NYC moderate (−1.86 m).
+
+### Outcome: **B — Moderate geographic degradation (with caveats)**
+
+- Cross-city MAE close to in-city; PHL outperforms DC; NYC degrades moderately.
+- **Negative gap driven by PHL**, not universal generalization.
+- **No true held-out city** — all eval cities (DC, NYC, PHL) appear in full GAMUS train; M5 trained on DC-only subset.
+- **Geographic generalization: PARTIALLY DEMONSTRATED, NOT PROVEN.**
+
+### Next Experiment (per decision tree)
+
+> Outcome B → Next: exactly one of (train-set-only target normalization) or (geographic training diversity study).
+
+---
+
+*Full report: `docs/research/m6-geographic-validation.md`*

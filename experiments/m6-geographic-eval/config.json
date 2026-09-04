@@ -1,0 +1,13 @@
+{
+  "adapt_checkpoint": "experiments/dav2-gamus-head-m5-e01/checkpoints/best.pt",
+  "base_checkpoint": "checkpoints/depth_anything_v2_vits.pth",
+  "device": "cpu",
+  "input_size": 518,
+  "manifest": "manifests/gamus.m6.geographic.json",
+  "output": "experiments/m6-geographic-eval",
+  "seed": 0,
+  "splits": [
+    "val",
+    "test"
+  ]
+}

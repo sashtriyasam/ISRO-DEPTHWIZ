@@ -2,7 +2,7 @@
 
 **Single-View Height Estimation and 3D Flythrough**
 
-Shravan ML/data track — Milestone 5: single-factor extended training of the M4 head (epochs 15 -> 30; M5 is the current adaptation reference).
+Shravan ML/data track — Milestone 6: geographic validation of frozen M5 adapted model (M5 current reference; geographic generalization partially demonstrated).
 
 M1/M2 established and verified the dataset contract; M3 froze the relative-depth baseline. M4 adds masked-L1 training of a ~23k-param head on frozen features with val-selected checkpoints. No backbone fine-tuning, calibration/DSM, or Three.js visualization is included.
 
@@ -25,6 +25,7 @@ See:
 - `docs/research/depth-anything-v2.md` — M3 upstream audit, license, preprocessing, baseline protocol + bring-up results
 - `docs/research/remote-sensing-adaptation.md` — M4 adaptation report (Stage A results, ablations deferred)
 - `docs/research/m5-extended-training.md` — M5 single-factor report (epochs 15 -> 30; current reference)
+- `docs/research/m6-geographic-validation.md` — M6 geographic validation report (frozen M5 eval)
 - `docs/research/dataset-foundation-repro.md` — how to reproduce manifest / dev subset / validation
 - `docs/data-provenance.md` — license & provenance
 - `configs/gamus.example.json` — example configuration
@@ -51,7 +52,8 @@ src/depthwizard/eval/
 src/depthwizard/experiments/
   depth_anything_v2.py — frozen baseline runner → experiments/depth-anything-v2/<id>/
   adapt_dav2.py   — M4 adaptation runner → experiments/dav2-gamus-head-m4-<id>/
-src/depthwizard/adapt/  — M4: features tap + HeightHead + masked-L1 + train/eval (research only)
+  m6_geographic.py — M6 geographic validation runner → experiments/m6-geographic-<id>/
+src/depthwizard/adapt/  — M4/M5: features tap + HeightHead + masked-L1 + train/eval (research only)
 tests/            — fixture-based + opt-in real-data/real-model tests (no download required)
 configs/          — example configs (gamus.*, dav2_baseline.*)
 experiments/      — compact config.json + results.json + README.md per run (no rasters)
@@ -71,4 +73,4 @@ All tests use synthetic fixtures under `tests/` and run without the real GAMUS d
 
 ## Branch
 
-`feat/shravan-dav2-gamus-extended-training` (M4: `feat/shravan-dav2-gamus-adaptation`, M3: `feat/shravan-depth-anything-v2-baseline`)
+`feat/shravan-m5-geographic-validation` (M5: `feat/shravan-dav2-gamus-extended-training`, M4: `feat/shravan-dav2-gamus-adaptation`)
