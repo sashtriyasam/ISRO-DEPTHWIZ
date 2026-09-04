@@ -1,18 +1,20 @@
 # Aryan Integration Manifest
 
-Generated: 2026-09-04
+Generated: 2026-09-04 (updated M30)
 
 ## Current Aryan Integration Branch
 
 ```
-feat/aryan-session-correctness
-d781621f0ad185047208d72dc26f83de127e1583
+feat/aryan-integration-ready
+198bc1d (M29 consolidation commit)
+parent: d781621 (M28 session correctness)
 ```
 
 ## Base
 
 ```
 origin/main: c97a614 (feat/integration): add canonical Aryan backend adapter
+merge-base: 27ec398 (camera-system fork point)
 ```
 
 ## Aryan Milestone Commits (M20–M28)
@@ -104,47 +106,115 @@ These are pre-existing environment issues, NOT code defects.
 307 backend tests pass.
 ```
 
+## M30 Integration Rehearsal
+
+**Date:** 2026-09-04
+**Aryan branch:** `feat/aryan-integration-ready` at `198bc1d`
+**Shivam target:** `origin/main` at `c97a614` (same as `feat/shivam-aryan-integration-readiness`)
+**Merge base:** `27ec398` (camera-system fork point)
+
+### Simulated Merge Result
+
+**NO CONFLICT.** `git merge-tree` produced zero conflict markers.
+
+The only "changed in both" file is `.gitignore`, which auto-merges cleanly.
+
+Aryan adds 27 new/modified files on top of the merge base. Main has 15 commits ahead of the merge base. These are additive changes with no overlapping modifications.
+
+### Conflicting Files
+
+**None.** Zero file-level conflicts detected.
+
+### Semantic Conflict Findings
+
+**None.** Aryan and Shivam work on opposite sides of the service boundary:
+- Aryan owns: TypeScript frontend, React UI, Three.js viewer, camera, flythrough, session
+- Shivam owns: Python scientific backend, calibration, DSM, geospatial transforms
+
+The interface is the stdio service protocol (`src/service/wireTypes.ts` ↔ `src/depthwizard/service/wire.py`).
+
+### Transport Compatibility
+
+All transport contract files are **NEW in Aryan** (do not exist in origin/main):
+- `src/service/wireTypes.ts` — service wire types
+- `src/backend/types.ts` — backend artifact types
+- `scripts/backend_bridge.py` — frontend→backend bridge
+- `scripts/depthwiz_service.py` — stdio service
+
+These are additive. No existing Shivam files are modified by Aryan.
+
+### Host Compatibility
+
+Aryan's host boundary (`src/host/`) is self-contained:
+- Detects browser vs Node.js runtime
+- Provides capability flags
+- No assumptions about backend executables
+- No hardcoded paths
+
+Compatible with any backend deployment.
+
+### Session/Viewer Compatibility
+
+Session lifecycle (`src/session/`) derives state from:
+- `hasArtifact` (boolean)
+- `processing` (ProcessingState)
+
+No scientific values in session state. No backend assumptions. Pure derivation logic.
+
+### Production Backend Status
+
+**Still only SyntheticDepthBackend.** No production model adapter exists in any branch.
+
+The `src/backend/sourceDescriptor.ts` seam remains ready for future registration.
+
+---
+
 ## Recommended Shivam Integration Order
 
-The Aryan stack can be integrated as **one coherent unit**. There is no need for sequential branch merging.
+**ONE-SHOT MERGE: SAFE**
 
-### Option A: Single Merge (Recommended)
-
-Merge `feat/aryan-session-correctness` into `feat/shivam-aryan-integration-readiness`:
-
-```
+```bash
 git checkout feat/shivam-aryan-integration-readiness
-git merge feat/aryan-session-correctness
+git merge feat/aryan-integration-ready
 ```
 
-This brings in the complete M01–M28 desktop stack in one operation.
+This brings in the complete M01–M29 desktop stack in one operation. No sequential merging needed.
 
-### Option B: Cherry-Pick Individual Milestones
+### Rollback Considerations
 
-If a staged approach is preferred:
+If the merge causes issues:
+```bash
+git merge --abort  # if still in progress
+git reset --hard origin/main  # after merge, to revert
+```
 
-| Unit | Base | Depends On | Touches | Risk | Validation |
-|------|------|-----------|---------|------|-----------|
-| M20 rendering modes | M19 | rendering controls | src/components/RenderingControls | Low | Visual |
-| M21 flythrough | M20 | camera system | src/flythrough/, src/camera/ | Medium | CDP test |
-| M22 canonical integration | M21 | backend sync | scripts/, src/backend/ | High | Backend boundary |
-| M23 backend hardening | M22 | source descriptors | src/backend/sourceDescriptor | Low | Unit tests |
-| M24 flythrough UX | M23 | flythrough | src/components/FlythroughPanel | Low | Visual |
-| M25 visual validation | M24 | flythrough | CDP test | Low | Runtime |
-| M26 desktop host | M25 | host detection | src/host/ | Low | Unit tests |
-| M27 project session | M26 | app state | src/session/, src/app/ | Medium | Unit tests |
-| M28 session correctness | M27 | session | src/session/ | Low | Unit tests |
+The Aryan branch remains unchanged on origin for retry.
 
-**Option A is strongly preferred** because the Aryan stack is a single linear chain with no parallel work.
+### Post-Merge Validation Commands
+
+```bash
+# Frontend
+npm install
+npx tsc --noEmit
+npx vitest run
+npm run build
+
+# Backend
+python -m pytest tests/
+python -m ruff check
+
+# Runtime
+npm run dev  # then open browser, test fixture, verify viewer
+```
 
 ## Post-Integration Branch Cleanup
 
 After Shivam accepts the integration:
 
 **NOT deleted by Aryan** (cleanup is Shivam's decision):
-- All 27 historical `feat/aryan-*` branches become purely historical
+- All 28 historical `feat/aryan-*` branches become purely historical
 - They remain on origin for audit trail
-- `feat/aryan-session-correctness` becomes the definitive integration source
+- `feat/aryan-integration-ready` is the definitive integration source
 
 ## Architecture Satisfaction
 
@@ -173,7 +243,7 @@ After Shivam accepts the integration:
 
 ## Dependencies
 
-No new dependencies added during M20–M28.
+No new dependencies added during M20–M29.
 
 ## License / Provenance
 
