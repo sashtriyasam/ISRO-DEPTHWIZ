@@ -5,6 +5,8 @@ import { InputWorkspace } from "./InputWorkspace";
 import { makeTestPng, makeCorruptBytes } from "../../input/testFixtures";
 import { FixtureSource } from "../../artifact/FixtureSource";
 import { ApplicationBackendSource } from "../../input/applicationSource";
+import { LocalServiceClient } from "../../service/client";
+import type { ServiceCapabilitiesWire } from "../../service/wireTypes";
 
 const bridge = new BackendBridge({ bridgeScript: "scripts/backend_bridge.py" });
 const SLOW = { timeout: 20000 };
@@ -119,6 +121,39 @@ describe("InputWorkspace", () => {
     expect(onGenerate).toHaveBeenCalledOnce();
     const source = onGenerate.mock.calls[0][0] as { targetSemantics: string };
     expect(source.targetSemantics).toBe("height_agl_ndsm");
+  });
+
+  it("blocks generation with an explicit state when the backend is unregistered", async () => {
+    const stubClient = {
+      capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+        contract_version: "1",
+        supported_input_formats: [".png"],
+        supported_target_semantics: ["absolute_elevation_dsm"],
+        available_backends: ["retired-model"],
+        mesh_supported: true,
+        geotiff_supported: false,
+      }),
+    } as unknown as LocalServiceClient;
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={stubClient}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />
+    );
+    await waitFor(() => expect(container.textContent).toContain("Supported:"), SLOW);
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    expect(screen.getByText(/Backend unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/will not be substituted/)).toBeInTheDocument();
+    const generate = screen.getByRole("button", { name: "Generate terrain" });
+    expect(generate).toBeDisabled();
+    fireEvent.click(generate);
+    expect(onGenerate).not.toHaveBeenCalled();
   });
 
   it("disables generation while processing runs", async () => {

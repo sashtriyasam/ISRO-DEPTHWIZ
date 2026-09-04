@@ -9,10 +9,12 @@ import {
   InputValidationCancelled,
 } from "../../input/validation";
 import { formatSupportedList } from "../../input/types";
+import type { LocalServiceClient } from "../../service/client";
 import {
   ApplicationBackendSource,
   DEFAULT_TARGET_SEMANTICS,
 } from "../../input/applicationSource";
+import { SYNTHETIC_BACKEND_ID, isBackendRegistered } from "../../backend/sourceDescriptor";
 import type { MetricTargetSemantics, ServiceCapabilitiesWire } from "../../service/wireTypes";
 import type {
   ClientFile,
@@ -23,6 +25,7 @@ import type {
 
 interface InputWorkspaceProps {
   bridge?: BackendBridge;
+  serviceClient?: LocalServiceClient;
   processingRunning: boolean;
   onGenerate: (source: ArtifactSource) => void;
 }
@@ -64,10 +67,14 @@ const FIXTURE_METADATA: InputMetadata = {
   checksum: null,
 };
 
-export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputWorkspaceProps) {
+export function InputWorkspace({ bridge, serviceClient, processingRunning, onGenerate }: InputWorkspaceProps) {
   const bridgeRef = useRef<BackendBridge | null>(null);
   if (!bridgeRef.current) {
     bridgeRef.current = bridge ?? new BackendBridge();
+  }
+  const serviceClientRef = useRef<LocalServiceClient | null>(null);
+  if (!serviceClientRef.current) {
+    serviceClientRef.current = serviceClient ?? null;
   }
   const [capabilities, setCapabilities] = useState<ServiceCapabilitiesWire | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
@@ -84,18 +91,19 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
     (t): t is MetricTargetSemantics =>
       t === "absolute_elevation_dsm" || t === "height_agl_ndsm"
   );
+  const backendRegistered = isBackendRegistered(capabilities);
   const backendIdentity =
     capabilities === null
       ? null
       : capabilities.available_backends.length === 1 &&
-          capabilities.available_backends[0] === "synthetic-depth"
+          capabilities.available_backends[0] === SYNTHETIC_BACKEND_ID
         ? "Synthetic Development Backend"
         : `Backends: ${capabilities.available_backends.join(", ") || "none reported"}`;
 
   const loadCapabilities = useCallback(async () => {
     setCapabilitiesError(null);
     try {
-      const result = await fetchServiceCapabilities();
+      const result = await fetchServiceCapabilities(serviceClientRef.current ?? undefined);
       setCapabilities(result);
       if (
         !result.supported_target_semantics.includes(targetSemantics) &&
@@ -231,8 +239,10 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
     }
   }, [releaseStaged, processingRunning]);
 
+  const backendUnavailable = capabilities !== null && !backendRegistered;
+
   const handleGenerate = useCallback(() => {
-    if (inputState.status !== "validated" || processingRunning) {
+    if (inputState.status !== "validated" || processingRunning || backendUnavailable) {
       return;
     }
     if (inputState.stagedPath) {
@@ -245,7 +255,7 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable]);
 
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
@@ -370,10 +380,16 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
               ))}
             </div>
           )}
+          {backendUnavailable && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }} role="alert">
+              <div style={errorStyle}>Backend unavailable: synthetic backend is not registered.</div>
+              <div style={mutedStyle}>Check the backend installation. Synthetic output will not be substituted.</div>
+            </div>
+          )}
           <button
             onClick={handleGenerate}
             style={primaryButtonStyle}
-            disabled={processingRunning}
+            disabled={processingRunning || backendUnavailable}
             aria-label="Generate terrain"
           >
             {processingRunning ? "Processing…" : "Generate terrain"}

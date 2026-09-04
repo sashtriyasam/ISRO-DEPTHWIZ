@@ -123,6 +123,24 @@ describe("resolveTerrainArtifact", () => {
     }
   });
 
+  it("rejects non-metric mesh semantics before any artifact exists", () => {
+    const bundle = minimalBundle();
+    bundle.terrain.mesh.semantics = "relative_depth";
+    bundle.terrain.dsm.semantics = "relative_depth";
+    bundle.response.summary.target_semantics = "relative_depth";
+    const descriptor = bundle.response.artifacts.find((a) => a.kind === "mesh");
+    if (descriptor) {
+      descriptor.semantics = "relative_depth";
+    }
+    try {
+      resolveTerrainArtifact(bundle);
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ArtifactTransportFailure);
+      expect((err as ArtifactTransportFailure).transportError.code).toBe("RESOLUTION_FAILED");
+    }
+  });
+
   it("rejects malformed payloads with adapter detail", () => {
     const bundle = minimalBundle();
     bundle.terrain.mesh.vertices = [0, 10];

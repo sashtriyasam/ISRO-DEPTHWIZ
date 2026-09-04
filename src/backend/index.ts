@@ -33,4 +33,16 @@ export type {
   StagedInput,
 } from "./bridge";
 export { BackendArtifactSource, BackendOperationError } from "./source";
+export {
+  SYNTHETIC_BACKEND_ID,
+  kindForBackendName,
+  describeBackendSource,
+  isBackendRegistered,
+  probeBackendAvailability,
+} from "./sourceDescriptor";
+export type {
+  BackendSourceKind,
+  BackendAvailability,
+  BackendSourceDescriptor,
+} from "./sourceDescriptor";
 export type { BackendSourceOptions, BackendSourceMode } from "./source";
