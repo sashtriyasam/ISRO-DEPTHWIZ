@@ -138,9 +138,44 @@ export function App() {
     return "inspect";
   }, [measurementState.status, profileState.status]);
 
-  const handleCameraReady = useCallback(() => {
-    setCameraMode("orbit");
+  const desiredCameraModeRef = useRef<CameraMode>("orbit");
+
+  const applyCameraMode = useCallback((mode: CameraMode) => {
+    desiredCameraModeRef.current = mode;
+    setCameraMode(mode);
+    viewerRef.current?.setCameraMode(mode);
   }, []);
+
+  const handleCameraReady = useCallback(() => {
+    const desired = desiredCameraModeRef.current;
+    setCameraMode(desired);
+    viewerRef.current?.setCameraMode(desired);
+  }, []);
+
+  const handleCameraModeChange = useCallback((mode: CameraMode) => {
+    if (mode === "first-person") {
+      viewerRef.current?.clearSelection();
+      setInspectionState({ status: "empty" });
+      setMeasurementState({ status: "empty" });
+      viewerRef.current?.clearMeasurementGraphics();
+      setProfileState({ status: "empty" });
+      viewerRef.current?.clearProfileGraphics();
+    }
+    applyCameraMode(mode);
+  }, [applyCameraMode]);
+
+  useEffect(() => {
+    if (cameraMode !== "first-person") {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === "Escape") {
+        applyCameraMode("orbit");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cameraMode, applyCameraMode]);
 
   const handleFrameScene = useCallback(() => {
     const manager = viewerRef.current?.getCameraManager();
@@ -371,6 +406,7 @@ export function App() {
             />
             <CameraControls
               currentMode={cameraMode}
+              onModeChange={handleCameraModeChange}
               onFrameScene={handleFrameScene}
               onReset={handleReset}
             />

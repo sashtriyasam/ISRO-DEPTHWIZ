@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { CameraController, CameraMode, DisplayBounds } from "./types";
 import { OrbitCameraController } from "./OrbitController";
+import { FirstPersonCameraController } from "./FirstPersonController";
+import { AerialCameraController } from "./AerialController";
 
 export class CameraManager {
   private activeController: CameraController | null = null;
@@ -28,6 +30,22 @@ export class CameraManager {
     switch (mode) {
       case "orbit":
         this.activeController = new OrbitCameraController({
+          camera: this.camera,
+          domElement: this.domElement,
+          target,
+          bounds,
+        });
+        break;
+      case "first-person":
+        this.activeController = new FirstPersonCameraController({
+          camera: this.camera,
+          domElement: this.domElement,
+          target,
+          bounds,
+        });
+        break;
+      case "aerial":
+        this.activeController = new AerialCameraController({
           camera: this.camera,
           domElement: this.domElement,
           target,

@@ -8,6 +8,7 @@ import type { MeasurementPoint } from "../measurement/types";
 import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
 import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
+import type { CameraMode, DisplayBounds } from "../camera/types";
 import { resolveInspection } from "../inspection/resolver";
 
 type InteractionMode = "inspect" | "measure" | "profile";
@@ -26,6 +27,8 @@ interface ViewerProps {
 export interface ViewerHandle {
   getCameraManager: () => CameraManager | null;
   loadArtifact: (artifact: SceneArtifact) => void;
+  setCameraMode: (mode: CameraMode) => void;
+  getCameraMode: () => CameraMode;
   clearSelection: () => void;
   clearMeasurementGraphics: () => void;
   clearProfileGraphics: () => void;
@@ -63,6 +66,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     onProfilePointSelectedRef: ((point: MeasurementPoint | null) => void) | null;
     interactionModeRef: InteractionMode;
     verticalScaleRef: number;
+    cameraModeRef: CameraMode;
+    lastBoundsRef: DisplayBounds | null;
   }>({
     renderer: null,
     camera: null,
@@ -86,11 +91,14 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     onProfilePointSelectedRef: null,
     interactionModeRef: "inspect",
     verticalScaleRef: 1,
+    cameraModeRef: "orbit",
+    lastBoundsRef: null,
   });
 
   const handlePointerDown = useCallback((event: PointerEvent) => {
     const state = stateRef.current;
     if (state.disposed || !state.camera || !state.threeScene || !state.currentMeshGroup || !state.currentArtifact) return;
+    if (state.cameraModeRef === "first-person") return;
 
     const container = containerRef.current;
     if (!container) return;
@@ -188,6 +196,19 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
   useImperativeHandle(ref, () => ({
     getCameraManager: () => stateRef.current.cameraManager,
+    getCameraMode: () => stateRef.current.cameraModeRef,
+    setCameraMode: (mode: CameraMode) => {
+      const state = stateRef.current;
+      if (state.disposed || !state.cameraManager || !state.lastBoundsRef) return;
+      state.cameraModeRef = mode;
+      const bounds = state.lastBoundsRef;
+      state.cameraManager.activate(mode, bounds.center.clone(), {
+        center: bounds.center.clone(),
+        size: bounds.size.clone(),
+        sphere: bounds.sphere.clone(),
+        box: bounds.box.clone(),
+      });
+    },
     loadArtifact: (artifact: SceneArtifact) => {
       const state = stateRef.current;
       if (state.disposed || !state.threeScene || !state.cameraManager) return;
@@ -229,6 +250,12 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         state.currentMeshGroup = group;
 
         const bounds = computeScaledBounds(group.mesh, state.verticalScaleRef);
+        state.lastBoundsRef = {
+          center: bounds.center.clone(),
+          size: bounds.size.clone(),
+          sphere: bounds.sphere.clone(),
+          box: bounds.box.clone(),
+        };
         state.cameraManager.frameBounds(bounds);
       }
     },
@@ -324,8 +351,14 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       state.currentLayerId = layerId;
     }
 
-    const bounds = group ? computeScaledBounds(group.mesh, verticalScale) : computeDisplayBounds([]);
-    const cameraManager = new CameraManager(camera, renderer.domElement);
+      const bounds = group ? computeScaledBounds(group.mesh, verticalScale) : computeDisplayBounds([]);
+      state.lastBoundsRef = {
+        center: bounds.center.clone(),
+        size: bounds.size.clone(),
+        sphere: bounds.sphere.clone(),
+        box: bounds.box.clone(),
+      };
+      const cameraManager = new CameraManager(camera, renderer.domElement);
     cameraManager.setInitial(
       new THREE.Vector3(6, 5, 6),
       bounds.center.clone()
