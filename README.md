@@ -2,7 +2,7 @@
 
 **Single-View Height Estimation and 3D Flythrough**
 
-Shravan ML/data track — Milestone 4: frozen DA-V2-Small + lightweight height head (research adaptation; builds on M1–M3).
+Shravan ML/data track — Milestone 5: single-factor extended training of the M4 head (epochs 15 -> 30; M5 is the current adaptation reference).
 
 M1/M2 established and verified the dataset contract; M3 froze the relative-depth baseline. M4 adds masked-L1 training of a ~23k-param head on frozen features with val-selected checkpoints. No backbone fine-tuning, calibration/DSM, or Three.js visualization is included.
 
@@ -24,6 +24,7 @@ See:
 - `docs/research/gamus-empirical-probe.md` — M2 empirical probe report (real H5 measurements, tool-generated)
 - `docs/research/depth-anything-v2.md` — M3 upstream audit, license, preprocessing, baseline protocol + bring-up results
 - `docs/research/remote-sensing-adaptation.md` — M4 adaptation report (Stage A results, ablations deferred)
+- `docs/research/m5-extended-training.md` — M5 single-factor report (epochs 15 -> 30; current reference)
 - `docs/research/dataset-foundation-repro.md` — how to reproduce manifest / dev subset / validation
 - `docs/data-provenance.md` — license & provenance
 - `configs/gamus.example.json` — example configuration
@@ -70,4 +71,4 @@ All tests use synthetic fixtures under `tests/` and run without the real GAMUS d
 
 ## Branch
 
-`feat/shravan-dav2-gamus-adaptation` (M1: `feat/shravan-gamus-audit`, M2: `feat/shravan-gamus-empirical-validation`, M3: `feat/shravan-depth-anything-v2-baseline`)
+`feat/shravan-dav2-gamus-extended-training` (M4: `feat/shravan-dav2-gamus-adaptation`, M3: `feat/shravan-depth-anything-v2-baseline`)

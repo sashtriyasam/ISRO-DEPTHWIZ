@@ -1,0 +1,16 @@
+{
+  "manifest": "manifests/gamus.m4.manifest.json",
+  "experiment_id": "dav2-gamus-head-m5-e01",
+  "train_samples": null,
+  "val_split": "val",
+  "epochs": 30,
+  "lr": 0.001,
+  "weight_decay": 0.0,
+  "seed": 0,
+  "device": "cpu",
+  "input_size": 518,
+  "checkpoint": null,
+  "root": "data/gamus",
+  "visuals": false,
+  "comment": "Single-factor extension of adapt_m4 (epochs 15 -> 30). All other factors identical. Test split never touched."
+}

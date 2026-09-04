@@ -105,3 +105,18 @@ python -m pytest -q
 ```
 
 Backbone: `DepthAnythingV2-Small` @ `03876f86...` (Apache-2.0); upstream code @ `a561b84`. No calibration engine involvement; adapted output is research metric prediction, not calibrated elevation.
+
+---
+
+# M5 — Single-Factor Extended Training (epochs 15 -> 30)
+
+**Branch:** `feat/shravan-dav2-gamus-extended-training` - **Experiment:** `experiments/dav2-gamus-head-m5-e01`
+**Full report:** `docs/research/m5-extended-training.md` (this section summarizes; numbers identical).
+
+- Controlled change: epochs only (config diff verified: `experiment_id` + `epochs`). All else frozen.
+- Reproduction: M5 epochs 0-14 bit-identical to M4 e01 log; M4 artifacts untouched.
+- Result: best val MAE **5.1500 @epoch 23** vs M4 5.4914 @14 -> **dMAE -0.3414 (-6.22%)**; RMSE -1.22;
+  Pearson +0.056; 30+m bin 23.247->16.287; residual mean -3.665->-0.761. Low bins regressed
+  (0-1m +1.875, ground +1.812) - capacity shift, not protocol breach.
+- Outcome A (M4 under-trained); late oscillation past ~23 noted. **M5 is the current adaptation reference.**
+- Next: exactly one of (train-only target normalization) or (geographic validation study).
