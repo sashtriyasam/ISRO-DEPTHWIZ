@@ -37,14 +37,15 @@ export interface DisplayBoundsResult {
 export function computeFrameCameraPosition(
   bounds: DisplayBoundsResult,
   fov: number,
-  _aspect: number
+  _aspect: number,
+  direction?: THREE.Vector3
 ): { position: THREE.Vector3; target: THREE.Vector3 } {
   const maxDim = Math.max(bounds.size.x, bounds.size.y, bounds.size.z);
   const fovRad = (fov * Math.PI) / 180;
   const distance = (maxDim / 2) / Math.tan(fovRad / 2) * 1.5;
 
-  const direction = new THREE.Vector3(1, 0.8, 1).normalize();
-  const position = bounds.center.clone().add(direction.multiplyScalar(distance));
+  const dir = direction ? direction.clone().normalize() : new THREE.Vector3(1, 0.8, 1).normalize();
+  const position = bounds.center.clone().add(dir.multiplyScalar(distance));
 
   return { position, target: bounds.center.clone() };
 }

@@ -1,6 +1,20 @@
 import * as THREE from "three";
 
-export type CameraMode = "orbit";
+export type ManualCameraMode = "orbit" | "first-person" | "aerial";
+
+export const MANUAL_CAMERA_MODES: readonly ManualCameraMode[] = [
+  "orbit",
+  "first-person",
+  "aerial",
+];
+
+export type CameraMode = ManualCameraMode | "trajectory";
+
+export const CAMERA_MODES: readonly CameraMode[] = [...MANUAL_CAMERA_MODES, "trajectory"];
+
+export function isCameraMode(value: string): value is CameraMode {
+  return (CAMERA_MODES as readonly string[]).includes(value);
+}
 
 export interface CameraState {
   mode: CameraMode;
@@ -16,11 +30,23 @@ export interface DisplayBounds {
   box: THREE.Box3;
 }
 
+export interface OrbitControlsTuning {
+  minDistance?: number;
+  maxDistance?: number;
+  minPolarAngle?: number;
+  maxPolarAngle?: number;
+  rotateSpeed?: number;
+  zoomSpeed?: number;
+  panSpeed?: number;
+}
+
 export interface CameraControllerOptions {
   camera: THREE.PerspectiveCamera;
   domElement: HTMLElement;
   target: THREE.Vector3;
   bounds: DisplayBounds;
+  controls?: OrbitControlsTuning;
+  initialDirection?: THREE.Vector3;
 }
 
 export interface CameraController {
