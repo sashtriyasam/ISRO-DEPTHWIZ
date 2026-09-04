@@ -120,6 +120,26 @@ describe("backend input validation", () => {
   });
 });
 
+describe("staged file hygiene", () => {
+  it("removes staged temp files when validation fails", async () => {
+    const { existsSync } = await import("fs");
+    const stagedPaths: string[] = [];
+    const trackingBridge = new BackendBridge({ bridgeScript: "scripts/backend_bridge.py" });
+    const original = trackingBridge.stageInputBytes.bind(trackingBridge);
+    trackingBridge.stageInputBytes = async (bytes, name) => {
+      const staged = await original(bytes, name);
+      stagedPaths.push(staged.path);
+      return staged;
+    };
+    const file = makeClientFile("corrupt.png", makeCorruptBytes(), "image/png");
+    await expect(
+      validateInputFile(file, { bridge: trackingBridge, supportedSuffixes: SUFFIXES })
+    ).rejects.toThrow();
+    expect(stagedPaths).toHaveLength(1);
+    expect(existsSync(stagedPaths[0])).toBe(false);
+  });
+});
+
 describe("mapInspectionToMetadata", () => {
   it("never invents CRS or units", () => {
     const metadata = mapInspectionToMetadata(

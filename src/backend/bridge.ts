@@ -207,6 +207,17 @@ export class BackendBridge {
     }
   }
 
+  async fetchTerrainPayload(
+    stagedPath: string,
+    hooks: BridgeExecutionHooks = {}
+  ): Promise<BackendTerrainProduct> {
+    if (!this.isNode) {
+      throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
+    }
+    const jsonData = await this.spawnPython(["--terrain-file", stagedPath], hooks);
+    return validateTerrainShape(jsonData);
+  }
+
   private processTerrainData(
     jsonData: unknown,
     errors: BridgeError[],

@@ -41,6 +41,22 @@ export function SceneInfo({ artifact, state, sourceLabel }: SceneInfoProps) {
               {artifact.label}
             </div>
           </div>
+          {artifact.metadata.backend && (
+            <div>
+              <div style={sectionLabelStyle}>Product</div>
+              <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-secondary)" }}>
+                {productLabel(artifact.metadata.backend.elevation_semantics)}
+                {" · "}
+                {artifact.metadata.backend.depth_scale === "metric" ? "meters" : "relative units"}
+              </div>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                {artifact.metadata.backend.model_name}
+                {artifact.metadata.backend.calibration_reference
+                  ? ` · ref ${artifact.metadata.backend.calibration_reference}`
+                  : ""}
+              </div>
+            </div>
+          )}
           <div>
             <div style={sectionLabelStyle}>Geometry</div>
             <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-secondary)" }}>
@@ -75,6 +91,21 @@ export function SceneInfo({ artifact, state, sourceLabel }: SceneInfoProps) {
       )}
     </div>
   );
+}
+
+function productLabel(semantics: string): string {
+  switch (semantics) {
+    case "absolute_elevation_dsm":
+      return "DSM";
+    case "height_agl_ndsm":
+      return "AGL";
+    case "relative_surface_rdsm":
+      return "Relative surface";
+    case "relative_depth":
+      return "Relative depth";
+    default:
+      return semantics;
+  }
 }
 
 const sectionLabelStyle: React.CSSProperties = {

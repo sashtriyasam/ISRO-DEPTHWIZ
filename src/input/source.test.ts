@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { BackendBridge } from "../backend/bridge";
 import { BackendOperationError } from "../backend/source";
-import { LocalServiceClient } from "../service/client";
-import type { ServiceResponseWire } from "../service/wireTypes";
+import { ArtifactTransportFailure } from "../transport/types";
+import type { ArtifactTransport } from "../transport/transport";
 import { validateInputFile } from "./validation";
 import { FileInputSource } from "./source";
 import { makeTestPng, makeCorruptBytes, makeClientFile } from "./testFixtures";
@@ -69,57 +69,25 @@ describe("FileInputSource", () => {
     const file = makeClientFile("tile.png", makeTestPng(4, 4), "image/png");
     const validated = await validateInputFile(file, { bridge, supportedSuffixes: SUFFIXES });
     try {
-      const stubClient = {
-        executeService: async () => ({
-          request: {},
-          response: {
-            contract_version: "1",
-            success: true,
-            final_state: "completed",
-            states: ["completed"],
-            failure: null,
-            artifacts: [
-              {
-                kind: "mesh",
-                available: false,
-                persisted: false,
-                path: null,
-                semantics: null,
-                units: null,
-                width: null,
-                height: null,
-                georeferenced: null,
-              },
-            ],
-            summary: {
-              input_path: validated.stagedPath,
-              input_checksum: null,
-              backend_name: "synthetic-depth",
-              backend_version: null,
-              calibration_method: null,
-              calibration_reference: null,
-              target_semantics: null,
-              mesh_requested: true,
-              geotiff_path: null,
-              engine_version: "0.1.0",
-            },
-          } as ServiceResponseWire,
-        }),
-        capabilities: async () => {
-          throw new Error("unused");
+      const stubTransport: ArtifactTransport = {
+        fetchTerrain: async () => {
+          throw new ArtifactTransportFailure({
+            code: "ARTIFACT_UNAVAILABLE",
+            message: "Service completed without an available mesh artifact",
+            stage: null,
+          });
         },
-        buildRequest: (args: unknown) => args,
-      } as unknown as LocalServiceClient;
+      };
       const source = new FileInputSource({
         stagedPath: validated.stagedPath,
         metadata: validated.metadata,
-        serviceClient: stubClient,
+        transport: stubTransport,
       });
       await source.load();
       expect.fail("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(BackendOperationError);
-      expect((err as BackendOperationError).bridgeErrors[0].code).toBe("MESH_UNAVAILABLE");
+      expect((err as BackendOperationError).bridgeErrors[0].code).toBe("ARTIFACT_UNAVAILABLE");
     } finally {
       await validated.cleanup();
     }

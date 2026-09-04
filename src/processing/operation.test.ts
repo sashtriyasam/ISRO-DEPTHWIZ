@@ -140,6 +140,31 @@ describe("runProcessingOperation", () => {
     expect(states[states.length - 1].status).toBe("cancelled");
   });
 
+  it("retains the previous artifact when resolution fails", async () => {
+    const failing: ArtifactSource = {
+      id: "failing",
+      label: "Failing",
+      load: async () => {
+        throw new BackendOperationError([
+          { code: "RESOLUTION_FAILED", message: "payload rejected", phase: "adapter" },
+        ]);
+      },
+    };
+    const { states, emit } = collect();
+    const outcome = await runProcessingOperation(
+      { status: "idle" },
+      { source: failing, loader: new ArtifactLoader(), operationId: "op-7", previousAvailable: true },
+      emit
+    );
+    expect(outcome.kind).toBe("failed");
+    const last = states[states.length - 1];
+    expect(last.status).toBe("error");
+    if (last.status === "error") {
+      expect(last.failure.code).toBe("RESOLUTION_FAILED");
+      expect(last.failure.previousAvailable).toBe(true);
+    }
+  });
+
   it("refuses duplicate operations while one is running", async () => {
     const running: ProcessingState = {
       status: "running",
