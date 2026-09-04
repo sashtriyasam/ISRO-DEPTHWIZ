@@ -23,6 +23,11 @@ dev = [
     "mypy>=1",
     "ruff>=0.4",
 ]
+dav2 = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "opencv-python>=4.5",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -54,4 +59,20 @@ ignore_errors = true
 # skip type analysis of its imports instead of failing the run.
 [[tool.mypy.overrides]]
 module = ["rasterio", "rasterio.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["torch", "torch.*", "torchvision", "torchvision.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["depth_anything_v2", "depth_anything_v2.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["PIL", "PIL.*"]
 ignore_missing_imports = true
