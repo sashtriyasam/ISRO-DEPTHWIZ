@@ -82,6 +82,9 @@ export function FlythroughPanel({
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-primary)" }}>
                   Waypoint {index + 1}
                   {isActive && index === currentIndex ? " (current)" : ""}
+                  <span style={{ color: "var(--color-text-muted)" }}>
+                    {" "}· {formatDisplayPosition(waypoint.position)}
+                  </span>
                 </span>
                 <button
                   style={actionButtonStyle}
@@ -181,6 +184,12 @@ export function FlythroughPanel({
       </div>
     </div>
   );
+}
+
+function formatDisplayPosition(position: { x: number; y: number; z: number }): string {
+  const format = (value: number): string =>
+    Number.isFinite(value) ? value.toFixed(1) : "—";
+  return `display (${format(position.x)}, ${format(position.y)}, ${format(position.z)})`;
 }
 
 const sectionLabelStyle: React.CSSProperties = {

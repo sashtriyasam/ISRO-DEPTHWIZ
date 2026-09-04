@@ -48,8 +48,8 @@ describe("FlythroughPanel", () => {
   it("lists waypoints with remove actions", () => {
     const onRemoveWaypoint = vi.fn();
     const { container } = render(<FlythroughPanel {...baseProps({ waypoints: waypoints(2), onRemoveWaypoint })} />);
-    expect(screen.getByText("Waypoint 1")).toBeInTheDocument();
-    expect(screen.getByText("Waypoint 2")).toBeInTheDocument();
+    expect(screen.getByText(/Waypoint 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Waypoint 2/)).toBeInTheDocument();
     expect(container.querySelector('[role="list"][aria-label="Flythrough waypoints"]')).not.toBeNull();
     expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Remove waypoint 1" }));
@@ -156,3 +156,4 @@ describe("FlythroughPanel", () => {
     expect(onClear).toHaveBeenCalledOnce();
   });
 });
+

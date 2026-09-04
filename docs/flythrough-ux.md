@@ -76,6 +76,33 @@ paths dispose controllers, listeners (there are none to leak — the
 controller is update-driven), and preview resources; repeated
 play/stop/reset cycles stay deterministic.
 
+## Visual validation
+
+Validated headlessly against the production build (M25) with real
+Chromium WebGL (SwiftShader) driven over CDP — no mocks, no
+fabricated screenshots (harness kept outside the repo; no new
+dependencies):
+
+- Environment: Edge headless + `vite preview` on Windows; fixture
+  terrain (the browser-usable path — Python-backed sources need a
+  desktop bridge, which the UI reports honestly instead of faking).
+- Workflows: fixture → generate → 3 waypoints across orbit/aerial
+  poses → play → pause → resume → stop → replay → natural completion
+  → reset; speed 2× mid-flight; first-person capture; Esc handling.
+- Confirmed: route line plus green-start/red-end markers render and
+  track the camera poses; mid-flight camera motion, pause freeze,
+  resume continuation, exact final-pose landing, and single-fire
+  completion; mode restoration on stop/completion; waypoint progress
+  text; wireframe/combined rendering with the route legible;
+  exaggeration sweep 1x→10x→1x with route retained; terrain picking
+  during flight creates no selection while idle picking works
+  (selection marker verified); artifact replacement clears the
+  route; single canvas throughout; narrow (900×700) layout intact;
+  all interactive controls expose accessible names with correct
+  disabled states.
+- Not tested visually: pointer-lock-free drag feel nuances,
+  multi-monitor sizing, and touch input (no touch device present).
+
 ## Explicitly out of scope
 
 Reorder, persistence, import/export, easing editors, splines,
