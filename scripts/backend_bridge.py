@@ -138,8 +138,30 @@ def run_terrain(width: int, height: int) -> dict:
         tmp_path.unlink(missing_ok=True)
 
 
-def run_terrain_on_path(input_path: Path) -> dict:
+METRIC_TARGETS = ("height_agl_ndsm", "absolute_elevation_dsm")
+
+
+def parse_target_semantics(value: str | None) -> ElevationSemantics:
+    """Resolve a caller-requested metric target against backend semantics."""
+    if value is None:
+        return DEV_TARGET_SEMANTICS
+    try:
+        target = ElevationSemantics(value)
+    except ValueError:
+        raise ValueError(
+            f"unsupported target semantics: {value!r} (supported: {', '.join(METRIC_TARGETS)})"
+        ) from None
+    if target.value not in METRIC_TARGETS:
+        raise ValueError(
+            f"target semantics must be metric, got {value!r} "
+            f"(supported: {', '.join(METRIC_TARGETS)})"
+        )
+    return target
+
+
+def run_terrain_on_path(input_path: Path, target_value: str | None = None) -> dict:
     """Full terrain chain on a real input file using only real backend subsystems."""
+    target = parse_target_semantics(target_value)
     inspection = inspect_input(input_path)
     emit_stage("preprocessing")
     depth = SyntheticDepthBackend().estimate_depth(inspection)
@@ -150,13 +172,13 @@ def run_terrain_on_path(input_path: Path) -> dict:
         reference_values=DEV_REFERENCE,
         reference_id=DEV_REFERENCE_ID,
         reference_units="meters",
-        target_semantics=DEV_TARGET_SEMANTICS,
+        target_semantics=target,
         source_checksum=inspection.handle.sha256,
     )
     calibration = ScaleOffsetCalibrator().calibrate(samples)
 
     emit_stage("calibrating")
-    product = create_scientific_height_product(depth, calibration, DEV_TARGET_SEMANTICS)
+    product = create_scientific_height_product(depth, calibration, target)
     grid = rasterize_height_product(product)
     emit_stage("dsm_generation")
     mesh = build_terrain_mesh(grid)
@@ -234,7 +256,8 @@ def main() -> None:
             if not input_path.exists():
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
-            print(json.dumps(run_terrain_on_path(input_path), allow_nan=False))
+            target_value = sys.argv[3] if len(sys.argv) > 3 else None
+            print(json.dumps(run_terrain_on_path(input_path, target_value), allow_nan=False))
         elif sys.argv[1] == "--inspect":
             if len(sys.argv) < 3:
                 print(json.dumps({"error": "Missing input path for --inspect"}))

@@ -400,6 +400,14 @@ export function App() {
             />
             <ProcessingPanel
               state={processing}
+              resultMeta={
+                processing.status === "ready" && artifact?.metadata.backend
+                  ? {
+                      backend: artifact.metadata.backend.model_name,
+                      target: artifact.metadata.backend.elevation_semantics,
+                    }
+                  : null
+              }
               onCancel={handleCancelOperation}
               onRetry={handleRetryOperation}
               onDismiss={handleDismissOperation}

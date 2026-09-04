@@ -4,7 +4,7 @@ import { BackendBridge } from "../../backend/bridge";
 import { InputWorkspace } from "./InputWorkspace";
 import { makeTestPng, makeCorruptBytes } from "../../input/testFixtures";
 import { FixtureSource } from "../../artifact/FixtureSource";
-import { FileInputSource } from "../../input/source";
+import { ApplicationBackendSource } from "../../input/applicationSource";
 
 const bridge = new BackendBridge({ bridgeScript: "scripts/backend_bridge.py" });
 const SLOW = { timeout: 20000 };
@@ -90,7 +90,35 @@ describe("InputWorkspace", () => {
     expect(onGenerate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
     expect(onGenerate).toHaveBeenCalledOnce();
-    expect(onGenerate.mock.calls[0][0]).toBeInstanceOf(FileInputSource);
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source).toBeInstanceOf(ApplicationBackendSource);
+    expect(source.kind).toBe("file");
+    expect(source.backendLabel).toBe("Synthetic Development Backend");
+  });
+
+  it("shows the registered backend identity without a dropdown", async () => {
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+    );
+    await waitForSupported(container);
+    expect(container.textContent).toContain("Backend: Synthetic Development Backend");
+  });
+
+  it("offers capability-driven output targets and passes the selection through", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+    );
+    await waitForSupported(container);
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    fireEvent.click(screen.getByRole("radio", { name: "Height / AGL" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    expect(onGenerate).toHaveBeenCalledOnce();
+    const source = onGenerate.mock.calls[0][0] as { targetSemantics: string };
+    expect(source.targetSemantics).toBe("height_agl_ndsm");
   });
 
   it("disables generation while processing runs", async () => {

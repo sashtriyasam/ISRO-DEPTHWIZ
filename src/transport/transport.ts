@@ -73,7 +73,11 @@ export class ServiceArtifactTransport implements ArtifactTransport {
     }
 
     try {
-      const terrain = await this.bridge.fetchTerrainPayload(request.stagedPath, hooks);
+      const terrain = await this.bridge.fetchTerrainPayload(
+        request.stagedPath,
+        hooks,
+        request.targetSemantics
+      );
       return { response, terrain };
     } catch (err) {
       if (err instanceof ArtifactTransportFailure) {

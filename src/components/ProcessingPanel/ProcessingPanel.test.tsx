@@ -108,4 +108,39 @@ describe("ProcessingPanel", () => {
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByText("2 completed")).toBeInTheDocument();
   });
+
+  it("shows backend identity and target from the actual result", () => {
+    const state: ProcessingState = {
+      status: "ready",
+      operationId: "op-1",
+      sourceId: "s",
+      sourceLabel: "tile.png",
+      artifactId: "a",
+      completedStages: [],
+      warnings: [],
+    };
+    const { container } = render(
+      <ProcessingPanel
+        state={state}
+        resultMeta={{ backend: "synthetic-depth", target: "absolute_elevation_dsm" }}
+      />
+    );
+    expect(screen.getByText("synthetic-depth")).toBeInTheDocument();
+    expect(screen.getByText("absolute_elevation_dsm")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("AI Model");
+  });
+
+  it("omits backend rows without result metadata", () => {
+    const state: ProcessingState = {
+      status: "ready",
+      operationId: "op-1",
+      sourceId: "s",
+      sourceLabel: "s",
+      artifactId: "a",
+      completedStages: [],
+      warnings: [],
+    };
+    const { container } = render(<ProcessingPanel state={state} />);
+    expect(container.textContent).not.toContain("Backend");
+  });
 });

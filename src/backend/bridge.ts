@@ -181,7 +181,11 @@ export class BackendBridge {
     }
   }
 
-  async executeTerrainFile(stagedPath: string, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
+  async executeTerrainFile(
+    stagedPath: string,
+    hooks: BridgeExecutionHooks = {},
+    targetSemantics?: string
+  ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
@@ -200,7 +204,11 @@ export class BackendBridge {
     }
 
     try {
-      const jsonData = await this.spawnPython(["--terrain-file", stagedPath], hooks);
+      const args =
+        targetSemantics !== undefined
+          ? ["--terrain-file", stagedPath, targetSemantics]
+          : ["--terrain-file", stagedPath];
+      const jsonData = await this.spawnPython(args, hooks);
       return this.processTerrainData(jsonData, errors, warnings);
     } catch (err) {
       return this.toProcessError(err);
@@ -209,12 +217,17 @@ export class BackendBridge {
 
   async fetchTerrainPayload(
     stagedPath: string,
-    hooks: BridgeExecutionHooks = {}
+    hooks: BridgeExecutionHooks = {},
+    targetSemantics?: string
   ): Promise<BackendTerrainProduct> {
     if (!this.isNode) {
       throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
     }
-    const jsonData = await this.spawnPython(["--terrain-file", stagedPath], hooks);
+    const args =
+      targetSemantics !== undefined
+        ? ["--terrain-file", stagedPath, targetSemantics]
+        : ["--terrain-file", stagedPath];
+    const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
   }
 

@@ -1,14 +1,20 @@
 import type { ProcessingState } from "../../processing/types";
 import { STAGE_LABELS } from "../../processing/types";
 
+export interface ProcessingResultMeta {
+  backend: string;
+  target: string;
+}
+
 interface ProcessingPanelProps {
   state: ProcessingState;
+  resultMeta?: ProcessingResultMeta | null;
   onCancel?: () => void;
   onRetry?: () => void;
   onDismiss?: () => void;
 }
 
-export function ProcessingPanel({ state, onCancel, onRetry, onDismiss }: ProcessingPanelProps) {
+export function ProcessingPanel({ state, resultMeta, onCancel, onRetry, onDismiss }: ProcessingPanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       <div style={sectionLabelStyle}>Processing</div>
@@ -32,6 +38,12 @@ export function ProcessingPanel({ state, onCancel, onRetry, onDismiss }: Process
           <>
             <DataRow label="Status" value="Ready" />
             <DataRow label="Source" value={state.sourceLabel} />
+            {resultMeta && (
+              <>
+                <DataRow label="Backend" value={resultMeta.backend} />
+                <DataRow label="Target" value={resultMeta.target} />
+              </>
+            )}
             <DataRow label="Stages" value={`${state.completedStages.length} completed`} />
           </>
         )}

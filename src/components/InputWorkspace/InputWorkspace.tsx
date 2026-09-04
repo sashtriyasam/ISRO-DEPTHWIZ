@@ -3,13 +3,17 @@ import { BackendBridge } from "../../backend/bridge";
 import { FixtureSource } from "../../artifact/FixtureSource";
 import type { ArtifactSource } from "../../artifact/types";
 import {
-  fetchServiceSuffixes,
+  fetchServiceCapabilities,
   validateInputFile,
   InputValidationFailed,
   InputValidationCancelled,
 } from "../../input/validation";
 import { formatSupportedList } from "../../input/types";
-import { FileInputSource } from "../../input/source";
+import {
+  ApplicationBackendSource,
+  DEFAULT_TARGET_SEMANTICS,
+} from "../../input/applicationSource";
+import type { MetricTargetSemantics, ServiceCapabilitiesWire } from "../../service/wireTypes";
 import type {
   ClientFile,
   InputMetadata,
@@ -65,22 +69,46 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
   if (!bridgeRef.current) {
     bridgeRef.current = bridge ?? new BackendBridge();
   }
-  const [suffixes, setSuffixes] = useState<string[] | null>(null);
+  const [capabilities, setCapabilities] = useState<ServiceCapabilitiesWire | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
   const [inputState, setInputState] = useState<InputState>({ status: "empty" });
+  const [targetSemantics, setTargetSemantics] =
+    useState<MetricTargetSemantics>(DEFAULT_TARGET_SEMANTICS);
   const [dragActive, setDragActive] = useState(false);
   const validationRef = useRef<AbortController | null>(null);
   const stagedRef = useRef<(() => Promise<void>) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const suffixes = capabilities?.supported_input_formats ?? null;
+  const targetChoices = (capabilities?.supported_target_semantics ?? []).filter(
+    (t): t is MetricTargetSemantics =>
+      t === "absolute_elevation_dsm" || t === "height_agl_ndsm"
+  );
+  const backendIdentity =
+    capabilities === null
+      ? null
+      : capabilities.available_backends.length === 1 &&
+          capabilities.available_backends[0] === "synthetic-depth"
+        ? "Synthetic Development Backend"
+        : `Backends: ${capabilities.available_backends.join(", ") || "none reported"}`;
+
   const loadCapabilities = useCallback(async () => {
     setCapabilitiesError(null);
     try {
-      const list = await fetchServiceSuffixes();
-      setSuffixes(list);
+      const result = await fetchServiceCapabilities();
+      setCapabilities(result);
+      if (
+        !result.supported_target_semantics.includes(targetSemantics) &&
+        result.supported_target_semantics.length > 0
+      ) {
+        const fallback = result.supported_target_semantics[0];
+        if (fallback === "absolute_elevation_dsm" || fallback === "height_agl_ndsm") {
+          setTargetSemantics(fallback);
+        }
+      }
     } catch (err) {
       setCapabilitiesError(err instanceof Error ? err.message : String(err));
-      setSuffixes(null);
+      setCapabilities(null);
     }
   }, []);
 
@@ -132,7 +160,7 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
         stagedRef.current = result.cleanup;
         setInputState({
           status: "validated",
-          file,
+          file: { ...file, bytes: new Uint8Array(0) },
           metadata: result.metadata,
           stagedPath: result.stagedPath,
           cleanup: result.cleanup,
@@ -208,15 +236,16 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
       return;
     }
     if (inputState.stagedPath) {
-      const source = new FileInputSource({
+      const source = new ApplicationBackendSource({
         stagedPath: inputState.stagedPath,
         metadata: inputState.metadata,
+        targetSemantics,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics]);
 
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
@@ -283,6 +312,10 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
         <div style={mutedStyle}>Supported: {formatSupportedList(suffixes)}</div>
       )}
 
+      {backendIdentity && (
+        <div style={mutedStyle}>Backend: {backendIdentity}</div>
+      )}
+
       {inputState.status === "validating" && (
         <div style={mutedStyle}>Validating {inputState.file.name} with the backend…</div>
       )}
@@ -315,6 +348,28 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
             label="GSD"
             value={inputState.metadata.gsd === null ? "—" : String(inputState.metadata.gsd)}
           />
+          {targetChoices.length > 1 && inputState.stagedPath !== "" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                Output target
+              </span>
+              {targetChoices.map((choice) => (
+                <label
+                  key={choice}
+                  style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}
+                >
+                  <input
+                    type="radio"
+                    name="target-semantics"
+                    checked={targetSemantics === choice}
+                    onChange={() => setTargetSemantics(choice)}
+                    disabled={processingRunning}
+                  />
+                  <span>{targetSemanticsLabel(choice)}</span>
+                </label>
+              ))}
+            </div>
+          )}
           <button
             onClick={handleGenerate}
             style={primaryButtonStyle}
@@ -327,6 +382,10 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
       )}
     </div>
   );
+}
+
+function targetSemanticsLabel(choice: MetricTargetSemantics): string {
+  return choice === "absolute_elevation_dsm" ? "Absolute Elevation / DSM" : "Height / AGL";
 }
 
 function DataRow({ label, value }: { label: string; value: string }) {

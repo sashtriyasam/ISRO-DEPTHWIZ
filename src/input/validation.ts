@@ -1,6 +1,7 @@
 import { BackendBridge } from "../backend/bridge";
 import type { BackendInspection } from "../backend/bridge";
 import { LocalServiceClient } from "../service/client";
+import type { ServiceCapabilitiesWire } from "../service/wireTypes";
 import type { ArtifactLoadOptions } from "../artifact/types";
 import {
   formatSupportedList,
@@ -201,14 +202,20 @@ export async function fetchSupportedSuffixes(bridge?: BackendBridge): Promise<st
 }
 
 export async function fetchServiceSuffixes(client?: LocalServiceClient): Promise<string[]> {
+  const capabilities = await fetchServiceCapabilities(client);
+  return [...capabilities.supported_input_formats];
+}
+
+export async function fetchServiceCapabilities(
+  client?: LocalServiceClient
+): Promise<ServiceCapabilitiesWire> {
   const active = client ?? new LocalServiceClient();
   try {
-    const capabilities = await active.capabilities();
-    return [...capabilities.supported_input_formats];
+    return await active.capabilities();
   } catch (err) {
     throw new InputValidationFailed({
       code: "capabilities_unavailable",
-      message: "Supported input formats could not be loaded from the service.",
+      message: "Backend capabilities could not be loaded from the service.",
       reason: err instanceof Error ? err.message : String(err),
       action: "Check the backend setup and try again.",
     });

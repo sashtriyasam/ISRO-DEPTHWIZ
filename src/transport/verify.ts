@@ -35,6 +35,13 @@ export function verifyBundle(bundle: TerrainBundle): void {
   if (mesh.semantics !== null && mesh.semantics !== terrain.mesh.semantics) {
     mismatches.push(`semantics descriptor=${mesh.semantics} payload=${terrain.mesh.semantics}`);
   }
+  const requestedTarget = response.summary.target_semantics;
+  if (
+    requestedTarget !== null &&
+    requestedTarget !== terrain.mesh.semantics
+  ) {
+    mismatches.push(`target summary=${requestedTarget} payload=${terrain.mesh.semantics}`);
+  }
   if (mesh.units !== null && mesh.units !== terrain.mesh.units) {
     mismatches.push(`units descriptor=${mesh.units} payload=${terrain.mesh.units}`);
   }
