@@ -5,6 +5,7 @@ import { Viewer, type ViewerHandle } from "../viewer/Viewer";
 import { StatusBar } from "../components/StatusBar/StatusBar";
 import { CameraControls } from "../components/CameraControls/CameraControls";
 import { LayerControls } from "../components/LayerControls/LayerControls";
+import { RenderingControls } from "../components/RenderingControls/RenderingControls";
 import { HeightExaggeration } from "../components/HeightExaggeration/HeightExaggeration";
 import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
@@ -24,7 +25,8 @@ import { updateMeasurementGraphics, updateProfileGraphics } from "../viewer/View
 import type { ArtifactState } from "../artifact/types";
 import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
-import type { LayerId, LayerState } from "../layers/types";
+import type { LayerId, LayerState, RenderingMode } from "../layers/types";
+import { DEFAULT_RENDERING_MODE } from "../layers";
 import type { ExaggerationLevel } from "../display/types";
 import type { InspectionResult, InspectionState } from "../inspection/types";
 import type { MeasurementMode, MeasurementPoint, MeasurementState } from "../measurement/types";
@@ -35,6 +37,7 @@ export function App() {
   const [artifactState, setArtifactState] = useState<ArtifactState>("idle");
   const [cameraMode, setCameraMode] = useState<CameraMode | null>(null);
   const [layerState, setLayerState] = useState<LayerState | null>(null);
+  const [renderingMode, setRenderingMode] = useState<RenderingMode>(DEFAULT_RENDERING_MODE);
   const [exaggeration, setExaggeration] = useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
   const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "empty" });
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>("distance");
@@ -428,6 +431,13 @@ export function App() {
                 onLayerSelect={handleLayerSelect}
               />
             )}
+            <RenderingControls
+              currentMode={renderingMode}
+              onModeChange={(mode) => {
+                setRenderingMode(mode);
+                viewerRef.current?.setRenderingMode(mode);
+              }}
+            />
             <MeasurementPanel
               state={measurementState}
               mode={measurementMode}

@@ -6,6 +6,7 @@ import type { ExaggerationLevel } from "../display/types";
 import type { InspectionResult } from "../inspection/types";
 import type { MeasurementPoint } from "../measurement/types";
 import { createLayerMesh, disposeLayerMesh } from "../layers/layerRenderer";
+import type { RenderingMode } from "../layers/types";
 import { CameraManager } from "../camera/CameraManager";
 import { computeDisplayBounds } from "../camera/sceneBounds";
 import type { CameraMode, DisplayBounds } from "../camera/types";
@@ -29,6 +30,8 @@ export interface ViewerHandle {
   loadArtifact: (artifact: SceneArtifact) => void;
   setCameraMode: (mode: CameraMode) => void;
   getCameraMode: () => CameraMode;
+  setRenderingMode: (mode: RenderingMode) => void;
+  getRenderingMode: () => RenderingMode;
   clearSelection: () => void;
   clearMeasurementGraphics: () => void;
   clearProfileGraphics: () => void;
@@ -67,6 +70,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     interactionModeRef: InteractionMode;
     verticalScaleRef: number;
     cameraModeRef: CameraMode;
+    renderingModeRef: RenderingMode;
     lastBoundsRef: DisplayBounds | null;
   }>({
     renderer: null,
@@ -92,6 +96,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     interactionModeRef: "inspect",
     verticalScaleRef: 1,
     cameraModeRef: "orbit",
+    renderingModeRef: "shaded",
     lastBoundsRef: null,
   });
 
@@ -220,7 +225,6 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         }
         disposeLayerMesh(state.currentMeshGroup);
         state.currentMeshGroup = null;
-        state.currentLayerId = null;
       }
 
       if (state.selectionMarker) {
@@ -237,19 +241,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
       state.currentArtifact = artifact;
 
-      const group = createLayerMesh(artifact, state.currentLayerId ?? "dsm");
-      if (group) {
-        group.mesh.scale.y = state.verticalScaleRef;
-        if (group.wireframe) {
-          group.wireframe.scale.y = state.verticalScaleRef;
-        }
-        state.threeScene.add(group.mesh);
-        if (group.wireframe) {
-          state.threeScene.add(group.wireframe);
-        }
-        state.currentMeshGroup = group;
-
-        const bounds = computeScaledBounds(group.mesh, state.verticalScaleRef);
+      const meshGroup = replaceMeshGroup(state, artifact, state.currentLayerId ?? "dsm");
+      if (meshGroup) {
+        const bounds = computeScaledBounds(meshGroup.mesh, state.verticalScaleRef);
         state.lastBoundsRef = {
           center: bounds.center.clone(),
           size: bounds.size.clone(),
@@ -258,6 +252,13 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
         };
         state.cameraManager.frameBounds(bounds);
       }
+    },
+    getRenderingMode: () => stateRef.current.renderingModeRef,
+    setRenderingMode: (mode: RenderingMode) => {
+      const state = stateRef.current;
+      if (state.disposed || !state.threeScene || !state.currentArtifact) return;
+      state.renderingModeRef = mode;
+      replaceMeshGroup(state, state.currentArtifact, state.currentLayerId ?? "dsm");
     },
     clearSelection: () => {
       const state = stateRef.current;
@@ -337,19 +338,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
 
     state.currentArtifact = scene;
 
-    const group = createLayerMesh(scene, layerId);
-    if (group) {
-      group.mesh.scale.y = verticalScale;
-      if (group.wireframe) {
-        group.wireframe.scale.y = verticalScale;
-      }
-      threeScene.add(group.mesh);
-      if (group.wireframe) {
-        threeScene.add(group.wireframe);
-      }
-      state.currentMeshGroup = group;
+    if (replaceMeshGroup(state, scene, layerId)) {
       state.currentLayerId = layerId;
     }
+    const group = state.currentMeshGroup;
 
       const bounds = group ? computeScaledBounds(group.mesh, verticalScale) : computeDisplayBounds([]);
       state.lastBoundsRef = {
@@ -491,6 +483,39 @@ function clearProfileGraphics(state: {
     state.profileLine.geometry.dispose();
     state.profileLine = null;
   }
+}
+
+function replaceMeshGroup(
+  state: {
+    threeScene: THREE.Scene | null;
+    currentMeshGroup: MeshGroup | null;
+    verticalScaleRef: number;
+    renderingModeRef: RenderingMode;
+  },
+  artifact: SceneArtifact,
+  layerId: LayerId
+): MeshGroup | null {
+  if (!state.threeScene) return state.currentMeshGroup;
+  if (state.currentMeshGroup) {
+    state.threeScene.remove(state.currentMeshGroup.mesh);
+    if (state.currentMeshGroup.wireframe) {
+      state.threeScene.remove(state.currentMeshGroup.wireframe);
+    }
+    disposeLayerMesh(state.currentMeshGroup);
+    state.currentMeshGroup = null;
+  }
+  const group = createLayerMesh(artifact, layerId, state.renderingModeRef);
+  if (!group) return null;
+  group.mesh.scale.y = state.verticalScaleRef;
+  if (group.wireframe) {
+    group.wireframe.scale.y = state.verticalScaleRef;
+  }
+  state.threeScene.add(group.mesh);
+  if (group.wireframe) {
+    state.threeScene.add(group.wireframe);
+  }
+  state.currentMeshGroup = group;
+  return group;
 }
 
 export function updateMeasurementGraphics(
