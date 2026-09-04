@@ -3,7 +3,7 @@ import { BackendBridge } from "../../backend/bridge";
 import { FixtureSource } from "../../artifact/FixtureSource";
 import type { ArtifactSource } from "../../artifact/types";
 import {
-  fetchSupportedSuffixes,
+  fetchServiceSuffixes,
   validateInputFile,
   InputValidationFailed,
   InputValidationCancelled,
@@ -76,7 +76,7 @@ export function InputWorkspace({ bridge, processingRunning, onGenerate }: InputW
   const loadCapabilities = useCallback(async () => {
     setCapabilitiesError(null);
     try {
-      const list = await fetchSupportedSuffixes(bridgeRef.current!);
+      const list = await fetchServiceSuffixes();
       setSuffixes(list);
     } catch (err) {
       setCapabilitiesError(err instanceof Error ? err.message : String(err));

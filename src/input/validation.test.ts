@@ -6,6 +6,7 @@ import {
   mapInspectionToMetadata,
   validateInputFile,
   fetchSupportedSuffixes,
+  fetchServiceSuffixes,
   InputValidationFailed,
 } from "./validation";
 import { makeTestPng, makeCorruptBytes, makeClientFile } from "./testFixtures";
@@ -55,6 +56,11 @@ describe("suffixOf", () => {
 describe("backend capabilities", () => {
   it("loads the supported suffix list from the real backend", async () => {
     const suffixes = await fetchSupportedSuffixes(bridge);
+    expect(suffixes).toEqual([".jpeg", ".jpg", ".png", ".tif", ".tiff"]);
+  });
+
+  it("loads the same suffix list from the service contract", async () => {
+    const suffixes = await fetchServiceSuffixes();
     expect(suffixes).toEqual([".jpeg", ".jpg", ".png", ".tif", ".tiff"]);
   });
 });

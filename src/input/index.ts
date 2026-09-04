@@ -12,6 +12,7 @@ export {
   mapInspectionToMetadata,
   validateInputFile,
   fetchSupportedSuffixes,
+  fetchServiceSuffixes,
   InputValidationFailed,
   InputValidationCancelled,
 } from "./validation";
