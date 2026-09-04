@@ -1,0 +1,9 @@
+{
+  "root": "data/gamus",
+  "manifest": "manifests/gamus.manifest.json",
+  "split": "train",
+  "dev_subset_size": 20,
+  "dev_seed": "depthwizard-m1",
+  "dev_split_source": "train",
+  "validation_strict": true
+}

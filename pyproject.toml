@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "depthwizard"
+version = "0.1.0.m1"
+description = "DepthWizard — Single-View Height Estimation and 3D Flythrough (SIH 26175) — dataset foundation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Shravan", email = "shravan@depthwizard.local" }]
+dependencies = []
+
+[project.optional-dependencies]
+h5 = ["h5py", "numpy"]
+dev = ["pytest>=7", "h5py", "numpy", "Pillow"]
+
+[project.urls]
+Repository = "https://github.com/EarthNets/RSI-MMSegmentation"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true
+ignore_missing_imports = true
