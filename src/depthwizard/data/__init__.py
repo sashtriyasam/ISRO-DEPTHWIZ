@@ -3,6 +3,7 @@
 Shared interfaces: changes here require Shravan + Shivam review (AGENTS.md).
 """
 
+from depthwizard.data.experiment import GamusExperimentDataset
 from depthwizard.data.schemas import (
     GAMUS_CLASSES,
     GAMUS_CLASS_NAMES,
@@ -15,6 +16,7 @@ __all__ = [
     "GAMUS_CLASSES",
     "GAMUS_CLASS_NAMES",
     "GAMUS_SPLITS",
+    "GamusExperimentDataset",
     "GamusRecord",
     "GamusSample",
 ]

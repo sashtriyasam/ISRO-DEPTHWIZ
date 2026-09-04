@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "depthwizard"
-version = "0.1.0.m1"
+version = "0.1.0.m2"
 description = "DepthWizard — Single-View Height Estimation and 3D Flythrough (SIH 26175) — dataset foundation"
 readme = "README.md"
 requires-python = ">=3.10"

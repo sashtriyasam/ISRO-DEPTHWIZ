@@ -2,9 +2,9 @@
 
 **Single-View Height Estimation and 3D Flythrough**
 
-Shravan ML/data track — Milestone 1: GAMUS Dataset Foundation.
+Shravan ML/data track — Milestone 2: Empirical GAMUS Validation + Experiment-Ready Interface (builds on M1 foundation).
 
-This repository establishes the deterministic dataset contract, manifest, and development-subset machinery for future depth-model experiments. No model training, DSM generation, or Three.js visualization is included in this milestone.
+This repository establishes the deterministic dataset contract, manifest, and development-subset machinery for future depth-model experiments, now empirically verified against real GAMUS tiles. No model training, DSM generation, or Three.js visualization is included in this milestone.
 
 ## Quick start (no dataset required)
 
@@ -19,6 +19,7 @@ python -m depthwizard.data.manifest --help
 See:
 
 - `docs/research/gamus-audit.md` — full upstream GAMUS audit (re-verified 2026-09-04, commit `6ed44ba87b59911144430ebc0ca02c1f7a1c62b4`)
+- `docs/research/gamus-empirical-probe.md` — M2 empirical probe report (real H5 measurements, tool-generated)
 - `docs/research/dataset-foundation-repro.md` — how to reproduce manifest / dev subset / validation
 - `docs/data-provenance.md` — license & provenance
 - `configs/gamus.example.json` — example configuration
@@ -28,15 +29,18 @@ See:
 
 ```
 src/depthwizard/data/
-  schemas.py      — manifest record & sample contract
+  schemas.py      — manifest record & sample contract (frozen, M1+M2 verified)
   config.py       — GamusConfig (root, manifest, subset)
-  manifest.py     — deterministic manifest generation
+  manifest.py     — deterministic manifest generation (--probe verified on real data)
   subset.py       — deterministic dev-subset selection
   validation.py   — pairing / shape / dtype / class validation
   adapter.py      — GAMUS adapter (lazy H5 loading, contract)
-tests/            — fixture-based, no dataset download required
+  acquire.py      — deterministic tiny real-data acquisition (M2)
+  probe.py        — empirical H5 probe → JSON + Markdown (M2)
+  experiment.py   — manifest-driven tensor interface, torch-optional (M2, no training)
+tests/            — fixture-based + opt-in real-data tests (no download required)
 configs/          — example config
-manifests/        — committed manifests only (no raw .h5)
+manifests/        — manifests + compact probe reports only (no raw .h5)
 data/             — local dataset root (ignored, see data/README.md)
 ```
 
