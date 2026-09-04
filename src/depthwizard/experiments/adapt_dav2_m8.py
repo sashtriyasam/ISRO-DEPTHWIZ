@@ -207,7 +207,7 @@ def run_adaptation(
         "aligned_mae_mean": float(sum(v["mae"] for v in m3_vals if v["mae"] is not None) / max(1, len(m3_vals))),
     }
 
-    _ = {
+    results = {
         "experiment_id": experiment_id,
         "kind": "adaptation-stage-A (frozen backbone + trainable head; geographic diversity 8/8/8; raw target; research only)",
         "dataset": {
@@ -243,7 +243,7 @@ def run_adaptation(
         },
         "validation": analysis,
         "m3_reference_same_val": m3_ref,
-        "software": {},
+        "software": _software(),
         "memory": "not measured",
         "wall_time_s": 0.0,
         "generated_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -266,12 +266,54 @@ def run_adaptation(
         "city_composition": "8 DC + 8 PHL + 8 NYC",
         "comment": "Geographic training diversity experiment (M8). 24 train tiles: 8 DC + 8 PHL + 8 NYC from train split. Same 8 DC val tiles as M5. Target mode: raw meters. All other factors frozen to M5."
     }
-    out = Path("experiments/dav2-gamus-head-m8-diversity-e01")
+    out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
     out.joinpath("config.json").write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    out.joinpath("results.json").write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    # Return empty results for now - actual training would be done by running the module
-    return {"experiment_id": "dav2-gamus-head-m8-diversity-e01", "status": "ready"}
+    # Load train_summary for best_epoch
+    train_summary_path = out / "train_summary.json"
+    train_summary = {}
+    if train_summary_path.exists():
+        train_summary = json.loads(train_summary_path.read_text(encoding="utf-8"))
+
+    # README.md
+    val = results.get("validation", {})
+    error = val.get("error", {})
+    mae = error.get("mae", 0.0)
+    rmse = error.get("rmse", 0.0)
+    pearson = val.get("correlation", {}).get("pearson", 0.0)
+    readme = f"""# {experiment_id}
+
+**M8 Geographic Training Diversity Experiment** — frozen DA-V2-Small + lightweight head on 24 tiles (8 DC + 8 PHL + 8 NYC), raw-meter masked L1, validated on same 8 DC tiles as M5.
+
+## Config
+- Manifest: `manifests/gamus.m4.manifest.json`
+- Train: 24 tiles (8 DC + 8 PHL + 8 NYC from train split)
+- Val: 8 DC tiles (identical to M5)
+- Target mode: raw meters (M5 baseline)
+- Epochs: 30, lr=1e-3, seed=0, Adam, weight_decay=0, batch=1 tile, no augmentation
+- Selection: best val MAE on fixed 8 DC val tiles
+
+## Results
+- **Best epoch**: {train_summary.get("best_epoch", "N/A")}
+- **Val MAE (best)**: {mae:.4f} m
+- **Val RMSE (best)**: {rmse:.4f} m
+- **Val Pearson (best)**: {pearson:.4f}
+
+## Comparison to M5 Baseline
+| Metric | M5 (24 DC train) | M8 (8 DC + 8 PHL + 8 NYC train) | Delta |
+|--------|------------------|----------------------------------|-------|
+| Val MAE | 5.1500 m | {mae:.4f} m | {mae - 5.1500:+.4f} m |
+
+## Notes
+- No geographic eval during training — secondary eval via M6 protocol after checkpoint selection
+- Head: ~23k params (conv3x3 64->32->16->1 + bilinear upsample)
+- Backbone: frozen DA-V2-Small (24.8M params)
+"""
+    out.joinpath("README.md").write_text(readme, encoding="utf-8")
+
+    return results
 
 
 def _load_samples(adapter: GamusAdapter, recs: list[GamusRecord], need_label: bool) -> list[dict]:
