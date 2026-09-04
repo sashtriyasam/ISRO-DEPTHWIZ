@@ -1,10 +1,12 @@
 import type { BridgeExecutionHooks } from "../backend/bridge";
 import { OperationCancelledError } from "../backend/bridge";
+import { detectHost, type HostCapabilities, type HostDetectionOverrides } from "../host/host";
 
 export interface ServiceTransportOptions {
   pythonPath?: string;
   serviceScript?: string;
   timeoutMs?: number;
+  host?: HostDetectionOverrides;
 }
 
 export interface ServiceTransport {
@@ -17,21 +19,22 @@ export class SubprocessServiceTransport implements ServiceTransport {
   private pythonPath: string;
   private serviceScript: string;
   private timeoutMs: number;
-  private isNode: boolean;
+  private host: HostCapabilities;
 
   constructor(options: ServiceTransportOptions = {}) {
     this.pythonPath = options.pythonPath ?? "python";
     this.serviceScript = options.serviceScript ?? "scripts/depthwiz_service.py";
     this.timeoutMs = options.timeoutMs ?? SERVICE_TIMEOUT_MS;
-    this.isNode =
-      typeof process !== "undefined" &&
-      typeof process.versions !== "undefined" &&
-      typeof process.versions.node !== "undefined";
+    this.host = detectHost(options.host);
+  }
+
+  get hostCapabilities(): HostCapabilities {
+    return this.host;
   }
 
   async invoke(payload: unknown, hooks: BridgeExecutionHooks = {}): Promise<unknown> {
-    if (!this.isNode) {
-      throw new Error("Service transport requires Node.js environment (Tauri/Electron)");
+    if (!this.host.processSpawning) {
+      throw new Error("Service transport requires a desktop host with process spawning");
     }
     if (hooks.signal?.aborted) {
       throw new OperationCancelledError();

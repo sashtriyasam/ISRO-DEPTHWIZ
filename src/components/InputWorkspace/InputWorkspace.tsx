@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackendBridge } from "../../backend/bridge";
 import { FixtureSource } from "../../artifact/FixtureSource";
 import type { ArtifactSource } from "../../artifact/types";
@@ -9,6 +9,7 @@ import {
   InputValidationCancelled,
 } from "../../input/validation";
 import { formatSupportedList } from "../../input/types";
+import { detectHost, hostLabel } from "../../host/host";
 import type { LocalServiceClient } from "../../service/client";
 import {
   ApplicationBackendSource,
@@ -86,6 +87,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
   const stagedRef = useRef<(() => Promise<void>) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const detectedHost = useMemo(() => detectHost(), []);
   const suffixes = capabilities?.supported_input_formats ?? null;
   const targetChoices = (capabilities?.supported_target_semantics ?? []).filter(
     (t): t is MetricTargetSemantics =>
@@ -324,6 +326,11 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
 
       {backendIdentity && (
         <div style={mutedStyle}>Backend: {backendIdentity}</div>
+      )}
+
+      <div style={mutedStyle}>Host: {hostLabel(detectedHost)}</div>
+      {detectedHost.runtime === "browser" && (
+        <div style={mutedStyle}>File validation needs a desktop host; the fixture path works anywhere.</div>
       )}
 
       {inputState.status === "validating" && (

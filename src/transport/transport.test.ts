@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { BackendBridge } from "../backend/bridge";
 import type { BackendTerrainProduct } from "../backend/types";
 import { LocalServiceClient } from "../service/client";
+import { SubprocessServiceTransport } from "../service/transport";
 import { makeTestPng } from "../input/testFixtures";
 import { ServiceArtifactTransport } from "./transport";
 import { ArtifactTransportFailure } from "./types";
@@ -126,6 +127,61 @@ describe("ServiceArtifactTransport", () => {
       expect.fail("should have thrown");
     } catch (err) {
       expect((err as ArtifactTransportFailure).transportError.code).toBe("OPERATION_CANCELLED");
+    }
+  });
+
+  it("returns field-equivalent payloads across repeated fetches", async () => {
+    const transport = new ServiceArtifactTransport();
+    const staged = await bridge.stageInputBytes(makeTestPng(4, 4), "tile.png");
+    try {
+      const first = await transport.fetchTerrain({ stagedPath: staged.path });
+      const second = await transport.fetchTerrain({ stagedPath: staged.path });
+      expect(first.terrain.mesh.vertices).toEqual(second.terrain.mesh.vertices);
+      expect(first.terrain.mesh.indices).toEqual(second.terrain.mesh.indices);
+      expect(first.terrain.dsm.values).toEqual(second.terrain.dsm.values);
+      expect(first.response.summary.input_checksum).toBe(second.response.summary.input_checksum);
+    } finally {
+      await staged.cleanup();
+    }
+  });
+
+  it("cancels a live fetch and terminates the owned process", async () => {
+    const transport = new ServiceArtifactTransport();
+    const staged = await bridge.stageInputBytes(makeTestPng(8, 8), "tile.png");
+    try {
+      const controller = new AbortController();
+      await expect(
+        transport.fetchTerrain(
+          { stagedPath: staged.path },
+          {
+            signal: controller.signal,
+            onStage: () => controller.abort(),
+          }
+        )
+      ).rejects.toSatisfy((err: unknown) => {
+        expect(err).toBeInstanceOf(ArtifactTransportFailure);
+        expect((err as ArtifactTransportFailure).transportError.code).toBe("OPERATION_CANCELLED");
+        return true;
+      });
+    } finally {
+      await staged.cleanup();
+    }
+  });
+
+  it("reports service unavailability on a browser-only host without spawning", async () => {
+    const transport = new ServiceArtifactTransport({
+      serviceClient: new LocalServiceClient(
+        new SubprocessServiceTransport({
+          host: { runtime: "browser", processSpawning: false, localFilesystem: false },
+        })
+      ),
+    });
+    try {
+      await transport.fetchTerrain({ stagedPath: "tile.png" });
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ArtifactTransportFailure);
+      expect((err as ArtifactTransportFailure).transportError.code).toBe("SERVICE_UNAVAILABLE");
     }
   });
 });

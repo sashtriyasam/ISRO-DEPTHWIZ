@@ -1,6 +1,7 @@
 import type { BackendDepthResult, BackendSpatialContext, BackendTerrainProduct } from "./types";
 import { adaptBackendResult, type AdapterResult } from "./adapter";
 import { adaptTerrainProduct } from "./meshAdapter";
+import { detectHost, type HostCapabilities, type HostDetectionOverrides } from "../host/host";
 
 export interface BackendCapabilities {
   contractVersion: string;
@@ -125,6 +126,7 @@ export interface BackendBridgeOptions {
   pythonPath?: string;
   bridgeScript?: string;
   timeoutMs?: number;
+  host?: HostDetectionOverrides;
 }
 
 export class OperationCancelledError extends Error {
@@ -138,13 +140,17 @@ export class BackendBridge {
   private pythonPath: string;
   private bridgeScript: string;
   private timeoutMs: number;
-  private isNode: boolean;
+  private host: HostCapabilities;
 
   constructor(options: BackendBridgeOptions = {}) {
     this.pythonPath = options.pythonPath ?? "python";
     this.bridgeScript = options.bridgeScript ?? "scripts/backend_bridge.py";
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
-    this.isNode = typeof process !== "undefined" && typeof process.versions !== "undefined" && typeof process.versions.node !== "undefined";
+    this.host = detectHost(options.host);
+  }
+
+  get hostCapabilities(): HostCapabilities {
+    return this.host;
   }
 
   async executeSynthetic(width = 8, height = 8, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
@@ -159,10 +165,10 @@ export class BackendBridge {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
-    if (!this.isNode) {
+    if (!this.host.processSpawning) {
       errors.push({
         code: "BROWSER_ENVIRONMENT",
-        message: "Backend bridge requires Node.js environment (Tauri/Electron)",
+        message: "Backend bridge requires a desktop host with process spawning",
         phase: "process",
       });
       return { success: false, errors, warnings };
@@ -189,10 +195,10 @@ export class BackendBridge {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
-    if (!this.isNode) {
+    if (!this.host.processSpawning) {
       errors.push({
         code: "BROWSER_ENVIRONMENT",
-        message: "Backend bridge requires Node.js environment (Tauri/Electron)",
+        message: "Backend bridge requires a desktop host with process spawning",
         phase: "process",
       });
       return { success: false, errors, warnings };
@@ -220,8 +226,8 @@ export class BackendBridge {
     hooks: BridgeExecutionHooks = {},
     targetSemantics?: string
   ): Promise<BackendTerrainProduct> {
-    if (!this.isNode) {
-      throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
+    if (!this.host.processSpawning) {
+      throw new Error("Backend bridge requires a desktop host with process spawning");
     }
     const args =
       targetSemantics !== undefined
@@ -259,8 +265,8 @@ export class BackendBridge {
   }
 
   async getCapabilities(): Promise<BackendCapabilities> {
-    if (!this.isNode) {
-      throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
+    if (!this.host.processSpawning) {
+      throw new Error("Backend bridge requires a desktop host with process spawning");
     }
     const data = (await this.spawnPython(["--capabilities"])) as {
       contract_version?: unknown;
@@ -279,8 +285,8 @@ export class BackendBridge {
   }
 
   async inspectInputFile(stagedPath: string, hooks: BridgeExecutionHooks = {}): Promise<InspectInputResult> {
-    if (!this.isNode) {
-      throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
+    if (!this.host.processSpawning) {
+      throw new Error("Backend bridge requires a desktop host with process spawning");
     }
     const data = (await this.spawnPython(["--inspect", stagedPath], hooks)) as {
       valid?: unknown;
@@ -304,6 +310,11 @@ export class BackendBridge {
   }
 
   async stageInputBytes(bytes: Uint8Array, filename: string): Promise<StagedInput> {
+    if (!this.host.localFilesystem) {
+      throw new Error(
+        "File staging requires a host filesystem; browser-only contexts cannot stage input files"
+      );
+    }
     let fs: typeof import("fs/promises");
     let os: typeof import("os");
     let path: typeof import("path");
@@ -313,7 +324,7 @@ export class BackendBridge {
       path = await import("path");
     } catch {
       throw new Error(
-        "File staging requires a Node.js filesystem (Tauri/Electron); browser-only contexts cannot stage input files"
+        "File staging requires a host filesystem; this host cannot stage input files"
       );
     }
     const base = filename.split(/[\\/]/).pop() ?? "";
@@ -333,10 +344,10 @@ export class BackendBridge {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
-    if (!this.isNode) {
+    if (!this.host.processSpawning) {
       errors.push({
         code: "BROWSER_ENVIRONMENT",
-        message: "Backend bridge requires Node.js environment (Tauri/Electron)",
+        message: "Backend bridge requires a desktop host with process spawning",
         phase: "process",
       });
       return { success: false, errors, warnings };
@@ -517,3 +528,5 @@ export class BackendBridge {
     };
   }
 }
+
+

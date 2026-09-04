@@ -106,6 +106,15 @@ describe("InputWorkspace", () => {
     expect(container.textContent).toContain("Backend: Synthetic Development Backend");
   });
 
+  it("states the desktop host honestly without claiming production", async () => {
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+    );
+    await waitForSupported(container);
+    expect(container.textContent).toContain("Host: Desktop host");
+    expect(container.textContent).not.toContain("Production");
+  });
+
   it("offers capability-driven output targets and passes the selection through", async () => {
     const onGenerate = vi.fn();
     const { container } = render(
