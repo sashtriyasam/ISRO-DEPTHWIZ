@@ -70,3 +70,13 @@ class ExportError(DepthWizardError):
     """Product export/serialization failed."""
 
     code = "export_failure"
+
+
+class PipelineExecutionError(DepthWizardError):
+    """Pipeline orchestration contract violated (reuse, illegal transition).
+
+    Stage work failures are reported as data in PipelineResult, not via
+    this error; it covers runner misuse and state-machine violations.
+    """
+
+    code = "pipeline_execution_failure"

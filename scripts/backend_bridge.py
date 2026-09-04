@@ -139,49 +139,56 @@ def run_depth_only(width: int, height: int) -> dict:
 
 
 def run_terrain(width: int, height: int) -> dict:
-    """Full terrain chain using only real backend subsystems."""
+    """Full terrain chain on a generated synthetic input."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
     try:
         create_synthetic_png(width, height, tmp_path)
-        inspection = inspect_input(tmp_path)
-        emit_stage("preprocessing")
-        depth = SyntheticDepthBackend().estimate_depth(inspection)
-        emit_stage("inference_running")
+        return run_terrain_on_path(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
-        samples = CalibrationSamples(
-            predicted_values=DEV_PREDICTED,
-            reference_values=DEV_REFERENCE,
-            reference_id=DEV_REFERENCE_ID,
-            reference_units="meters",
-            target_semantics=DEV_TARGET_SEMANTICS,
-            source_checksum=inspection.handle.sha256,
-        )
-        calibration = ScaleOffsetCalibrator().calibrate(samples)
 
-        emit_stage("calibrating")
-        product = create_scientific_height_product(
-            depth, calibration, DEV_TARGET_SEMANTICS
-        )
-        grid = rasterize_height_product(product)
-        emit_stage("dsm_generation")
-        mesh = build_terrain_mesh(grid)
-        emit_stage("mesh_generation")
+def run_terrain_on_path(input_path: Path) -> dict:
+    """Full terrain chain on a real input file using only real backend subsystems."""
+    inspection = inspect_input(input_path)
+    emit_stage("preprocessing")
+    depth = SyntheticDepthBackend().estimate_depth(inspection)
+    emit_stage("inference_running")
 
-        spatial_dump = mesh.spatial.model_dump()
-        provenance_dump = mesh.provenance.model_dump(mode="json")
+    samples = CalibrationSamples(
+        predicted_values=DEV_PREDICTED,
+        reference_values=DEV_REFERENCE,
+        reference_id=DEV_REFERENCE_ID,
+        reference_units="meters",
+        target_semantics=DEV_TARGET_SEMANTICS,
+        source_checksum=inspection.handle.sha256,
+    )
+    calibration = ScaleOffsetCalibrator().calibrate(samples)
 
-        return {
-            "kind": "terrain",
-            "stages": [
+    emit_stage("calibrating")
+    product = create_scientific_height_product(
+        depth, calibration, DEV_TARGET_SEMANTICS
+    )
+    grid = rasterize_height_product(product)
+    emit_stage("dsm_generation")
+    mesh = build_terrain_mesh(grid)
+    emit_stage("mesh_generation")
+
+    spatial_dump = mesh.spatial.model_dump()
+    provenance_dump = mesh.provenance.model_dump(mode="json")
+
+    return {
+    "kind": "terrain",
+    "stages": [
                 "preprocessing",
                 "inference_running",
                 "calibrating",
                 "dsm_generation",
                 "mesh_generation",
-            ],
-            "depth_result": depth.model_dump(),
-            "dsm": {
+    ],
+    "depth_result": depth.model_dump(),
+    "dsm": {
                 "width": grid.width,
                 "height": grid.height,
                 "dtype": grid.dtype,
@@ -193,8 +200,8 @@ def run_terrain(width: int, height: int) -> dict:
                 "nodata": None,
                 "georeferencing": grid.georeferencing.value,
                 "spatial": spatial_dump,
-            },
-            "mesh": {
+    },
+    "mesh": {
                 "vertices": _json_list(mesh.vertices),
                 "indices": _json_list(mesh.indices),
                 "normals": _json_list(mesh.normals),
@@ -226,17 +233,55 @@ def run_terrain(width: int, height: int) -> dict:
                 "calibration_offset": mesh.calibration_offset,
                 "calibration_valid_samples": mesh.calibration_valid_samples,
                 "provenance": provenance_dump,
+    },
+}
+
+
+def run_capabilities() -> dict:
+    """Report actual backend input capabilities (no input needed)."""
+    from depthwizard.ingestion.formats import SUPPORTED_SUFFIXES
+
+    return {
+"contract_version": "1",
+        "supported_suffixes": list(SUPPORTED_SUFFIXES),
+    }
+
+
+def run_inspect(input_path: Path) -> dict:
+    """Validate one real input file with the actual backend ingestion."""
+    from depthwizard.errors import DepthWizardError
+
+    if not input_path.exists():
+        return {
+            "valid": False,
+            "failure": {
+                "code": "invalid_input",
+                "message": f"Input file not found: {input_path.name}",
             },
         }
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    try:
+        inspection = inspect_input(input_path)
+        return {"valid": True, "inspection": inspection.model_dump(mode="json")}
+    except DepthWizardError as exc:
+        return {
+            "valid": False,
+            "failure": {"code": exc.code, "message": str(exc)},
+        }
+    except ImportError as exc:
+        return {
+            "valid": False,
+            "failure": {
+                "code": "environment_unsupported",
+                "message": f"Backend reader unavailable in this environment: {exc}",
+            },
+        }
 
 
 def main() -> None:
     """Main entry point: invoke the actual backend and serialize the result."""
     if len(sys.argv) < 2:
         print(json.dumps({
-            "error": "Usage: backend_bridge.py <input_path> | --synthetic <w> <h> | --terrain <w> <h>"
+            "error": "Usage: backend_bridge.py <input_path> | --synthetic <w> <h> | --terrain <w> <h> | --terrain-file <path> | --inspect <path> | --capabilities"
         }))
         sys.exit(1)
 
@@ -245,6 +290,22 @@ def main() -> None:
             width = int(sys.argv[2]) if len(sys.argv) > 2 else 8
             height = int(sys.argv[3]) if len(sys.argv) > 3 else 8
             print(json.dumps(run_terrain(width, height), allow_nan=False))
+        elif sys.argv[1] == "--terrain-file":
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Missing input path for --terrain-file"}))
+                sys.exit(1)
+            input_path = Path(sys.argv[2])
+            if not input_path.exists():
+                print(json.dumps({"error": f"Input file not found: {input_path}"}))
+                sys.exit(1)
+            print(json.dumps(run_terrain_on_path(input_path), allow_nan=False))
+        elif sys.argv[1] == "--inspect":
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Missing input path for --inspect"}))
+                sys.exit(1)
+            print(json.dumps(run_inspect(Path(sys.argv[2]))))
+        elif sys.argv[1] == "--capabilities":
+            print(json.dumps(run_capabilities()))
         elif sys.argv[1] == "--synthetic":
             width = int(sys.argv[2]) if len(sys.argv) > 2 else 8
             height = int(sys.argv[3]) if len(sys.argv) > 3 else 8
@@ -266,3 +327,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -11,8 +11,9 @@ import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPane
 import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
-import { ArtifactLoader, FixtureSource } from "../artifact";
-import { BackendArtifactSource } from "../backend/source";
+import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
+import { ArtifactLoader } from "../artifact";
+import type { ArtifactSource } from "../artifact/types";
 import { runProcessingOperation, type ProcessingState } from "../processing";
 import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
@@ -38,19 +39,25 @@ export function App() {
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>("distance");
   const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
   const [profileState, setProfileState] = useState<ProfileState>({ status: "empty" });
-  const [sourceType, setSourceType] = useState<"fixture" | "backend">("fixture");
   const [processing, setProcessing] = useState<ProcessingState>({ status: "idle" });
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
   const operationRef = useRef<{ sourceId: string; controller: AbortController } | null>(null);
   const operationCounterRef = useRef(0);
+  const pendingRef = useRef<ArtifactSource | null>(null);
   const artifactRef = useRef<SceneArtifact | null>(null);
   artifactRef.current = artifact;
 
-  const startOperation = useCallback((nextSourceType: "fixture" | "backend") => {
-    const source = nextSourceType === "backend"
-      ? new BackendArtifactSource()
-      : new FixtureSource();
+  const clearAnalysisState = useCallback(() => {
+    viewerRef.current?.clearSelection();
+    setInspectionState({ status: "empty" });
+    setMeasurementState({ status: "empty" });
+    viewerRef.current?.clearMeasurementGraphics();
+    setProfileState({ status: "empty" });
+    viewerRef.current?.clearProfileGraphics();
+  }, []);
+
+  const startOperation = useCallback((source: ArtifactSource) => {
     const active = operationRef.current;
     if (active && active.sourceId === source.id) {
       return;
@@ -86,27 +93,35 @@ export function App() {
         setArtifact(outcome.artifact);
         setLayerState(createLayerState(outcome.artifact));
         setArtifactState("ready");
+        clearAnalysisState();
       } else if (outcome.kind === "failed" && !hadArtifact) {
         setArtifactState("error");
       }
     })();
-  }, []);
+  }, [clearAnalysisState]);
 
   useEffect(() => {
-    startOperation(sourceType);
     return () => {
       operationRef.current?.controller.abort();
       operationRef.current = null;
     };
-  }, [sourceType, startOperation]);
+  }, []);
+
+  const handleGenerate = useCallback((source: ArtifactSource) => {
+    pendingRef.current = source;
+    startOperation(source);
+  }, [startOperation]);
 
   const handleCancelOperation = useCallback(() => {
     operationRef.current?.controller.abort();
   }, []);
 
   const handleRetryOperation = useCallback(() => {
-    startOperation(sourceType);
-  }, [sourceType, startOperation]);
+    const pending = pendingRef.current;
+    if (pending) {
+      startOperation(pending);
+    }
+  }, [startOperation]);
 
   const handleDismissOperation = useCallback(() => {
     setProcessing({ status: "idle" });
@@ -333,17 +348,19 @@ export function App() {
             />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}>
-              {artifactState === "loading" ? "Loading artifact..." : artifactState === "error" ? "Failed to load artifact" : ""}
+              {artifactState === "loading"
+                ? "Generating terrain…"
+                : artifactState === "error"
+                  ? "Terrain generation failed — select an input to try again"
+                  : "Select an input file or the development fixture to begin"}
             </div>
           )
         }
         panel={
           <SidePanel>
-            <SourceControl
-              sourceType={sourceType}
-              onSourceChange={setSourceType}
-              artifact={artifact}
-              state={artifactState}
+            <InputWorkspace
+              processingRunning={processing.status === "running"}
+              onGenerate={handleGenerate}
             />
             <ProcessingPanel
               state={processing}
@@ -391,9 +408,7 @@ export function App() {
                   ? "Synthetic Development Backend"
                   : artifact
                     ? "Development Fixture"
-                    : sourceType === "backend"
-                      ? "Synthetic Development Backend"
-                      : "Development Fixture"
+                    : "No input selected"
               }
             />
           </SidePanel>
@@ -423,51 +438,3 @@ function SidePanel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SourceControl({
-  sourceType,
-  onSourceChange,
-  artifact,
-  state,
-}: {
-  sourceType: "fixture" | "backend";
-  onSourceChange: (type: "fixture" | "backend") => void;
-  artifact: SceneArtifact | null;
-  state: ArtifactState;
-}) {
-  return (
-    <div className="panel-section">
-      <div className="panel-section-header">Source</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer" }}>
-          <input
-            type="radio"
-            name="source"
-            checked={sourceType === "fixture"}
-            onChange={() => onSourceChange("fixture")}
-          />
-          <span>Development Fixture</span>
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer" }}>
-          <input
-            type="radio"
-            name="source"
-            checked={sourceType === "backend"}
-            onChange={() => onSourceChange("backend")}
-          />
-          <span>Synthetic Development Backend</span>
-        </label>
-      </div>
-      {state === "ready" && artifact?.metadata.backend && (
-        <div style={{ marginTop: "var(--spacing-xs)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-          <div>Backend: {artifact.metadata.backend.model_name}</div>
-          <div>Version: {artifact.metadata.backend.model_version ?? "unknown"}</div>
-          <div>Scale: {artifact.metadata.backend.depth_scale}</div>
-          <div>Semantics: {artifact.metadata.backend.elevation_semantics}</div>
-          {artifact.metadata.backend.depth_scale === "relative" && (
-            <div style={{ color: "var(--color-warning)" }}>Relative depth (not metric)</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

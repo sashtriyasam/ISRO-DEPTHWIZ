@@ -1,6 +1,42 @@
-import type { BackendDepthResult, BackendTerrainProduct } from "./types";
+import type { BackendDepthResult, BackendSpatialContext, BackendTerrainProduct } from "./types";
 import { adaptBackendResult, type AdapterResult } from "./adapter";
 import { adaptTerrainProduct } from "./meshAdapter";
+
+export interface BackendCapabilities {
+  contractVersion: string;
+  supportedSuffixes: string[];
+}
+
+export interface BackendInspectionHandle {
+  source_path: string;
+  display_name: string;
+  file_size: number;
+  sha256: string;
+}
+
+export interface BackendInspection {
+  handle: BackendInspectionHandle;
+  detected_format: string;
+  width: number;
+  height: number;
+  band_count: number | null;
+  dtype: string | null;
+  georeferencing: string;
+  spatial: BackendSpatialContext;
+  source_format_metadata: Record<string, string>;
+  status: string;
+}
+
+export interface InspectInputResult {
+  valid: boolean;
+  inspection?: BackendInspection;
+  error?: { code: string; message: string };
+}
+
+export interface StagedInput {
+  path: string;
+  cleanup: () => Promise<void>;
+}
 
 export interface BridgeError {
   code: string;
@@ -139,29 +175,134 @@ export class BackendBridge {
 
     try {
       const jsonData = await this.spawnPython(["--terrain", String(width), String(height)], hooks);
-      let validated: BackendTerrainProduct;
-      try {
-        validated = validateTerrainShape(jsonData);
-      } catch (err) {
-        errors.push({
-          code: "TRANSPORT_INVALID",
-          message: err instanceof Error ? err.message : "Invalid terrain transport data",
-          phase: "transport",
-        });
-        return { success: false, errors, warnings };
-      }
-      const adapterResult = adaptTerrainProduct(validated);
-      if (!adapterResult.success) {
-        for (const e of adapterResult.errors) {
-          errors.push({ code: e.code, message: e.message, phase: "adapter" });
-        }
-        return { success: false, errors, warnings };
-      }
-      warnings.push(...adapterResult.warnings);
-      return { success: true, artifact: adapterResult.artifact, errors: [], warnings };
+      return this.processTerrainData(jsonData, errors, warnings);
     } catch (err) {
       return this.toProcessError(err);
     }
+  }
+
+  async executeTerrainFile(stagedPath: string, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
+    const errors: BridgeError[] = [];
+    const warnings: string[] = [];
+
+    if (!this.isNode) {
+      errors.push({
+        code: "BROWSER_ENVIRONMENT",
+        message: "Backend bridge requires Node.js environment (Tauri/Electron)",
+        phase: "process",
+      });
+      return { success: false, errors, warnings };
+    }
+
+    if (hooks.signal?.aborted) {
+      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const jsonData = await this.spawnPython(["--terrain-file", stagedPath], hooks);
+      return this.processTerrainData(jsonData, errors, warnings);
+    } catch (err) {
+      return this.toProcessError(err);
+    }
+  }
+
+  private processTerrainData(
+    jsonData: unknown,
+    errors: BridgeError[],
+    warnings: string[]
+  ): BridgeResult {
+    let validated: BackendTerrainProduct;
+    try {
+      validated = validateTerrainShape(jsonData);
+    } catch (err) {
+      errors.push({
+        code: "TRANSPORT_INVALID",
+        message: err instanceof Error ? err.message : "Invalid terrain transport data",
+        phase: "transport",
+      });
+      return { success: false, errors, warnings };
+    }
+    const adapterResult = adaptTerrainProduct(validated);
+    if (!adapterResult.success) {
+      for (const e of adapterResult.errors) {
+        errors.push({ code: e.code, message: e.message, phase: "adapter" });
+      }
+      return { success: false, errors, warnings };
+    }
+    warnings.push(...adapterResult.warnings);
+    return { success: true, artifact: adapterResult.artifact, errors: [], warnings };
+  }
+
+  async getCapabilities(): Promise<BackendCapabilities> {
+    if (!this.isNode) {
+      throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
+    }
+    const data = (await this.spawnPython(["--capabilities"])) as {
+      contract_version?: unknown;
+      supported_suffixes?: unknown;
+    };
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      typeof data.contract_version !== "string" ||
+      !Array.isArray(data.supported_suffixes) ||
+      !data.supported_suffixes.every((s): s is string => typeof s === "string")
+    ) {
+      throw new Error("Malformed capabilities response from backend");
+    }
+    return { contractVersion: data.contract_version, supportedSuffixes: data.supported_suffixes };
+  }
+
+  async inspectInputFile(stagedPath: string, hooks: BridgeExecutionHooks = {}): Promise<InspectInputResult> {
+    if (!this.isNode) {
+      throw new Error("Backend bridge requires Node.js environment (Tauri/Electron)");
+    }
+    const data = (await this.spawnPython(["--inspect", stagedPath], hooks)) as {
+      valid?: unknown;
+      inspection?: unknown;
+      failure?: unknown;
+    };
+    if (typeof data !== "object" || data === null || typeof data.valid !== "boolean") {
+      throw new Error("Malformed inspection response from backend");
+    }
+    if (!data.valid) {
+      const failure = data.failure as { code?: unknown; message?: unknown } | undefined;
+      return {
+        valid: false,
+        error: {
+          code: typeof failure?.code === "string" ? failure.code : "invalid_input",
+          message: typeof failure?.message === "string" ? failure.message : "Input rejected by backend",
+        },
+      };
+    }
+    return { valid: true, inspection: data.inspection as BackendInspection };
+  }
+
+  async stageInputBytes(bytes: Uint8Array, filename: string): Promise<StagedInput> {
+    let fs: typeof import("fs/promises");
+    let os: typeof import("os");
+    let path: typeof import("path");
+    try {
+      fs = await import("fs/promises");
+      os = await import("os");
+      path = await import("path");
+    } catch {
+      throw new Error(
+        "File staging requires a Node.js filesystem (Tauri/Electron); browser-only contexts cannot stage input files"
+      );
+    }
+    const base = filename.split(/[\\/]/).pop() ?? "";
+    const trimmed = base.slice(-128) || "input";
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "depthwiz-"));
+    const target = path.join(dir, trimmed);
+    await fs.writeFile(target, bytes);
+    return {
+      path: target,
+      cleanup: async () => {
+        await fs.rm(dir, { recursive: true, force: true });
+      },
+    };
   }
 
   private async execute(args: string[], hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
