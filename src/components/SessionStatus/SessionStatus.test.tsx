@@ -8,6 +8,21 @@ describe("SessionStatus", () => {
     expect(screen.getByText(/Session Empty/i)).toBeTruthy();
   });
 
+  it("renders processing phase", () => {
+    render(<SessionPhase phase="processing" />);
+    expect(screen.getByText(/Session Processing/i)).toBeTruthy();
+  });
+
+  it("renders ready phase", () => {
+    render(<SessionPhase phase="ready" />);
+    expect(screen.getByText(/Session Ready/i)).toBeTruthy();
+  });
+
+  it("renders error phase", () => {
+    render(<SessionPhase phase="error" />);
+    expect(screen.getByText(/Session Error/i)).toBeTruthy();
+  });
+
   it("renders reset button when canReset true", () => {
     render(<SessionReset canReset />);
     expect(screen.getByRole("button", { name: /reset project session/i })).toBeTruthy();
@@ -18,14 +33,19 @@ describe("SessionStatus", () => {
     expect(screen.queryByRole("button", { name: /reset project session/i })).toBeNull();
   });
 
-  it("renders unsaved badge when dirty", () => {
-    render(<SessionDirtyBadge dirty="dirty" />);
-    expect(screen.getByText("unsaved")).toBeTruthy();
+  it("renders modified badge when modified", () => {
+    render(<SessionModifiedBadge modified="modified" />);
+    expect(screen.getByText("modified")).toBeTruthy();
   });
 
-  it("does not render unsaved badge when clean", () => {
-    render(<SessionDirtyBadge dirty="clean" />);
-    expect(screen.queryByText("unsaved")).toBeNull();
+  it("does not render modified badge when clean", () => {
+    render(<SessionModifiedBadge modified="clean" />);
+    expect(screen.queryByText("modified")).toBeNull();
+  });
+
+  it("modified badge has accessible label", () => {
+    render(<SessionModifiedBadge modified="modified" />);
+    expect(screen.getByLabelText("Analysis state active")).toBeTruthy();
   });
 
   it("calls onReset when reset clicked", async () => {
@@ -33,7 +53,7 @@ describe("SessionStatus", () => {
     render(
       <SessionStatus
         phase="ready"
-        dirty="clean"
+        modified="clean"
         canReset
         onReset={onReset}
       />
@@ -43,14 +63,14 @@ describe("SessionStatus", () => {
   });
 });
 
-function SessionPhase({ phase }: { phase: "empty" | "input-ready" | "processing" | "ready" | "error" }) {
-  return <SessionStatus phase={phase} dirty="clean" canReset={false} />;
+function SessionPhase({ phase }: { phase: "empty" | "processing" | "ready" | "error" }) {
+  return <SessionStatus phase={phase} modified="clean" canReset={false} />;
 }
 
 function SessionReset({ canReset }: { canReset: boolean }) {
-  return <SessionStatus phase="empty" dirty="clean" canReset={canReset} onReset={vi.fn()} />;
+  return <SessionStatus phase="empty" modified="clean" canReset={canReset} onReset={vi.fn()} />;
 }
 
-function SessionDirtyBadge({ dirty }: { dirty: "clean" | "dirty" | "not-applicable" }) {
-  return <SessionStatus phase="ready" dirty={dirty} canReset={false} />;
+function SessionModifiedBadge({ modified }: { modified: "clean" | "modified" }) {
+  return <SessionStatus phase="ready" modified={modified} canReset={false} />;
 }

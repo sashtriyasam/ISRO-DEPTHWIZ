@@ -29,7 +29,7 @@ import type { ArtifactSource } from "../artifact/types";
 import { runProcessingOperation, type ProcessingState } from "../processing";
 import { SessionStatus } from "../components/SessionStatus/SessionStatus";
 import {
-  deriveSessionDirty,
+  deriveSessionModified,
   deriveSessionPhase,
   pendingSelections,
   resetSession,
@@ -299,9 +299,9 @@ export function App() {
     [artifact, processing]
   );
 
-  const sessionDirty = useMemo(
+  const sessionModified = useMemo(
     () =>
-      deriveSessionDirty({
+      deriveSessionModified({
         waypoints,
         measurement: measurementState,
         profile: profileState,
@@ -620,10 +620,10 @@ export function App() {
           <SidePanel>
             <SessionStatus
               phase={sessionPhase}
-              dirty={sessionDirty}
+              modified={sessionModified}
               canReset={
                 artifact !== null ||
-                waypoints.length > 0 ||
+                sessionModified === "modified" ||
                 processing.status !== "idle"
               }
               onReset={handleResetWorkspace}

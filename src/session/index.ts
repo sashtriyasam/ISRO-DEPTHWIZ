@@ -1,7 +1,7 @@
-export type { SessionPhase, SessionDirty, SessionSnapshot, SessionResetDeps } from "./session";
+export type { SessionPhase, SessionModified, SessionSnapshot, SessionResetDeps } from "./session";
 export {
   deriveSessionPhase,
-  deriveSessionDirty,
+  deriveSessionModified,
   resetSession,
   pendingSelections,
 } from "./session";

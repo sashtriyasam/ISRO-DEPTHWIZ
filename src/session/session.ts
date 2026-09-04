@@ -4,9 +4,9 @@ import type { InspectionState } from "../inspection/types";
 import type { ProcessingState } from "../processing/types";
 import type { FlythroughWaypoint, PlaybackStatus } from "../flythrough/types";
 
-export type SessionPhase = "empty" | "input-ready" | "processing" | "ready" | "error";
+export type SessionPhase = "empty" | "processing" | "ready" | "error";
 
-export type SessionDirty = "clean" | "dirty" | "not-applicable";
+export type SessionModified = "clean" | "modified";
 
 export interface SessionSnapshot {
   hasArtifact: boolean;
@@ -23,27 +23,27 @@ export function deriveSessionPhase(snapshot: Pick<SessionSnapshot, "hasArtifact"
   if (processing.status === "running") {
     return "processing";
   }
-  if (processing.status === "error" && !hasArtifact) {
-    return "error";
-  }
   if (hasArtifact) {
     return "ready";
   }
   if (processing.status === "error") {
     return "error";
   }
+  if (processing.status === "cancelled") {
+    return hasArtifact ? "ready" : "empty";
+  }
   return "empty";
 }
 
-export function deriveSessionDirty(snapshot: Pick<SessionSnapshot, "waypoints" | "measurement" | "profile">): SessionDirty {
+export function deriveSessionModified(snapshot: Pick<SessionSnapshot, "waypoints" | "measurement" | "profile">): SessionModified {
   if (snapshot.waypoints.length > 0) {
-    return "dirty";
+    return "modified";
   }
   if (snapshot.measurement.status === "completed") {
-    return "dirty";
+    return "modified";
   }
   if (snapshot.profile.status === "completed") {
-    return "dirty";
+    return "modified";
   }
   return "clean";
 }

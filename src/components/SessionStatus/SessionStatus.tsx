@@ -1,15 +1,14 @@
-import type { SessionDirty, SessionPhase } from "../../session/session";
+import type { SessionModified, SessionPhase } from "../../session/session";
 
 interface SessionStatusProps {
   phase: SessionPhase;
-  dirty: SessionDirty;
+  modified: SessionModified;
   canReset: boolean;
   onReset?: () => void;
 }
 
 const PHASE_LABELS: Record<SessionPhase, string> = {
   empty: "Empty",
-  "input-ready": "Input Ready",
   processing: "Processing",
   ready: "Ready",
   error: "Error",
@@ -17,13 +16,12 @@ const PHASE_LABELS: Record<SessionPhase, string> = {
 
 const PHASE_COLORS: Record<SessionPhase, string> = {
   empty: "var(--color-text-muted)",
-  "input-ready": "var(--color-text-secondary)",
   processing: "var(--color-accent)",
   ready: "var(--color-success)",
   error: "var(--color-error)",
 };
 
-export function SessionStatus({ phase, dirty, canReset, onReset }: SessionStatusProps) {
+export function SessionStatus({ phase, modified, canReset, onReset }: SessionStatusProps) {
   return (
     <div style={rootStyle} role="region" aria-label="Project session status">
       <div style={headerStyle}>
@@ -31,9 +29,9 @@ export function SessionStatus({ phase, dirty, canReset, onReset }: SessionStatus
           <span style={{ color: PHASE_COLORS[phase] }} aria-hidden="true">&#9679;</span>
           {" "}Session {PHASE_LABELS[phase]}
         </span>
-        {dirty === "dirty" && (
-          <span style={dirtyBadgeStyle} aria-label="Unsaved analysis state">
-            unsaved
+        {modified === "modified" && (
+          <span style={modifiedBadgeStyle} aria-label="Analysis state active">
+            modified
           </span>
         )}
       </div>
@@ -70,7 +68,7 @@ const phaseLabelStyle: React.CSSProperties = {
   letterSpacing: "0.05em",
 };
 
-const dirtyBadgeStyle: React.CSSProperties = {
+const modifiedBadgeStyle: React.CSSProperties = {
   fontSize: "10px",
   padding: "1px 6px",
   borderRadius: "var(--radius-sm)",
