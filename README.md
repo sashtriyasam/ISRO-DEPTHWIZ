@@ -2,9 +2,9 @@
 
 **Single-View Height Estimation and 3D Flythrough**
 
-Shravan ML/data track — Milestone 3: Depth Anything V2 Small frozen baseline + reproducible GAMUS bring-up (builds on M1/M2).
+Shravan ML/data track — Milestone 4: frozen DA-V2-Small + lightweight height head (research adaptation; builds on M1–M3).
 
-M1/M2 established the deterministic dataset contract and empirically verified it against real GAMUS tiles. M3 adds frozen monocular baseline inference (relative depth only), per-image affine research evaluation, and compact experiment artifacts. No training, adaptation, calibration/DSM, or Three.js visualization is included.
+M1/M2 established and verified the dataset contract; M3 froze the relative-depth baseline. M4 adds masked-L1 training of a ~23k-param head on frozen features with val-selected checkpoints. No backbone fine-tuning, calibration/DSM, or Three.js visualization is included.
 
 ## Quick start (no dataset or weights required)
 
@@ -23,6 +23,7 @@ See:
 - `docs/research/gamus-audit.md` — full upstream GAMUS audit (re-verified 2026-09-04, commit `6ed44ba87b59911144430ebc0ca02c1f7a1c62b4`)
 - `docs/research/gamus-empirical-probe.md` — M2 empirical probe report (real H5 measurements, tool-generated)
 - `docs/research/depth-anything-v2.md` — M3 upstream audit, license, preprocessing, baseline protocol + bring-up results
+- `docs/research/remote-sensing-adaptation.md` — M4 adaptation report (Stage A results, ablations deferred)
 - `docs/research/dataset-foundation-repro.md` — how to reproduce manifest / dev subset / validation
 - `docs/data-provenance.md` — license & provenance
 - `configs/gamus.example.json` — example configuration
@@ -48,6 +49,8 @@ src/depthwizard/eval/
   alignment.py    — mask + per-image affine research eval + metrics (NOT calibration)
 src/depthwizard/experiments/
   depth_anything_v2.py — frozen baseline runner → experiments/depth-anything-v2/<id>/
+  adapt_dav2.py   — M4 adaptation runner → experiments/dav2-gamus-head-m4-<id>/
+src/depthwizard/adapt/  — M4: features tap + HeightHead + masked-L1 + train/eval (research only)
 tests/            — fixture-based + opt-in real-data/real-model tests (no download required)
 configs/          — example configs (gamus.*, dav2_baseline.*)
 experiments/      — compact config.json + results.json + README.md per run (no rasters)
@@ -67,4 +70,4 @@ All tests use synthetic fixtures under `tests/` and run without the real GAMUS d
 
 ## Branch
 
-`feat/shravan-depth-anything-v2-baseline` (M1: `feat/shravan-gamus-audit`, M2: `feat/shravan-gamus-empirical-validation`)
+`feat/shravan-dav2-gamus-adaptation` (M1: `feat/shravan-gamus-audit`, M2: `feat/shravan-gamus-empirical-validation`, M3: `feat/shravan-depth-anything-v2-baseline`)

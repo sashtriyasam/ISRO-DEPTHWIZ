@@ -1,0 +1,16 @@
+{
+  "manifest": "manifests/gamus.m4.manifest.json",
+  "experiment_id": "dav2-gamus-head-m4-e01",
+  "train_samples": null,
+  "val_split": "val",
+  "epochs": 15,
+  "lr": 0.001,
+  "weight_decay": 0.0,
+  "seed": 0,
+  "device": "cpu",
+  "input_size": 518,
+  "checkpoint": null,
+  "root": "data/gamus",
+  "visuals": false,
+  "comment": "Null train_samples uses all train records in the manifest. Test split is never touched. Null checkpoint resolves to checkpoints/depth_anything_v2_vits.pth (or DW_DAV2_CKPT)."
+}

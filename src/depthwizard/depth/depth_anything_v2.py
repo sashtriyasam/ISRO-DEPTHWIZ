@@ -106,6 +106,18 @@ class DepthAnythingV2Backend(DepthBackend):
     def is_loaded(self) -> bool:
         return self._model is not None
 
+    @property
+    def torch_module(self) -> Any:
+        """Read-only access to the loaded official torch module (M4 adaptation).
+
+        Additive, non-breaking: the frozen `infer` path is unchanged. Enables
+        forward-hook feature taps on the FROZEN backbone (weights never
+        modified). Shared-interface change — requires Shivam review.
+        """
+        if self._model is None:
+            self.load()
+        return self._model
+
     def _require_torch(self) -> Any:
         try:
             import torch  # type: ignore
