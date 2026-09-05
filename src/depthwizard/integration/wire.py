@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from depthwizard.integration.transport import TransportTerrainProduct
+from depthwizard.integration.transport import TransportRelativeProduct, TransportTerrainProduct
 
 
 def to_json_text(model: BaseModel) -> str:
@@ -29,6 +29,11 @@ def to_json_text(model: BaseModel) -> str:
 def terrain_product_from_json(text: str) -> TransportTerrainProduct:
     """Parse and validate terrain-product JSON text."""
     return TransportTerrainProduct.model_validate_json(text)
+
+
+def relative_product_from_json(text: str) -> TransportRelativeProduct:
+    """Parse and validate relative-product JSON text."""
+    return TransportRelativeProduct.model_validate_json(text)
 
 
 def is_json_safe(value: Any) -> bool:
@@ -61,4 +66,9 @@ def _assert_json_safe(value: Any) -> None:
     raise ValueError("transport payload is not JSON-safe (non-finite or exotic value)")
 
 
-__all__ = ["is_json_safe", "terrain_product_from_json", "to_json_text"]
+__all__ = [
+    "is_json_safe",
+    "relative_product_from_json",
+    "terrain_product_from_json",
+    "to_json_text",
+]

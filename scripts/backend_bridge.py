@@ -202,7 +202,7 @@ def run_terrain(
 METRIC_TARGETS = ("height_agl_ndsm", "absolute_elevation_dsm")
 
 _USAGE = (
-    "Usage: backend_bridge.py [--backend <name>] [--device <device>] "
+    "Usage: backend_bridge.py [--backend <name>] [--device <device>] [--mode metric|relative] "
     "<input_path> | --synthetic <w> <h> "
     "| --terrain <w> <h> | --terrain-file <path> [target] "
     "| --inspect <path> | --capabilities"
@@ -271,6 +271,43 @@ def run_terrain_on_path(
     return payload
 
 
+def run_relative_on_path(
+    input_path: Path,
+    backend_name: str = SYNTHETIC_BACKEND_NAME,
+    device: str | None = None,
+) -> dict[str, Any]:
+    """Relative terrain chain on a real input file (no calibration, ever)."""
+    from depthwizard.integration import relative_product, to_json_text
+    from depthwizard.rdsm.mesh import build_relative_mesh
+    from depthwizard.rdsm.rasterize import rasterize_relative_surface
+
+    inspection = inspect_input(input_path)
+    emit_stage("preprocessing")
+    backend = resolve_backend(backend_name, device)
+    if hasattr(backend, "load"):
+        backend.load()
+    try:
+        depth = backend.estimate_depth(inspection)
+    finally:
+        close = getattr(backend, "close", None)
+        if callable(close):
+            close()
+    emit_stage("inference_running")
+    grid = rasterize_relative_surface(depth)
+    emit_stage("rsm_generation")
+    mesh = build_relative_mesh(grid)
+    emit_stage("mesh_generation")
+
+    payload: dict[str, Any] = json.loads(to_json_text(relative_product(depth, grid, mesh)))
+    payload["stages"] = [
+        "preprocessing",
+        "inference_running",
+        "rsm_generation",
+        "mesh_generation",
+    ]
+    return payload
+
+
 def run_capabilities() -> dict[str, Any]:
     """Report actual backend input capabilities (no input needed)."""
     from depthwizard.ingestion.formats import SUPPORTED_SUFFIXES
@@ -320,6 +357,7 @@ def main() -> None:
     args = sys.argv[1:]
     backend_name = SYNTHETIC_BACKEND_NAME
     device: str | None = None
+    mode = "metric"
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -329,9 +367,15 @@ def main() -> None:
         elif args[i] == "--device" and i + 1 < len(args):
             device = args[i + 1]
             i += 2
+        elif args[i] == "--mode" and i + 1 < len(args):
+            mode = args[i + 1]
+            i += 2
         else:
             positional.append(args[i])
             i += 1
+    if mode not in ("metric", "relative"):
+        print(json.dumps({"error": f"Unknown mode {mode!r} (expected 'metric' or 'relative')"}))
+        sys.exit(1)
 
     try:
         if not positional:
@@ -355,17 +399,20 @@ def main() -> None:
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
             target_value = positional[2] if len(positional) > 2 else None
-            print(
-                json.dumps(
-                    run_terrain_on_path(
-                        input_path,
-                        target_value,
-                        backend_name=backend_name,
-                        device=device,
-                    ),
-                    allow_nan=False,
+            if mode == "relative":
+                runner = run_relative_on_path(
+                    input_path,
+                    backend_name=backend_name,
+                    device=device,
                 )
-            )
+            else:
+                runner = run_terrain_on_path(
+                    input_path,
+                    target_value,
+                    backend_name=backend_name,
+                    device=device,
+                )
+            print(json.dumps(runner, allow_nan=False))
         elif positional[0] == "--inspect":
             if len(positional) < 2:
                 print(json.dumps({"error": "Missing input path for --inspect"}))

@@ -4,6 +4,7 @@ import { BackendOperationError } from "../backend/source";
 import {
   ArtifactTransportFailure,
   ServiceArtifactTransport,
+  resolveRelativeArtifact,
   resolveTerrainArtifact,
   type ArtifactTransport,
 } from "../transport";
@@ -16,6 +17,7 @@ export interface FileInputSourceOptions {
   transport?: ArtifactTransport;
   targetSemantics?: MetricTargetSemantics;
   backend?: string;
+  mode?: "metric" | "relative";
 }
 
 function stableIdFor(metadata: InputMetadata): string {
@@ -39,6 +41,7 @@ export class FileInputSource implements ArtifactSource {
   readonly metadata: InputMetadata;
   readonly targetSemantics: MetricTargetSemantics;
   private backend?: string;
+  private mode: "metric" | "relative";
 
   constructor(options: FileInputSourceOptions) {
     this.stagedPath = options.stagedPath;
@@ -46,12 +49,32 @@ export class FileInputSource implements ArtifactSource {
     this.transport = options.transport ?? new ServiceArtifactTransport();
     this.targetSemantics = options.targetSemantics ?? "absolute_elevation_dsm";
     this.backend = options.backend;
+    this.mode = options.mode ?? "metric";
     this.id = stableIdFor(options.metadata);
     this.label = options.metadata.filename;
   }
 
   async load(loadOptions?: ArtifactLoadOptions): Promise<SceneArtifact> {
     try {
+      if (this.mode === "relative") {
+        if (!this.transport.fetchRelative) {
+          throw new ArtifactTransportFailure({
+            code: "ARTIFACT_UNAVAILABLE",
+            message: "Transport does not support relative products",
+            stage: null,
+          });
+        }
+        const bundle = await this.transport.fetchRelative(
+          {
+            stagedPath: this.stagedPath,
+            targetSemantics: this.targetSemantics,
+            backend: this.backend,
+            mode: "relative",
+          },
+          loadOptions,
+        );
+        return resolveRelativeArtifact(bundle);
+      }
       const bundle = await this.transport.fetchTerrain(
         {
           stagedPath: this.stagedPath,

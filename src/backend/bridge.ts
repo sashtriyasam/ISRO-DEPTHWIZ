@@ -2,9 +2,10 @@ import type {
   BackendDepthResult,
   BackendSpatialContext,
   BackendTerrainProduct,
+  BackendRelativeProduct,
 } from "./types";
 import { adaptBackendResult, type AdapterResult } from "./adapter";
-import { adaptTerrainProduct } from "./meshAdapter";
+import { adaptRelativeProduct, adaptTerrainProduct } from "./meshAdapter";
 import {
   detectHost,
   type HostCapabilities,
@@ -105,6 +106,28 @@ function validateTransportShape(data: unknown): BackendDepthResult {
   return obj as unknown as BackendDepthResult;
 }
 
+function validateRelativeShape(data: unknown): BackendRelativeProduct {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("Transport data is not an object");
+  }
+  const obj = data as Record<string, unknown>;
+  if (obj.kind !== "relative-terrain") {
+    throw new Error(
+      `Expected relative terrain product, got kind '${String(obj.kind)}'`,
+    );
+  }
+  if (!obj.rsm || typeof obj.rsm !== "object") {
+    throw new Error("Missing or invalid rsm section");
+  }
+  if (!obj.mesh || typeof obj.mesh !== "object") {
+    throw new Error("Missing or invalid mesh section");
+  }
+  if (!obj.depth_result || typeof obj.depth_result !== "object") {
+    throw new Error("Missing or invalid depth_result section");
+  }
+  return obj as unknown as BackendRelativeProduct;
+}
+
 function validateTerrainShape(data: unknown): BackendTerrainProduct {
   if (typeof data !== "object" || data === null) {
     throw new Error("Transport data is not an object");
@@ -136,6 +159,7 @@ export interface BackendBridgeOptions {
   timeoutMs?: number;
   host?: HostDetectionOverrides;
   backend?: string;
+  mode?: "metric" | "relative";
 }
 
 export class OperationCancelledError extends Error {
@@ -151,6 +175,7 @@ export class BackendBridge {
   private timeoutMs: number;
   private host: HostCapabilities;
   private backend: string;
+  private mode: "metric" | "relative";
 
   constructor(options: BackendBridgeOptions = {}) {
     this.pythonPath =
@@ -163,14 +188,23 @@ export class BackendBridge {
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
     this.host = detectHost(options.host);
     this.backend = options.backend ?? "synthetic-depth";
+    this.mode = options.mode ?? "metric";
   }
 
   get backendName(): string {
     return this.backend;
   }
 
+  get outputMode(): "metric" | "relative" {
+    return this.mode;
+  }
+
   private backendArgs(override?: string): string[] {
     return ["--backend", override ?? this.backend];
+  }
+
+  private modeArgs(override?: "metric" | "relative"): string[] {
+    return ["--mode", override ?? this.mode];
   }
 
   get hostCapabilities(): HostCapabilities {
@@ -237,6 +271,7 @@ export class BackendBridge {
     hooks: BridgeExecutionHooks = {},
     targetSemantics?: string,
     backendOverride?: string,
+    modeOverride?: "metric" | "relative",
   ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
@@ -260,24 +295,52 @@ export class BackendBridge {
     }
 
     try {
+      const mode = modeOverride ?? this.mode;
       const args =
         targetSemantics !== undefined
           ? [
               ...this.backendArgs(backendOverride),
+              ...this.modeArgs(mode),
               "--terrain-file",
               stagedPath,
               targetSemantics,
             ]
           : [
               ...this.backendArgs(backendOverride),
+              ...this.modeArgs(mode),
               "--terrain-file",
               stagedPath,
             ];
       const jsonData = await this.spawnPython(args, hooks);
+      if (mode === "relative") {
+        return this.processRelativeData(jsonData, errors, warnings);
+      }
       return this.processTerrainData(jsonData, errors, warnings);
     } catch (err) {
       return this.toProcessError(err);
     }
+  }
+
+  async fetchRelativePayload(
+    stagedPath: string,
+    hooks: BridgeExecutionHooks = {},
+    backendOverride?: string,
+  ): Promise<BackendRelativeProduct> {
+    if (!this.host.processSpawning) {
+      throw new Error(
+        "Backend bridge requires a desktop host with process spawning",
+      );
+    }
+    const jsonData = await this.spawnPython(
+      [
+        ...this.backendArgs(backendOverride),
+        ...this.modeArgs("relative"),
+        "--terrain-file",
+        stagedPath,
+      ],
+      hooks,
+    );
+    return validateRelativeShape(jsonData);
   }
 
   async fetchTerrainPayload(
@@ -302,6 +365,41 @@ export class BackendBridge {
         : [...this.backendArgs(backendOverride), "--terrain-file", stagedPath];
     const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
+  }
+
+  private processRelativeData(
+    jsonData: unknown,
+    errors: BridgeError[],
+    warnings: string[],
+  ): BridgeResult {
+    let validated: BackendRelativeProduct;
+    try {
+      validated = validateRelativeShape(jsonData);
+    } catch (err) {
+      errors.push({
+        code: "TRANSPORT_INVALID",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Invalid relative transport data",
+        phase: "transport",
+      });
+      return { success: false, errors, warnings };
+    }
+    const adapterResult = adaptRelativeProduct(validated);
+    if (!adapterResult.success) {
+      for (const e of adapterResult.errors) {
+        errors.push({ code: e.code, message: e.message, phase: "adapter" });
+      }
+      return { success: false, errors, warnings };
+    }
+    warnings.push(...adapterResult.warnings);
+    return {
+      success: true,
+      artifact: adapterResult.artifact,
+      errors: [],
+      warnings,
+    };
   }
 
   private processTerrainData(

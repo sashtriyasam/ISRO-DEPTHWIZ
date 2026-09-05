@@ -148,6 +148,53 @@ export interface BackendTerrainProduct {
   mesh: BackendTerrainMeshTransport;
 }
 
+export interface BackendRelativeSurfaceTransport {
+  width: number;
+  height: number;
+  dtype: string;
+  units: null;
+  semantics: ElevationSemantics;
+  values: Array<number | null>;
+  valid_mask: boolean[];
+  invalid_count: number;
+  georeferencing: GeoreferencingLevel;
+  spatial: BackendSpatialContext;
+}
+
+export interface BackendRelativeMeshTransport {
+  vertices: number[];
+  indices: number[];
+  normals: number[];
+  uvs: number[];
+  vertex_source_indices: number[];
+  vertex_count: number;
+  triangle_count: number;
+  valid_source_pixels: number;
+  invalid_source_pixels: number;
+  skipped_cells: number;
+  coverage: number;
+  frame: "local";
+  width: number;
+  height: number;
+  units: null;
+  semantics: ElevationSemantics;
+  georeferencing: GeoreferencingLevel;
+  spatial: BackendSpatialContext;
+  depth_model_name: string;
+  depth_model_version?: string | null;
+  depth_checkpoint_id?: string | null;
+  source_input_id?: string | null;
+  source_checksum?: string | null;
+  provenance?: BackendProductProvenance;
+}
+
+export interface BackendRelativeProduct {
+  kind: "relative-terrain";
+  depth_result: BackendDepthResult;
+  rsm: BackendRelativeSurfaceTransport;
+  mesh: BackendRelativeMeshTransport;
+}
+
 export interface BackendCalibrationResult {
   method: "scale_offset";
   scale: number;

@@ -6,6 +6,8 @@ export type ServiceArtifactKind =
   | "height"
   | "dsm"
   | "mesh"
+  | "relative_surface"
+  | "relative_mesh"
   | "geotiff";
 
 export const SERVICE_ARTIFACT_KINDS: readonly ServiceArtifactKind[] = [
@@ -14,6 +16,8 @@ export const SERVICE_ARTIFACT_KINDS: readonly ServiceArtifactKind[] = [
   "height",
   "dsm",
   "mesh",
+  "relative_surface",
+  "relative_mesh",
   "geotiff",
 ];
 
@@ -42,7 +46,8 @@ export const PIPELINE_STATE_VALUES: readonly PipelineStateValue[] = [
   "cancelled",
 ];
 
-export type MetricTargetSemantics = "height_agl_ndsm" | "absolute_elevation_dsm";
+export type MetricTargetSemantics =
+  "height_agl_ndsm" | "absolute_elevation_dsm";
 
 export interface ServiceRequestArgs {
   inputPath: string;
@@ -55,6 +60,7 @@ export interface ServiceRequestWire {
   input_path: string;
   target_semantics: string;
   backend: string;
+  output_mode: string;
   preprocessor: string;
   build_mesh: boolean;
   geotiff_path: string | null;

@@ -20,6 +20,14 @@ npm run dev
 
 See [docs/milestone-01.md](docs/milestone-01.md) for architecture details.
 
+## Project control plane
+
+North star: SIH Problem Statement 26175. Team planning lives in the
+shared GitHub Project **DepthWizard — SIH 26175**
+(`github.com/users/sashtriyasam/projects/4`), mirrored by
+`docs/project/MASTER_PLAN.md` and `AGENTS.md` (ownership, workflow,
+scientific rules).
+
 ## Python scientific engine (`src/depthwizard/`)
 
 Contracts, ingestion, depth backends, calibration, height semantics,

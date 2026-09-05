@@ -4,7 +4,9 @@ import type { ServiceResponseWire } from "./wireTypes";
 
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled"]);
 
-export function serviceStatesToStages(states: readonly string[]): ProcessingStage[] {
+export function serviceStatesToStages(
+  states: readonly string[],
+): ProcessingStage[] {
   const stages: ProcessingStage[] = [];
   for (const state of states) {
     if (TERMINAL_STATES.has(state)) {
@@ -25,7 +27,7 @@ export function serviceStatesToStages(states: readonly string[]): ProcessingStag
 
 export function serviceFailureToProcessingFailure(
   response: ServiceResponseWire,
-  previousAvailable: boolean
+  previousAvailable: boolean,
 ): ProcessingFailure {
   const failure = response.failure;
   return {
@@ -40,11 +42,17 @@ export function serviceFailureToProcessingFailure(
   };
 }
 
-function completedStageOf(response: ServiceResponseWire): ProcessingStage | null {
+function completedStageOf(
+  response: ServiceResponseWire,
+): ProcessingStage | null {
   const stages = serviceStatesToStages(response.states);
   return stages.length > 0 ? stages[stages.length - 1] : null;
 }
 
 export function meshDescriptorOf(response: ServiceResponseWire) {
   return response.artifacts.find((a) => a.kind === "mesh");
+}
+
+export function relativeMeshDescriptorOf(response: ServiceResponseWire) {
+  return response.artifacts.find((a) => a.kind === "relative_mesh");
 }

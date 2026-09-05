@@ -1,5 +1,8 @@
 import type { BridgeError } from "../backend/bridge";
-import type { BackendTerrainProduct } from "../backend/types";
+import type {
+  BackendRelativeProduct,
+  BackendTerrainProduct,
+} from "../backend/types";
 import type {
   MetricTargetSemantics,
   ServiceResponseWire,
@@ -11,11 +14,17 @@ export interface TerrainFetchRequest {
   targetSemantics?: MetricTargetSemantics;
   buildMesh?: boolean;
   backend?: string;
+  mode?: "metric" | "relative";
 }
 
 export interface TerrainBundle {
   response: ServiceResponseWire;
   terrain: BackendTerrainProduct;
+}
+
+export interface RelativeBundle {
+  response: ServiceResponseWire;
+  relative: BackendRelativeProduct;
 }
 
 export const TRANSPORT_ERROR_CODES = [

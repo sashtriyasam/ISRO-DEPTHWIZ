@@ -43,7 +43,14 @@ def test_full_success(tmp_path: Path) -> None:
     ]
     assert response.failure is None
     by_kind = {artifact.kind: artifact for artifact in response.artifacts}
-    assert set(by_kind) == set(ArtifactKind)
+    assert set(by_kind) == {
+        ArtifactKind.DEPTH,
+        ArtifactKind.CALIBRATION,
+        ArtifactKind.HEIGHT,
+        ArtifactKind.DSM,
+        ArtifactKind.MESH,
+        ArtifactKind.GEOTIFF,
+    }
     depth = by_kind[ArtifactKind.DEPTH]
     assert depth.available and not depth.persisted
     assert depth.semantics == "relative_depth"
@@ -127,3 +134,41 @@ def test_response_round_trip(tmp_path: Path) -> None:
     assert restored.artifacts == response.artifacts
     assert restored.summary == response.summary
     assert json.loads(encode_response(response))["contract_version"] == "1"
+
+
+def test_relative_mode_skips_calibration(tmp_path: Path) -> None:
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        output_mode="relative",
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.success is True
+    assert response.final_state == "completed"
+    by_kind = {artifact.kind: artifact for artifact in response.artifacts}
+    assert set(by_kind) == {
+        ArtifactKind.DEPTH,
+        ArtifactKind.RELATIVE_SURFACE,
+        ArtifactKind.RELATIVE_MESH,
+    }
+    assert by_kind[ArtifactKind.RELATIVE_SURFACE].units is None
+    assert by_kind[ArtifactKind.RELATIVE_MESH].units is None
+    assert response.summary.calibration_method is None
+    assert response.summary.target_semantics is None
+    restored = decode_response(encode_response(response))
+    assert restored == response
+
+
+def test_relative_mode_unknown_backend_loud(tmp_path: Path) -> None:
+    import pytest
+
+    from depthwizard.errors import PipelineExecutionError
+
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        backend="bogus-backend",
+        output_mode="relative",
+    )
+    with pytest.raises(PipelineExecutionError, match="unknown backend"):
+        LocalService().execute(request, SyntheticCalibrationProvider())

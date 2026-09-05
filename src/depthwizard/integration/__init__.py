@@ -12,6 +12,9 @@ from depthwizard.integration.adapt import (
     depth_to_transport,
     dsm_to_transport,
     mesh_to_transport,
+    relative_mesh_to_transport,
+    relative_product,
+    rsm_to_transport,
     terrain_product,
 )
 from depthwizard.integration.transport import (
@@ -22,10 +25,14 @@ from depthwizard.integration.transport import (
     TransportFailure,
     TransportMesh,
     TransportProvenance,
+    TransportRelativeMesh,
+    TransportRelativeProduct,
+    TransportRelativeSurface,
     TransportTerrainProduct,
 )
 from depthwizard.integration.wire import (
     is_json_safe,
+    relative_product_from_json,
     terrain_product_from_json,
     to_json_text,
 )
@@ -38,6 +45,9 @@ __all__ = [
     "TransportFailure",
     "TransportMesh",
     "TransportProvenance",
+    "TransportRelativeMesh",
+    "TransportRelativeProduct",
+    "TransportRelativeSurface",
     "TransportTerrainProduct",
     "bundle_from_pipeline",
     "calibration_to_transport",
@@ -45,6 +55,10 @@ __all__ = [
     "dsm_to_transport",
     "is_json_safe",
     "mesh_to_transport",
+    "relative_mesh_to_transport",
+    "relative_product",
+    "relative_product_from_json",
+    "rsm_to_transport",
     "terrain_product",
     "terrain_product_from_json",
     "to_json_text",
