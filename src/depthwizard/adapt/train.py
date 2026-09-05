@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from depthwizard.adapt.loss import masked_height_weighted_l1, masked_l1, TargetScale
+from depthwizard.adapt.loss import masked_height_weighted_l1, masked_l1, pearson_distance, TargetScale
 
 
 def set_deterministic(seed: int) -> None:
@@ -67,6 +67,7 @@ def train_one_epoch(
     target_scale: TargetScale,
     out_hw: tuple[int, int] = (1024, 1024),
     height_weight: Optional[tuple[float, float]] = None,
+    loss: str = "l1",
 ) -> dict[str, Any]:
     """One epoch over sorted train samples (batch=1 tile; 1024px tiles).
 
@@ -74,6 +75,10 @@ def train_one_epoch(
     ``(threshold_m, low_weight)`` for low-height-weighted masked L1 (M12):
     weights are assigned from the meter-scale target ``tgt`` while the
     comparison itself stays in the normalized space.
+
+    ``loss`` selects the objective: ``"l1"`` (masked L1, possibly
+    height-weighted) or ``"pearson"`` (scale/shift-decoupled
+    ``1 - Pearson``, M17 structural objective).
     """
     torch = _require_torch()
     model.assert_frozen()
@@ -86,20 +91,27 @@ def train_one_epoch(
         tgt = torch.as_tensor(s["height"], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
         # Normalize target
         tgt_norm = target_scale.forward(tgt)
-        if height_weight is None:
-            loss, n_valid = masked_l1(pred, tgt_norm)
+        if loss == "pearson":
+            if height_weight is not None:
+                raise ValueError("height_weight is incompatible with loss='pearson'")
+            step_loss, n_valid = pearson_distance(pred, tgt_norm)
+        elif loss == "l1":
+            if height_weight is None:
+                step_loss, n_valid = masked_l1(pred, tgt_norm)
+            else:
+                threshold, low_weight = height_weight
+                step_loss, n_valid = masked_height_weighted_l1(
+                    pred, tgt_norm, tgt, threshold=threshold, low_weight=low_weight
+                )
         else:
-            threshold, low_weight = height_weight
-            loss, n_valid = masked_height_weighted_l1(
-                pred, tgt_norm, tgt, threshold=threshold, low_weight=low_weight
-            )
-        loss.backward()
+            raise ValueError(f"loss must be 'l1' or 'pearson', got {loss!r}")
+        step_loss.backward()
         # Guard: backbone must not accumulate grads (frozen => no grad_fn path).
         for p in model.backbone.parameters():
             if p.grad is not None:
                 raise AssertionError("Backbone received gradients — freeze violated")
         optimizer.step()
-        total_loss += float(loss.item()) * n_valid
+        total_loss += float(step_loss.item()) * n_valid
         total_valid += n_valid
     denom = max(1, total_valid)
     return {"loss": total_loss / denom, "mae": total_loss / denom, "n_valid": total_valid}
@@ -161,6 +173,7 @@ def train_adapted_model(
     out_hw: tuple[int, int] = (1024, 1024),
     target_scale: Optional[TargetScale] = None,
     height_weight: Optional[tuple[float, float]] = None,
+    loss: str = "l1",
 ) -> dict[str, Any]:
     """Full training with best-val selection. Returns summary (JSON-serializable).
 
@@ -170,6 +183,9 @@ def train_adapted_model(
     ``selection_mode`` is ``"min"`` (e.g. MAE/RMSE) or ``"max"`` (e.g. Pearson
     for M16 structural selection). Pearson is affine-invariant, so maximizing
     pooled direct Pearson selects the same structure as the affine protocol.
+
+    ``loss`` selects the training objective (``"l1"`` default, ``"pearson"``
+    for the M17 structural objective); see :func:`train_one_epoch`.
     """
     torch = _require_torch()
     set_deterministic(seed)
@@ -198,7 +214,7 @@ def train_adapted_model(
         for epoch in range(epochs):
             tr = train_one_epoch(
                 model, train_samples, optimizer, target_scale,
-                out_hw=out_hw, height_weight=height_weight,
+                out_hw=out_hw, height_weight=height_weight, loss=loss,
             )
             va = evaluate_split(model, val_samples, target_scale, out_hw=out_hw)
             row = {
@@ -232,6 +248,7 @@ def train_adapted_model(
         "seed": seed,
         "selection_metric": selection_metric,
         "selection_mode": selection_mode,
+        "loss": loss,
         "best_epoch": best["epoch"],
         "best_value": best["value"],
         "history": history,

@@ -12,6 +12,10 @@ TargetScale supports:
 
 ``masked_height_weighted_l1`` (M12) keeps the z-space comparison but weights
 pixels by the meter-scale target (2x below 5 m, 1x at/above).
+
+``pearson_distance`` (M17) is a scale/shift-decoupled structural objective:
+``1 - Pearson(pred, target)`` over valid pixels. Constant or zero-variance
+inputs yield the neutral worst score 1.0 (never a misleading perfect score).
 """
 
 from __future__ import annotations
@@ -122,4 +126,38 @@ def masked_height_weighted_l1(
     loss = (w * torch.abs(pred_z[mask] - target_z[mask])).sum() / w.sum()
     if not torch.isfinite(loss).item():
         raise ValueError("masked_height_weighted_l1: non-finite loss")
+    return loss, n_valid
+
+
+def pearson_distance(pred: Any, target: Any) -> tuple[Any, int]:
+    """Scale/shift-decoupled structural loss (M17): ``1 - Pearson(pred, target)``.
+
+    Computed over pixels where BOTH are finite (same mask rule as
+    :func:`masked_l1`; negatives preserved). Perfect (affine) agreement gives
+    0.0; perfect anti-correlation gives 2.0.
+
+    Degeneracy contract (pre-registered): fewer than 2 valid pixels raises
+    (repo convention); zero-variance prediction or target returns the neutral
+    worst score ``1.0`` as a gradient-free constant — a collapsed model is
+    never rewarded, and ``train.py`` monitoring (prediction std) exposes it.
+    Deterministic given identical inputs.
+    """
+    torch = _require_torch()
+    if pred.shape != target.shape:
+        raise ValueError(f"pred shape {tuple(pred.shape)} != target shape {tuple(target.shape)}")
+    mask = torch.isfinite(pred) & torch.isfinite(target)
+    n_valid = int(mask.sum().item())
+    if n_valid < 2:
+        raise ValueError("pearson_distance: fewer than 2 valid pixels")
+    p = pred[mask].double()
+    t = target[mask].double()
+    pc = p - p.mean()
+    tc = t - t.mean()
+    denom = torch.sqrt((pc ** 2).sum() * (tc ** 2).sum())
+    if not torch.isfinite(denom).item() or float(denom.item()) == 0.0:
+        return torch.tensor(1.0), n_valid
+    r = ((pc * tc).sum() / denom).clamp(-1.0, 1.0)
+    loss = 1.0 - r.float()
+    if not torch.isfinite(loss).item():
+        raise ValueError("pearson_distance: non-finite loss")
     return loss, n_valid
