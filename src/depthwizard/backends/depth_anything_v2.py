@@ -3,8 +3,12 @@
 Official upstream: https://github.com/DepthAnything/Depth-Anything-V2
 Pinned revision: ``a561b849ebae10a6f5ef49e26c83cbbcd36c71bf`` (HEAD, 2026-03-24).
 Checkpoint: HF ``depth-anything/Depth-Anything-V2-Small`` file
-``depth_anything_v2_vits.pth`` (sha ``03876f8651c73a60fe4c2c48294e09fcb6838fcf``,
-Apache-2.0 — the only DA-V2 scale under a permissive license).
+``depth_anything_v2_vits.pth``
+Apache-2.0 — the only DA-V2 scale under a permissive license.
+
+Provenance fields are separated:
+- ``UPSTREAM_REVISION``: git commit hash of the pinned upstream repo.
+- ``CHECKPOINT_SHA256``: SHA-256 hash of the checkpoint file itself.
 
 The backend consumes the official implementation (``depth_anything_v2.dpt``)
 — it is NOT vendored.  The package must be importable (pinned clone on
@@ -45,7 +49,7 @@ ENCODER_CONFIG: dict[str, Any] = {
 }
 CHECKPOINT_FILE = "depth_anything_v2_vits.pth"
 CHECKPOINT_HF_ID = "depth-anything/Depth-Anything-V2-Small"
-CHECKPOINT_SHA = "03876f8651c73a60fe4c2c48294e09fcb6838fcf"
+CHECKPOINT_SHA256 = "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378"
 UPSTREAM_REVISION = "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 UPSTREAM_URL = "https://github.com/DepthAnything/Depth-Anything-V2"
 DEFAULT_INPUT_SIZE = 518
@@ -223,7 +227,7 @@ class DepthAnythingV2Backend:
             raise ModelInferenceError(
                 f"Depth Anything V2 Small checkpoint not found: {self._checkpoint}. "
                 f"Expected HF '{CHECKPOINT_HF_ID}' file '{CHECKPOINT_FILE}' "
-                f"(sha {CHECKPOINT_SHA}). Set DW_DAV2_CKPT or place the file under "
+                f"(sha256 {CHECKPOINT_SHA256}). Set DW_DAV2_CKPT or place the file under "
                 "checkpoints/ (git-ignored). Weights are never committed."
             )
         torch.manual_seed(self._seed)
@@ -352,7 +356,7 @@ class DepthAnythingV2Backend:
             "encoder": ENCODER,
             "param_count": PARAM_COUNT,
             "checkpoint_id": self.checkpoint_id,
-            "checkpoint_sha": CHECKPOINT_SHA,
+            "checkpoint_sha256": CHECKPOINT_SHA256,
             "checkpoint_path": ckpt_display,
             "upstream_url": UPSTREAM_URL,
             "upstream_revision": UPSTREAM_REVISION,

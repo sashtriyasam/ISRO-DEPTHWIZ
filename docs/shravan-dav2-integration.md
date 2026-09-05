@@ -15,11 +15,11 @@ DepthWizard remains model-agnostic.
 
 ### New files
 
-| File                                            | Purpose                                     |
-| ----------------------------------------------- | ------------------------------------------- |
-| `src/depthwizard/backends/depth_anything_v2.py` | Canonical `DepthAnythingV2Backend` adapter  |
-| `tests/backends/test_depth_anything_v2.py`      | Contract + semantics test suite (40+ tests) |
-| `docs/shravan-dav2-integration.md`              | This document                               |
+| File                                            | Purpose                                    |
+| ----------------------------------------------- | ------------------------------------------ |
+| `src/depthwizard/backends/depth_anything_v2.py` | Canonical `DepthAnythingV2Backend` adapter |
+| `tests/backends/test_depth_anything_v2.py`      | Contract + semantics test suite (49 tests) |
+| `docs/shravan-dav2-integration.md`              | This document                              |
 
 ### Modified files
 
@@ -45,19 +45,24 @@ with different semantics — it is NOT imported or referenced.
 
 ## Model metadata
 
-| Property       | Value                                              |
-| -------------- | -------------------------------------------------- |
-| Model          | Depth Anything V2 Small                            |
-| Encoder        | vits                                               |
-| Params         | 24 785 089                                         |
-| Checkpoint     | `depth_anything_v2_vits.pth`                       |
-| Checkpoint SHA | `03876f8651c73a60fe4c2c48294e09fcb6838fcf`         |
-| HF ID          | `depth-anything/Depth-Anything-V2-Small`           |
-| Upstream       | https://github.com/DepthAnything/Depth-Anything-V2 |
-| Upstream rev   | `a561b849ebae10a6f5ef49e26c83cbbcd36c71bf`         |
-| License        | Apache-2.0 (permissive scale)                      |
-| Device         | `cpu` / `cuda` / `mps` (auto-fail if unavailable)  |
-| Input size     | 518                                                |
+| Property           | Value                                                              |
+| ------------------ | ------------------------------------------------------------------ |
+| Model              | Depth Anything V2 Small                                            |
+| Encoder            | vits                                                               |
+| Params             | 24 785 089                                                         |
+| Checkpoint         | `depth_anything_v2_vits.pth`                                       |
+| Checkpoint SHA-256 | `715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378` |
+| HF ID              | `depth-anything/Depth-Anything-V2-Small`                           |
+| Upstream           | https://github.com/DepthAnything/Depth-Anything-V2                 |
+| Upstream revision  | `a561b849ebae10a6f5ef49e26c83cbbcd36c71bf`                         |
+| License            | Apache-2.0 (permissive scale)                                      |
+| Device             | `cpu` / `cuda` / `mps` (auto-fail if unavailable)                  |
+| Input size         | 518                                                                |
+
+> **Provenance note:** `Upstream revision` is the git commit hash (40 hex
+> chars) of the pinned repository. `Checkpoint SHA-256` is the file hash
+> (64 hex chars) of the downloaded weights. These are distinct values
+> serving different provenance purposes.
 
 ## Preprocessing (per official `infer_image` path)
 
@@ -96,7 +101,7 @@ Without it, `DepthAnythingV2Backend` is importable but raises
 
 ## Test suite
 
-40+ tests covering:
+49 tests covering:
 
 | Category                 | Tests                                                           |
 | ------------------------ | --------------------------------------------------------------- |
@@ -117,5 +122,25 @@ Without it, `DepthAnythingV2Backend` is importable but raises
 | Determinism              | Two calls produce equivalent results                            |
 | Optional dependency      | Module importable without torch                                 |
 | Image loading            | PNG, JPEG, GeoTIFF, single-band TIFF                            |
+| Metadata constants       | Upstream URL, revision, SHA-256, encoder config, input size     |
+| Provenance distinction   | Upstream revision (40 hex) vs checkpoint SHA-256 (64 hex)       |
+| Dependency availability  | Importable without torch, torch available                       |
+
+### Conditional real-model smoke test
+
+A genuine DA-V2 inference test exists but is **opt-in** to avoid network
+dependency and large downloads in CI:
+
+```bash
+DW_DAV2_REAL_SMOKE=1 DW_DAV2_CKPT=checkpoints/depth_anything_v2_vits.pth \
+  pytest tests/backends/test_depth_anything_v2.py::TestRealModelSmoke -v
+```
+
+Verified facts (2026-09-05):
+
+- Checkpoint SHA-256: `715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378`
+- Output: RELATIVE depth, all finite, restored to source size
+- Model load: ~5.6s CPU, inference: ~1.0s per 64×64 image (CPU)
+- Determinism: identical values across repeated runs
 
 All tests run without torch/cv2 via dependency injection.
