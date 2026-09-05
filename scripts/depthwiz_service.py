@@ -28,9 +28,7 @@ Envelope out:  {"capabilities": {...ServiceCapabilities...}}
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -60,23 +58,6 @@ except ImportError as exc:
 
 DEV_REFERENCE_ID = "synthetic-dev-ref"
 
-#: Checkpoint search order for the optional real backend (never committed).
-_DAV2_CANDIDATES = ("checkpoints/depth_anything_v2_vits.pth",)
-
-
-def _resolve_dav2_checkpoint() -> Path | None:
-    """Locate an external DA-V2 checkpoint without importing torch."""
-    override = os.environ.get("DW_DAV2_CKPT")
-    if override:
-        candidate = Path(override)
-        return candidate if candidate.is_file() else None
-    root = Path(__file__).resolve().parent.parent
-    for name in _DAV2_CANDIDATES:
-        candidate = root / name
-        if candidate.is_file():
-            return candidate
-    return None
-
 
 def build_backends() -> dict[str, Any]:
     """Assemble the service backend registry.
@@ -84,18 +65,22 @@ def build_backends() -> dict[str, Any]:
     The deterministic synthetic backend is always present. The real
     ``depth-anything-v2-small`` backend is registered only when its
     runtime (upstream source + torch) is import-discoverable AND an
-    external checkpoint file exists. Discovery uses ``find_spec``
+    external checkpoint resolves via the canonical
+    ``depthwizard.runtime`` order (explicit ``DW_DAV2_CKPT`` → packaged
+    data dir → repo-dev ``checkpoints/``). Discovery uses ``find_spec``
     (no heavy imports, no model loading). Unknown or unavailable
     backends are rejected loudly by ``LocalService`` — never silently
     replaced with synthetic.
     """
     from depthwizard.backends.synthetic import SyntheticDepthBackend
+    from depthwizard.runtime.diagnostics import module_available, resolve_checkpoint
 
     backends: dict[str, Any] = {"synthetic-depth": SyntheticDepthBackend()}
+    checkpoint, _location = resolve_checkpoint()
     if (
-        importlib.util.find_spec("depth_anything_v2") is not None
-        and importlib.util.find_spec("torch") is not None
-        and _resolve_dav2_checkpoint() is not None
+        module_available("depth_anything_v2")
+        and module_available("torch")
+        and checkpoint is not None
     ):
         from depthwizard.backends.depth_anything_v2 import DepthAnythingV2Backend
 
