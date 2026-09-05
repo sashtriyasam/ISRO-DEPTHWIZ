@@ -14,7 +14,8 @@
 
 ## 1. Metadata
 
-- Commit: (this branch tip; see handoff)
+- Experiment code/report commit: `14455a339cb112e4c08f62b0f0be54339db24f2a` (M13 experiment was executed from the M13 branch state corresponding to this commit; the M13 run itself required zero source changes — Case A)
+- Final documentation commit: recorded in the closing handoff after the final commit exists (this report's provenance section was finalized post-run without touching any scientific result)
 - Branch: `feat/shravan-m13-extended-training` (based on M12 `369608b`, no rebase onto main)
 - Experiment ID: `dav2-gamus-head-m13-extended-e01`
 - Timestamp: 2026-09-05 (artifacts carry `generated_utc`)
@@ -91,7 +92,7 @@ DC Pearson 0.452 (M12 0.416); PHL 0.443; NYC 0.284. Geo 30+m: DC 24.61 (M12 26.1
 
 ## 9. Training-Curve Interpretation
 
-Weighted train loss falls monotonically (~1.24 → ~0.474). Val MAE: 10.24 (ep0) → ~6.1–6.2 plateau ep24–53 → best 5.9323 @54 → degradation after (55–59: 6.54/6.17/6.41/6.76 pattern, final 6.76). Because the best (ep54) sits inside the budget with clear post-best overfitting, training was sufficient — the curve answers the hypothesis directly. No plateau-at-final ambiguity remains.
+Weighted train loss falls monotonically (~1.24 → ~0.474). Val MAE: 10.24 (ep0) → ~6.1–6.2 plateau ep24–53 → best 5.9323 @54 → degradation after (55–59: 6.77/6.54/6.17/6.41/6.76, final 6.76). Because the best (ep54) sits inside the budget with clear post-best overfitting, training was sufficient — the curve answers the hypothesis directly. No plateau-at-final ambiguity remains.
 
 ## 10. Scientific Outcome
 
