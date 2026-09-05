@@ -155,6 +155,7 @@ describe("request construction honesty", () => {
         "export_overwrite",
         "geotiff_path",
         "input_path",
+        "output_mode",
         "preprocessor",
         "target_semantics",
       ].sort()
