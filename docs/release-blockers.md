@@ -4,19 +4,7 @@ Generated: 2026-09-05
 
 ## Actual Blockers
 
-### 1. Managed Python Runtime Not Bundled
-**Severity**: P1
-**Status**: BLOCKING
-
-The packaged Electron app falls back to `python` on PATH when the managed runtime (`<resources>/python/python.exe`) is missing. No Python runtime is actually bundled with the installer.
-
-**Impact**: Users must install Python separately and ensure it's on PATH. The packaged product is not fully self-contained.
-
-**Resolution options**:
-- Bundle `python-embeddable` with the installer (~15MB)
-- Or document Python as a prerequisite and improve error messaging
-
-### 2. Real DA-V2 Desktop Visual Validation
+### 1. Real DA-V2 Desktop Visual Validation
 **Severity**: P1
 **Status**: BLOCKING
 
@@ -26,7 +14,7 @@ The DA-V2 inference pipeline (Python → torch → DA-V2 → calibration → DSM
 
 **Resolution**: Run on a machine with display, Python, torch, and DA-V2 checkpoint.
 
-### 3. NSIS Installer Not Manually Tested
+### 2. NSIS Installer Not Manually Tested
 **Severity**: P1
 **Status**: BLOCKING
 
@@ -36,7 +24,7 @@ The installer (`DepthWizard Setup 0.1.0.exe`, 109.8 MB) has been built but not t
 
 **Resolution**: Test on clean Windows machine or VM.
 
-### 4. Checkpoint Not Auto-Downloaded
+### 3. Checkpoint Not Auto-Downloaded
 **Severity**: P2
 **Status**: BLOCKING
 
@@ -45,6 +33,18 @@ The ~99MB DA-V2 checkpoint must be manually placed in `%APPDATA%/DepthWizard/che
 **Impact**: First-time users cannot use DA-V2 without manual setup.
 
 **Resolution**: Implement first-run download from HuggingFace or document manual placement.
+
+## Known Limitations
+
+### 4. Python External Prerequisite
+**Severity**: INFO
+**Status**: BY DESIGN
+
+No Python runtime is bundled with the installer. Users must install Python 3.10+ separately and ensure it is on PATH.
+
+**Impact**: Extra setup step for first-time users. Clear error messaging guides installation.
+
+**Resolution**: Document in installer prerequisites / README.
 
 ## Non-Blocking Issues
 
@@ -64,11 +64,12 @@ No auto-update mechanism. Users must re-download and reinstall for updates.
 
 **Resolution**: Implement electron-updater if needed for production.
 
-## Resolved in Phase 3
+## Resolved in Phase 3–4
 
-- ✅ Managed Python resolution contract clarified
+- ✅ Python runtime policy clarified: external prerequisite, not bundled
+- ✅ Runtime resolution simplified: `DEPTHWIZARD_PYTHON` → `python` on PATH
+- ✅ Clear error messaging when Python not found
 - ✅ Checkpoint distribution policy (external provision)
-- ✅ Provisioning vs self-check distinguished
 - ✅ HostCapabilities interface consistency fixed
 - ✅ Preload API consistency fixed
 - ✅ Input path validation hardened

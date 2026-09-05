@@ -70,18 +70,22 @@ worker-src 'self' blob:;
 | `terminateService()` | Kill owned subprocess |
 | `executeService(args)` | One-shot service execution with timeout |
 
+## Prerequisites
+
+- **Python 3.10+** must be installed externally and available on PATH
+- **DA-V2 checkpoint** (`depth_anything_v2_vits.pth`) must be placed manually in `%APPDATA%/DepthWizard/checkpoints/`
+
 ## Runtime Resolution
 
 ### Python
 
-**Packaged mode** (priority):
-1. `DEPTHWIZARD_PYTHON` env (developer override)
-2. `<resources>/python/python.exe` (managed runtime)
-3. No fallback to system Python
+This application requires Python to be installed externally. No Python runtime is bundled with the installer.
 
-**Development mode**:
-1. `DEPTHWIZARD_PYTHON` env
-2. `python` on PATH
+**Resolution priority**:
+1. `DEPTHWIZARD_PYTHON` env (explicit override)
+2. `python` on PATH (system Python)
+
+If Python is not found, a clear error message is displayed guiding the user to install Python 3.10+.
 
 ### Checkpoint
 

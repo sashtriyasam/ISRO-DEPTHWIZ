@@ -4,9 +4,9 @@ Generated: 2026-09-05
 
 | # | Case | Status | Evidence | Environment | Owner | Blocker? |
 |---|------|--------|----------|-------------|-------|----------|
-| 1 | Browser fixture | ✅ PASS | 625 Vitest tests passing | Headless | Aryan | No |
-| 2 | Electron fixture | ✅ PASS | 34 Electron security + API tests passing | Headless | Aryan | No |
-| 3 | Managed runtime | ⚠️ PARTIAL | `getManagedPythonPath()` resolves `<resources>/python/python.exe` when packaged; falls back to `python` on PATH if missing | Headless | Aryan | Yes — no actual managed Python bundled |
+| 1 | Browser fixture | ✅ PASS | 626 Vitest tests passing (4 skipped) | Headless | Aryan | No |
+| 2 | Electron fixture | ✅ PASS | 35 Electron security + API tests passing | Headless | Aryan | No |
+| 3 | Python prerequisite | ✅ PASS | `getPythonPath()` resolves `python` on PATH; clear error if missing | Headless | Aryan | No |
 | 4 | Runtime self-check | ✅ PASS | Service capabilities response includes `available_backends` | Headless | Shivam | No |
 | 5 | Real backend capability | ✅ PASS | `depth-anything-v2-small` registered when `depth_anything_v2` + `torch` + checkpoint discoverable | Headless | Shivam | No |
 | 6 | Explicit DA-V2 selection | ✅ PASS | `backend: "depth-anything-v2-small"` in ServiceRequestWire | Headless | Aryan | No |
@@ -40,13 +40,11 @@ Generated: 2026-09-05
 
 ## Summary
 
-- **PASS**: 18
-- **PARTIAL**: 1 (managed runtime resolution works but no bundled Python)
+- **PASS**: 19 (including Python prerequisite resolution)
 - **NOT TESTED**: 9 (require real runtime, visual validation, or manual Windows testing)
 
 ## Release Blockers
 
-1. **Managed Python not bundled** — No actual Python runtime is packaged with the installer. Users must have Python installed on their system.
-2. **Real DA-V2 not visually validated** — Cannot run DA-V2 inference in headless environment.
-3. **Installer not manually tested** — NSIS installer created but not tested on clean Windows.
-4. **Checkpoint not bundled** — External provision required; no auto-download mechanism.
+1. **Real DA-V2 not visually validated** — Cannot run DA-V2 inference in headless environment.
+2. **Installer not manually tested** — NSIS installer created but not tested on clean Windows.
+3. **Checkpoint not auto-downloaded** — External provision required; no auto-download mechanism.

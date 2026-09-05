@@ -127,15 +127,18 @@ describe("Electron security audit", () => {
     expect(preloadSource).toContain("Blocked IPC channel");
   });
 
-  it("managed Python resolution prefers packaged runtime", () => {
-    expect(mainSource).toContain("getManagedPythonPath");
-    expect(mainSource).toContain("process.resourcesPath");
+  it("Python resolution uses system Python (external prerequisite)", () => {
+    expect(mainSource).toContain("getPythonPath");
+    expect(mainSource).toContain("DEPTHWIZARD_PYTHON");
   });
 
-  it("packaged mode does not fall back to system Python silently", () => {
-    // In packaged mode, if managed runtime is missing, it returns "python"
-    // but the service script existence check will catch this
-    expect(mainSource).toContain("Service script not found");
+  it("Python missing produces actionable error", () => {
+    expect(mainSource).toContain("Install Python 3.10+");
+  });
+
+  it("Python missing produces actionable error message", () => {
+    expect(mainSource).toContain("Python not found");
+    expect(mainSource).toContain("DEPTHWIZARD_PYTHON");
   });
 
   it("checkpoint resolution has deterministic priority", () => {

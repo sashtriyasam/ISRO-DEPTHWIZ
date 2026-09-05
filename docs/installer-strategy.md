@@ -51,12 +51,13 @@ DepthWizard Setup 0.1.0.exe (NSIS installer)
 
 ## Runtime Policy
 
-**No Python bundled** — users must have Python installed.
+**Python prerequisite** — users must have Python 3.10+ installed on PATH.
 
 | Aspect | Value |
 |--------|-------|
-| Resolution | `DEPTHWIZARD_PYTHON` → `<resources>/python/python.exe` → `python` on PATH |
-| Packaged fallback | System Python on PATH |
+| Resolution | `DEPTHWIZARD_PYTHON` env → `python` on PATH |
+| Bundled Python | None |
+| Error handling | Clear message if Python not found: "Install Python 3.10+ and ensure it is on PATH" |
 
 ## Upgrade Behavior
 

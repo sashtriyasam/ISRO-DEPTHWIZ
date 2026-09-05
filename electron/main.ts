@@ -46,37 +46,20 @@ function rejectUnauthorized(
 // ---------------------------------------------------------------------------
 // Runtime resolution (main process authority)
 //
-// PACKAGED mode:
-//   1. DEPTHWIZARD_PYTHON env (explicit override, developer only)
-//   2. <resourcesPath>/python/python.exe (managed runtime)
-//   3. error — no fallback to system Python
+// This application requires Python to be installed externally.
+// No Python runtime is bundled with the installer.
 //
-// DEVELOPMENT mode:
-//   1. DEPTHWIZARD_PYTHON env
-//   2. python3 on PATH
-//   3. python on PATH
+// Resolution priority:
+//   1. DEPTHWIZARD_PYTHON env (explicit override)
+//   2. python on PATH (system Python)
+//
+// The renderer cannot provide executable paths.
+// The main process decides which executable is allowed.
 // ---------------------------------------------------------------------------
-
-function getManagedPythonPath(): string | null {
-  if (!app.isPackaged) return null;
-  const managed = path.join(process.resourcesPath, "python", "python.exe");
-  if (fs.existsSync(managed)) return managed;
-  return null;
-}
 
 function getPythonPath(): string {
   const explicit = process.env.DEPTHWIZARD_PYTHON;
   if (explicit) return explicit;
-
-  if (app.isPackaged) {
-    const managed = getManagedPythonPath();
-    if (managed) return managed;
-    // In packaged mode, do NOT fall back to system Python.
-    // The service will fail with a clear error.
-    return "python";
-  }
-
-  // Development: try python3 then python
   return "python";
 }
 
@@ -334,9 +317,13 @@ function registerIpcHandlers(): void {
         setupServiceListeners(serviceProcess);
         return { pid: serviceProcess.pid };
       } catch (err) {
-        return {
-          error: `Failed to spawn service: ${err instanceof Error ? err.message : String(err)}`,
-        };
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("ENOENT") || msg.includes("not found")) {
+          return {
+            error: `Python not found at "${python}". Install Python 3.10+ and ensure it is on PATH, or set the DEPTHWIZARD_PYTHON environment variable.`,
+          };
+        }
+        return { error: `Failed to spawn service: ${msg}` };
       }
     },
   );
@@ -409,9 +396,16 @@ function registerIpcHandlers(): void {
           });
         } catch (err) {
           clearTimeout(timer);
-          resolve({
-            error: `Failed to spawn service: ${err instanceof Error ? err.message : String(err)}`,
-          });
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("ENOENT") || msg.includes("not found")) {
+            resolve({
+              error: `Python not found at "${python}". Install Python 3.10+ and ensure it is on PATH, or set the DEPTHWIZARD_PYTHON environment variable.`,
+            });
+          } else {
+            resolve({
+              error: `Failed to spawn service: ${msg}`,
+            });
+          }
           return;
         }
 

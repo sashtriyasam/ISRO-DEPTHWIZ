@@ -19,14 +19,13 @@ Generated: 2026-09-04 | Updated: 2026-09-05
 
 ### Python Runtime Resolution
 
-**Packaged mode:**
-1. `DEPTHWIZARD_PYTHON` env (developer override)
-2. `<resources>/python/python.exe` (managed, if bundled)
-3. Error — no silent fallback
+This application requires Python to be installed externally. No Python runtime is bundled.
 
-**Development mode:**
-1. `DEPTHWIZARD_PYTHON` env
-2. `python` on PATH
+**Resolution priority:**
+1. `DEPTHWIZARD_PYTHON` env (explicit override)
+2. `python` on PATH (system Python)
+
+If Python is not found, a clear error message is displayed: "Install Python 3.10+ and ensure it is on PATH."
 
 ### Service Entrypoint
 
