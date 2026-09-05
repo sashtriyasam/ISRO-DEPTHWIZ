@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from depthwizard.adapt.loss import masked_l1, TargetScale
+from depthwizard.adapt.loss import masked_height_weighted_l1, masked_l1, TargetScale
 
 
 def set_deterministic(seed: int) -> None:
@@ -66,8 +66,15 @@ def train_one_epoch(
     optimizer: Any,
     target_scale: TargetScale,
     out_hw: tuple[int, int] = (1024, 1024),
+    height_weight: Optional[tuple[float, float]] = None,
 ) -> dict[str, Any]:
-    """One epoch over sorted train samples (batch=1 tile; 1024px tiles)."""
+    """One epoch over sorted train samples (batch=1 tile; 1024px tiles).
+
+    ``height_weight`` is None for standard masked L1, else
+    ``(threshold_m, low_weight)`` for low-height-weighted masked L1 (M12):
+    weights are assigned from the meter-scale target ``tgt`` while the
+    comparison itself stays in the normalized space.
+    """
     torch = _require_torch()
     model.assert_frozen()
     model.backbone.eval()
@@ -79,7 +86,13 @@ def train_one_epoch(
         tgt = torch.as_tensor(s["height"], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
         # Normalize target
         tgt_norm = target_scale.forward(tgt)
-        loss, n_valid = masked_l1(pred, tgt_norm)
+        if height_weight is None:
+            loss, n_valid = masked_l1(pred, tgt_norm)
+        else:
+            threshold, low_weight = height_weight
+            loss, n_valid = masked_height_weighted_l1(
+                pred, tgt_norm, tgt, threshold=threshold, low_weight=low_weight
+            )
         loss.backward()
         # Guard: backbone must not accumulate grads (frozen => no grad_fn path).
         for p in model.backbone.parameters():
@@ -146,8 +159,13 @@ def train_adapted_model(
     selection_metric: str = "mae",
     out_hw: tuple[int, int] = (1024, 1024),
     target_scale: Optional[TargetScale] = None,
+    height_weight: Optional[tuple[float, float]] = None,
 ) -> dict[str, Any]:
-    """Full training with best-val selection. Returns summary (JSON-serializable)."""
+    """Full training with best-val selection. Returns summary (JSON-serializable).
+
+    ``height_weight`` is None for standard masked L1, else
+    ``(threshold_m, low_weight)`` for low-height-weighted masked L1 (M12).
+    """
     torch = _require_torch()
     set_deterministic(seed)
     out = Path(output_dir)
@@ -171,7 +189,10 @@ def train_adapted_model(
     t0 = time.perf_counter()
     with log_path.open("w", encoding="utf-8") as logf:
         for epoch in range(epochs):
-            tr = train_one_epoch(model, train_samples, optimizer, target_scale, out_hw=out_hw)
+            tr = train_one_epoch(
+                model, train_samples, optimizer, target_scale,
+                out_hw=out_hw, height_weight=height_weight,
+            )
             va = evaluate_split(model, val_samples, target_scale, out_hw=out_hw)
             row = {
                 "epoch": epoch,
@@ -205,6 +226,10 @@ def train_adapted_model(
         "history": history,
         "train_time_s": time.perf_counter() - t0,
         "target_scale": target_scale.config(),
+        "height_weight": (
+            {"threshold_m": float(height_weight[0]), "low_weight": float(height_weight[1])}
+            if height_weight is not None else None
+        ),
     }
     (out / "train_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary

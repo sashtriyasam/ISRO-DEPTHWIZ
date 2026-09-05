@@ -9,6 +9,9 @@ returning a fake zero loss.
 TargetScale supports:
     mode="raw": identity forward/inverse (M4/M5 raw meters).
     mode="zscore": z = (y - mu) / sigma computed from TRAIN pixels only.
+
+``masked_height_weighted_l1`` (M12) keeps the z-space comparison but weights
+pixels by the meter-scale target (2x below 5 m, 1x at/above).
 """
 
 from __future__ import annotations
@@ -77,4 +80,46 @@ def masked_l1(pred: Any, target: Any) -> tuple[Any, int]:
     loss = torch.abs(pred[mask] - target[mask]).mean()
     if not torch.isfinite(loss).item():
         raise ValueError("masked_l1: non-finite loss")
+    return loss, n_valid
+
+
+def masked_height_weighted_l1(
+    pred_z: Any,
+    target_z: Any,
+    target_m: Any,
+    threshold: float = 5.0,
+    low_weight: float = 2.0,
+) -> tuple[Any, int]:
+    """Low-height-weighted masked L1 (M12).
+
+    Compares z-score prediction/target exactly like :func:`masked_l1`, but
+    weights each valid pixel by the ORIGINAL METER-SCALE target
+    (``target_m``), assigned BEFORE any z-score conversion:
+
+        w = low_weight  if target_m < threshold
+        w = 1.0         otherwise (including negative targets, which are < threshold)
+
+        loss = sum(w * |pred_z - target_z|) / sum(w)
+
+    Finite-pred AND finite-target masking is identical to :func:`masked_l1`
+    (finiteness is invariant under the z-score affine map, so masking on
+    either scale selects the same pixels). Negative targets are preserved
+    and fall in the weighted group. No class labels, no validation data.
+    """
+    torch = _require_torch()
+    if pred_z.shape != target_z.shape or pred_z.shape != target_m.shape:
+        raise ValueError(
+            f"shape mismatch pred_z {tuple(pred_z.shape)} vs "
+            f"target_z {tuple(target_z.shape)} vs target_m {tuple(target_m.shape)}"
+        )
+    if not (low_weight > 0.0):
+        raise ValueError(f"low_weight must be positive, got {low_weight!r}")
+    mask = torch.isfinite(pred_z) & torch.isfinite(target_z) & torch.isfinite(target_m)
+    n_valid = int(mask.sum().item())
+    if n_valid == 0:
+        raise ValueError("masked_height_weighted_l1: zero valid pixels (all non-finite)")
+    w = torch.where(target_m[mask] < float(threshold), float(low_weight), 1.0)
+    loss = (w * torch.abs(pred_z[mask] - target_z[mask])).sum() / w.sum()
+    if not torch.isfinite(loss).item():
+        raise ValueError("masked_height_weighted_l1: non-finite loss")
     return loss, n_valid
