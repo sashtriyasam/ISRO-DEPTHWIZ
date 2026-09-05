@@ -195,7 +195,11 @@ def test_unknown_backend_is_structured_error(
 
 
 def test_no_network_imports_in_runtime() -> None:
-    """No socket/HTTP/hub imports anywhere in the shipped engine."""
+    """No socket/HTTP/hub imports anywhere in the shipped engine.
+
+    Provisioning (``runtime/provision.py``) is the single exception: it
+    may fetch the fixed checkpoint identity, and only that identity.
+    """
     banned = (
         "import socket",
         "import requests",
@@ -211,7 +215,25 @@ def test_no_network_imports_in_runtime() -> None:
         for marker in banned:
             if marker in text:
                 offenders.append(f"{path}:{marker}")
+        if "urllib" in text and path.name != "provision.py":
+            offenders.append(f"{path}:urllib")
     assert offenders == []
+
+
+def test_provision_contacts_only_fixed_identities() -> None:
+    """The only URL literals in provisioning are the fixed identities."""
+    import re
+
+    text = Path("src/depthwizard/runtime/provision.py").read_text(encoding="utf-8")
+    literals = [
+        url for url in re.findall(r'"(https://[^"]+)"', text) if re.search(r"https://[^/]+/\S", url)
+    ]
+    assert literals, "expected fixed identities in provisioning"
+    for url in literals:
+        assert (
+            "DepthAnything/Depth-Anything-V2" in url
+            or "depth-anything/Depth-Anything-V2-Small" in url
+        ), f"unexpected URL in provisioning: {url}"
 
 
 # ---------------------------------------------------------------------------

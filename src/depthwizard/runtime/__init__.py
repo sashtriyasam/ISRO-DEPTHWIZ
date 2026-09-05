@@ -4,6 +4,7 @@ Helpers for setup verification and runtime self-checks: interpreter
 version, dependency availability (import discovery only, no heavy
 imports), checkpoint resolution/verification, and upstream revision
 reporting. Used by ``scripts/runtime_check.py`` and packaging tests.
+Provisioning workflow lives in ``depthwizard.runtime.provision``.
 """
 
 from depthwizard.runtime.diagnostics import (
@@ -48,18 +49,42 @@ from depthwizard.runtime.diagnostics import (
 from depthwizard.runtime.diagnostics import (
     verify_checkpoint as verify_checkpoint,
 )
+from depthwizard.runtime.provision import (
+    CORE_MODE as CORE_MODE,
+)
+from depthwizard.runtime.provision import (
+    DAV2_MODE as DAV2_MODE,
+)
+from depthwizard.runtime.provision import (
+    ProvisionRequest as ProvisionRequest,
+)
+from depthwizard.runtime.provision import (
+    ProvisionStatus as ProvisionStatus,
+)
+from depthwizard.runtime.provision import (
+    StepStatus as ProvisionStepStatus,
+)
+from depthwizard.runtime.provision import (
+    provision as provision,
+)
 
 __all__ = [
     "CHECKPOINT_FILE",
     "CHECKPOINT_SHA256",
     "CORE_MODULES",
+    "CORE_MODE",
     "DAV2_MODULES",
+    "DAV2_MODE",
     "MIN_PYTHON",
     "UPSTREAM_REVISION",
     "UPSTREAM_URL",
     "CheckStatus",
+    "ProvisionRequest",
+    "ProvisionStatus",
+    "ProvisionStepStatus",
     "availability_report",
     "default_data_dir",
+    "provision",
     "resolve_checkpoint",
     "sha256_file",
     "upstream_revision",
