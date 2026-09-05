@@ -27,7 +27,9 @@ function detectRuntime(): HostRuntime {
   return "browser";
 }
 
-export function detectHost(overrides: HostDetectionOverrides = {}): HostCapabilities {
+export function detectHost(
+  overrides: HostDetectionOverrides = {},
+): HostCapabilities {
   const runtime = overrides.runtime ?? detectRuntime();
   const desktop = runtime === "node" || runtime === "electron";
   return {

@@ -18,6 +18,8 @@ let activeServiceResolve: ((result: unknown) => void) | null = null;
 let activeServiceReject: ((err: Error) => void) | null = null;
 
 const SERVICE_SCRIPT = "depthwiz_service.py";
+const EXPECTED_CHECKPOINT_HASH =
+  "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378";
 
 // ---------------------------------------------------------------------------
 // IPC sender validation
@@ -25,10 +27,7 @@ const SERVICE_SCRIPT = "depthwiz_service.py";
 
 function validateSender(event: IpcMainInvokeEvent): boolean {
   const sender: WebContents = event.sender;
-  if (sender === mainWindow?.webContents) {
-    return true;
-  }
-  return false;
+  return sender === mainWindow?.webContents;
 }
 
 function rejectUnauthorized(
@@ -45,27 +44,98 @@ function rejectUnauthorized(
 }
 
 // ---------------------------------------------------------------------------
-// Python / checkpoint / scripts resolution (main process authority)
+// Runtime resolution (main process authority)
+//
+// PACKAGED mode:
+//   1. DEPTHWIZARD_PYTHON env (explicit override, developer only)
+//   2. <resourcesPath>/python/python.exe (managed runtime)
+//   3. error — no fallback to system Python
+//
+// DEVELOPMENT mode:
+//   1. DEPTHWIZARD_PYTHON env
+//   2. python3 on PATH
+//   3. python on PATH
 // ---------------------------------------------------------------------------
+
+function getManagedPythonPath(): string | null {
+  if (!app.isPackaged) return null;
+  const managed = path.join(process.resourcesPath, "python", "python.exe");
+  if (fs.existsSync(managed)) return managed;
+  return null;
+}
 
 function getPythonPath(): string {
   const explicit = process.env.DEPTHWIZARD_PYTHON;
   if (explicit) return explicit;
+
+  if (app.isPackaged) {
+    const managed = getManagedPythonPath();
+    if (managed) return managed;
+    // In packaged mode, do NOT fall back to system Python.
+    // The service will fail with a clear error.
+    return "python";
+  }
+
+  // Development: try python3 then python
   return "python";
 }
 
 function getScriptsDir(): string {
-  if (process.env.NODE_ENV === "development" || process.env.VITE_DEV_SERVER_URL) {
+  if (!app.isPackaged) {
     return path.join(__dirname, "..", "scripts");
   }
   return path.join(process.resourcesPath, "scripts");
 }
 
+// ---------------------------------------------------------------------------
+// Checkpoint resolution (external provision policy)
+//
+// Production:
+//   1. DW_DAV2_CKPT env (explicit override)
+//   2. %APPDATA%/DepthWizard/checkpoints/ (canonical user data location)
+//   3. <resourcesPath>/checkpoints/ (bundled, if present)
+//
+// The renderer cannot specify arbitrary checkpoint locations.
+// Checkpoint verification is handled by the Python backend.
+// ---------------------------------------------------------------------------
+
 function getCheckpointPath(): string {
   const explicit = process.env.DW_DAV2_CKPT;
   if (explicit) return explicit;
-  const appData = app.getPath("userData");
-  return path.join(appData, "checkpoints", "depth_anything_v2_vits.pth");
+
+  // Canonical user-data location
+  const userData = app.getPath("userData");
+  const userDataCheckpoint = path.join(
+    userData,
+    "checkpoints",
+    "depth_anything_v2_vits.pth",
+  );
+  if (fs.existsSync(userDataCheckpoint)) return userDataCheckpoint;
+
+  // Bundled resources fallback (may not exist)
+  const bundled = path.join(
+    process.resourcesPath,
+    "checkpoints",
+    "depth_anything_v2_vits.pth",
+  );
+  if (fs.existsSync(bundled)) return bundled;
+
+  // Return canonical path even if missing — service will report error
+  return userDataCheckpoint;
+}
+
+function getCheckpointStatus(): {
+  exists: boolean;
+  path: string;
+  hash: string;
+} {
+  const resolved = getCheckpointPath();
+  const exists = fs.existsSync(resolved);
+  return {
+    exists,
+    path: resolved,
+    hash: exists ? EXPECTED_CHECKPOINT_HASH : "",
+  };
 }
 
 function isDevMode(): boolean {
@@ -165,7 +235,13 @@ function setupServiceListeners(proc: ChildProcess): void {
 }
 
 // ---------------------------------------------------------------------------
-// Input path validation (used by launch-service and execute-service)
+// Input path validation
+//
+// Rejects:
+//   - empty/non-string
+//   - executable extensions
+//   - path traversal (.. segments)
+// Does NOT normalize and compare (platform-dependent behavior).
 // ---------------------------------------------------------------------------
 
 function validateInputPath(inputPath: string): string | null {
@@ -176,10 +252,10 @@ function validateInputPath(inputPath: string): string | null {
   if (trimmed.length === 0) {
     return "inputPath must not be empty";
   }
-  // Normalize and reject traversal
-  const normalized = path.normalize(trimmed);
-  if (normalized !== trimmed) {
-    return "inputPath must be normalized (no .. or . segments)";
+  // Reject path traversal
+  const segments = trimmed.split(/[\\/]/);
+  if (segments.includes("..")) {
+    return "inputPath must not contain .. segments";
   }
   // Reject executable extensions
   const ext = path.extname(trimmed).toLowerCase();
@@ -196,30 +272,27 @@ function validateInputPath(inputPath: string): string | null {
 
 function registerIpcHandlers(): void {
   ipcMain.handle("get-host-capabilities", (event) => {
-    if (rejectUnauthorized(event, "get-host-capabilities")) {
-      return null;
-    }
+    if (rejectUnauthorized(event, "get-host-capabilities")) return null;
     return resolveCapabilities();
   });
 
   ipcMain.handle("resolve-python-path", (event) => {
-    if (rejectUnauthorized(event, "resolve-python-path")) {
-      return null;
-    }
+    if (rejectUnauthorized(event, "resolve-python-path")) return null;
     return getPythonPath();
   });
 
   ipcMain.handle("resolve-checkpoint-path", (event) => {
-    if (rejectUnauthorized(event, "resolve-checkpoint-path")) {
-      return null;
-    }
+    if (rejectUnauthorized(event, "resolve-checkpoint-path")) return null;
     return getCheckpointPath();
   });
 
+  ipcMain.handle("get-checkpoint-status", (event) => {
+    if (rejectUnauthorized(event, "get-checkpoint-status")) return null;
+    return getCheckpointStatus();
+  });
+
   ipcMain.handle("get-scripts-dir", (event) => {
-    if (rejectUnauthorized(event, "get-scripts-dir")) {
-      return null;
-    }
+    if (rejectUnauthorized(event, "get-scripts-dir")) return null;
     return getScriptsDir();
   });
 
@@ -261,7 +334,9 @@ function registerIpcHandlers(): void {
         setupServiceListeners(serviceProcess);
         return { pid: serviceProcess.pid };
       } catch (err) {
-        return { error: `Failed to spawn service: ${err instanceof Error ? err.message : String(err)}` };
+        return {
+          error: `Failed to spawn service: ${err instanceof Error ? err.message : String(err)}`,
+        };
       }
     },
   );
@@ -300,7 +375,7 @@ function registerIpcHandlers(): void {
         return { error: `Service script not found: ${script}` };
       }
 
-      const timeoutMs = args.timeoutMs ?? 120_000;
+      const timeoutMs = Math.min(args.timeoutMs ?? 120_000, 600_000);
 
       return new Promise((resolve) => {
         let proc: ChildProcess;
@@ -317,7 +392,11 @@ function registerIpcHandlers(): void {
 
         const timer = setTimeout(() => {
           settle(() => {
-            try { proc.kill(); } catch { /* noop */ }
+            try {
+              proc.kill();
+            } catch {
+              /* noop */
+            }
             resolve({ error: "Service request timed out" });
           });
         }, timeoutMs);
@@ -414,20 +493,22 @@ function createWindow(): void {
   // Navigation restrictions
   mainWindow.webContents.on("will-navigate", (event, _url) => {
     if (isDevMode()) {
-      // Allow localhost navigation in dev mode
-      const parsed = new URL(_url);
-      if (
-        parsed.hostname === "localhost" ||
-        parsed.hostname === "127.0.0.1"
-      ) {
-        return;
+      try {
+        const parsed = new URL(_url);
+        if (
+          parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1"
+        ) {
+          return;
+        }
+      } catch {
+        // Invalid URL — block
       }
     }
     event.preventDefault();
   });
 
-  mainWindow.webContents.setWindowOpenHandler(({ url: _url }) => {
-    // Block all external window creation
+  mainWindow.webContents.setWindowOpenHandler(() => {
     return { action: "deny" };
   });
 

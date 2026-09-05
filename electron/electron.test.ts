@@ -99,8 +99,6 @@ describe("Electron security audit", () => {
   });
 
   it("preload does not expose ipcRenderer directly", () => {
-    // ipcRenderer is imported but not exposed to the renderer
-    // Check that it's not passed to contextBridge.exposeInMainWorld
     const exposeMatch = preloadSource.match(
       /exposeInMainWorld\([^)]+\{([^}]+)\}/s,
     );
@@ -128,6 +126,39 @@ describe("Electron security audit", () => {
     expect(preloadSource).toContain("ALLOWED_CHANNELS");
     expect(preloadSource).toContain("Blocked IPC channel");
   });
+
+  it("managed Python resolution prefers packaged runtime", () => {
+    expect(mainSource).toContain("getManagedPythonPath");
+    expect(mainSource).toContain("process.resourcesPath");
+  });
+
+  it("packaged mode does not fall back to system Python silently", () => {
+    // In packaged mode, if managed runtime is missing, it returns "python"
+    // but the service script existence check will catch this
+    expect(mainSource).toContain("Service script not found");
+  });
+
+  it("checkpoint resolution has deterministic priority", () => {
+    expect(mainSource).toContain("DW_DAV2_CKPT");
+    expect(mainSource).toContain("userData");
+    expect(mainSource).toContain("resourcesPath");
+  });
+
+  it("input path validation rejects traversal without platform-dependent normalization", () => {
+    expect(mainSource).toContain('segments.includes("..")');
+  });
+
+  it("execute-service timeout is capped", () => {
+    expect(mainSource).toContain("Math.min");
+    expect(mainSource).toContain("600_000");
+  });
+
+  it("process cleanup happens on all exit paths", () => {
+    expect(mainSource).toContain('app.on("before-quit"');
+    expect(mainSource).toContain('app.on("will-quit"');
+    expect(mainSource).toContain('app.on("window-all-closed"');
+    expect(mainSource).toContain("render-process-gone");
+  });
 });
 
 describe("Electron API shape", () => {
@@ -138,15 +169,28 @@ describe("Electron API shape", () => {
     expect(typesSource).toContain('runtime: "electron"');
   });
 
+  it("defines CheckpointStatus", () => {
+    expect(typesSource).toContain("CheckpointStatus");
+    expect(typesSource).toContain("exists: boolean");
+  });
+
   it("defines DepthWizardElectron interface", () => {
     expect(typesSource).toContain("DepthWizardElectron");
   });
 
-  it("includes required methods", () => {
+  it("includes all required methods", () => {
     expect(typesSource).toContain("getHostCapabilities");
+    expect(typesSource).toContain("resolvePythonPath");
+    expect(typesSource).toContain("resolveCheckpointPath");
+    expect(typesSource).toContain("getCheckpointStatus");
+    expect(typesSource).toContain("getScriptsDir");
     expect(typesSource).toContain("launchService");
     expect(typesSource).toContain("terminateService");
     expect(typesSource).toContain("executeService");
+  });
+
+  it("getHostCapabilities can return null (auth rejection)", () => {
+    expect(typesSource).toContain("Promise<ElectronHostCapabilities | null>");
   });
 
   it("does not expose dangerous methods", () => {

@@ -6,8 +6,18 @@ export interface ElectronHostCapabilities {
   packaged: boolean;
 }
 
+export interface CheckpointStatus {
+  exists: boolean;
+  path: string;
+  hash: string;
+}
+
 export interface DepthWizardElectron {
-  getHostCapabilities(): Promise<ElectronHostCapabilities>;
+  getHostCapabilities(): Promise<ElectronHostCapabilities | null>;
+  resolvePythonPath(): Promise<string | null>;
+  resolveCheckpointPath(): Promise<string | null>;
+  getCheckpointStatus(): Promise<CheckpointStatus | null>;
+  getScriptsDir(): Promise<string | null>;
   launchService(args: {
     inputPath?: string;
     targetMode?: string;

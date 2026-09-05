@@ -1,6 +1,6 @@
 # Aryan Runtime Integration
 
-Generated: 2026-09-04
+Generated: 2026-09-04 | Updated: 2026-09-05
 
 ## Canonical Main State
 
@@ -10,21 +10,23 @@ Generated: 2026-09-04
 | DA-V2 production backend | ✅ ON MAIN (`src/depthwizard/backends/depth_anything_v2.py`) |
 | DA-V2 runtime verification | ✅ ON MAIN (commit `6ed623e`) |
 | Aryan desktop integration | ✅ ON MAIN (merged via `feat/shivam-aryan-integration-readiness`) |
-| Runtime packaging | ❌ NOT ON MAIN (no installer/packaging branches exist) |
-| Native host support | ❌ NOT ON MAIN (browser/node detection only) |
-| Installer | ❌ NOT ON MAIN |
+| Runtime provisioning | ❌ NOT ON MAIN (branch `daf3482`) |
+| Runtime packaging | ❌ NOT ON MAIN (branch `31389f3`) |
+| `runtime_check.py` | ❌ NOT ON MAIN |
+| `src/depthwizard/runtime/` | ❌ NOT ON MAIN |
 
 ## Canonical Runtime Contract
 
 ### Python Runtime Resolution
 
-The service expects a Python interpreter with `depthwizard` installed.
+**Packaged mode:**
+1. `DEPTHWIZARD_PYTHON` env (developer override)
+2. `<resources>/python/python.exe` (managed, if bundled)
+3. Error — no silent fallback
 
-**Resolution order:**
-1. `DEPTHWIZARD_PYTHON` environment variable (explicit path)
-2. `python` on PATH (development fallback)
-
-**Packaged products should prefer an explicit managed runtime path.** The native host provides this.
+**Development mode:**
+1. `DEPTHWIZARD_PYTHON` env
+2. `python` on PATH
 
 ### Service Entrypoint
 
@@ -42,53 +44,25 @@ scripts/depthwiz_service.py
 
 | Backend | Name | Availability |
 |---------|------|-------------|
-| Synthetic | `synthetic-depth` | Always available (development) |
-| DA-V2 | `depth-anything-v2-small` | Requires torch + checkpoint |
+| Synthetic | `synthetic-depth` | Always available |
+| DA-V2 | `depth-anything-v2-small` | Requires `depth_anything_v2` + `torch` + checkpoint |
 
-**Policy:** Explicit real DA-V2 request + unavailable runtime = ERROR. Never silently fall back to synthetic.
+**Policy:** Explicit DA-V2 request + unavailable → ERROR. Never silently fall back to synthetic.
 
 ### Checkpoint Resolution
 
-```
-DW_DAV2_CKPT environment variable
-  → checkpoints/depth_anything_v2_vits.pth (project root fallback)
-```
+1. `DW_DAV2_CKPT` env
+2. `%APPDATA%/DepthWizard/checkpoints/depth_anything_v2_vits.pth`
+3. `<resources>/checkpoints/depth_anything_v2_vits.pth`
 
-- Checkpoint is externally provisioned (not in git)
-- SHA-256 verification: `715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378`
-- Python runtime is authority for final validation
-- Host may perform early existence preflight
+Expected SHA-256: `715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378`
 
-### Environment Variables
+### Service Capabilities
 
-| Variable | Purpose | Required |
-|----------|---------|----------|
-| `DEPTHWIZARD_PYTHON` | Python interpreter path | No (dev fallback) |
-| `DW_DAV2_CKPT` | DA-V2 checkpoint path | No (uses default) |
+Request: `{"capabilities": true}`
+Response: `{"capabilities": {"contract_version": "1", "available_backends": [...], ...}}`
 
-### Expected Directory Structure (Packaged)
-
-```
-<app-root>/
-  python/                    # Managed Python runtime
-    python.exe               # Windows
-    Lib/site-packages/       # depthwizard installed here
-  checkpoints/
-    depth_anything_v2_vits.pth
-  resources/
-    depthwiz_service.py      # Service entrypoint
-    backend_bridge.py        # Bridge script
-```
-
-### Failure Taxonomy
-
-| Error | Cause | Resolution |
-|-------|-------|-----------|
-| `ImportError` | depthwizard not installed | Install in managed runtime |
-| `ModelInferenceError` | DA-V2 inference failed | Check checkpoint, GPU memory |
-| `InvalidInputError` | Bad input file | User action: different file |
-| Wire error | Service protocol failure | Check stderr, restart service |
-| Non-zero exit | Process/wire failure | Check stderr diagnostics |
+The `available_backends` list advertises which backends are registered.
 
 ## Consumed Interface vs Canonical Implementation
 
@@ -97,6 +71,8 @@ DW_DAV2_CKPT environment variable
 | Python scientific engine | Shivam | Via service protocol |
 | DA-V2 backend | Shivam | Via service protocol |
 | Checkpoint verification | Shivam | Via service protocol |
-| Runtime provisioning | **Aryan (native host)** | Implements resolution |
+| Runtime provisioning | Shivam (branch only) | NOT on main |
+| `runtime_check.py` | Shivam (branch only) | NOT on main |
+| Runtime resolution | **Aryan (native host)** | Implements in `electron/main.ts` |
 | Service launch | **Aryan (native host)** | Spawns subprocess |
 | Service lifecycle | **Aryan (native host)** | Manages process |

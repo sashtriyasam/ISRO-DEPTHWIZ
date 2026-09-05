@@ -1,11 +1,10 @@
-# Native Host Technology Decision
+# Native Host
 
 Generated: 2026-09-04 | Updated: 2026-09-05
 
 ## Technology
 
-**Electron 44.2.0** (stable, released Sep 3, 2026)
-
+**Electron 44.2.0** (stable, Sep 3, 2026)
 - Chromium: 152.0.7977.76
 - Node.js: 24.20.0
 - License: MIT
@@ -22,29 +21,21 @@ Python Service (depthwiz_service.py)
 DA-V2 Backend / Synthetic Backend
 ```
 
-## Security Model
+## Security Configuration
 
-### BrowserWindow Configuration
+| Setting | Value |
+|---------|-------|
+| `contextIsolation` | `true` |
+| `nodeIntegration` | `false` |
+| `sandbox` | `true` |
+| `webSecurity` | `true` |
+| `allowRunningInsecureContent` | `false` |
+| `experimentalFeatures` | `false` |
+| `nodeIntegrationInWorker` | `false` |
+| `nodeIntegrationInSubFrames` | `false` |
+| `navigateOnDragDrop` | `false` |
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| `contextIsolation` | `true` | Prevents renderer accessing Electron internals |
-| `nodeIntegration` | `false` | No Node.js APIs in renderer |
-| `sandbox` | `true` | Renderer runs in sandboxed process |
-| `webSecurity` | `true` | Enforces same-origin policy |
-| `allowRunningInsecureContent` | `false` | Blocks mixed content |
-| `experimentalFeatures` | `false` | No experimental Chromium features |
-| `nodeIntegrationInWorker` | `false` | Workers sandboxed |
-| `nodeIntegrationInSubFrames` | `false` | Sub-frames sandboxed |
-| `navigateOnDragDrop` | `false` | No drag-to-navigate |
-
-### Navigation Restrictions
-
-- `will-navigate`: blocks all navigation except localhost in dev mode
-- `setWindowOpenHandler`: denies all new window creation
-- External URLs are never loaded in the application window
-
-### Content Security Policy
+## CSP
 
 ```
 default-src 'self';
@@ -59,88 +50,61 @@ frame-src 'none';
 worker-src 'self' blob:;
 ```
 
-### IPC Security
+## IPC Security
 
-- **Sender validation**: Every IPC handler verifies the request originates from the main window's WebContents
-- **Channel allowlist**: Preload uses explicit allowlist, rejects unknown channels
+- **Sender validation**: Every handler checks `event.sender === mainWindow?.webContents`
+- **Channel allowlist**: Preload uses explicit set, rejects unknown channels
+- **No raw ipcRenderer**: Exposed via `safeInvoke()` wrapper only
 - **No wildcard handlers**: No `ipcMain.handle("*", ...)`
-- **No raw ipcRenderer exposure**: Preload wraps all calls through `safeInvoke()`
 
-### Preload API (Minimized)
+## Preload API
 
 | Method | Purpose |
 |--------|---------|
-| `getHostCapabilities()` | Read-only host info |
-| `launchService(args)` | Start Python service subprocess |
+| `getHostCapabilities()` | Read-only host info (runtime, platform, packaged) |
+| `resolvePythonPath()` | Resolved Python executable path |
+| `resolveCheckpointPath()` | Resolved checkpoint file path |
+| `getCheckpointStatus()` | Checkpoint existence + hash info |
+| `getScriptsDir()` | Resolved scripts directory path |
+| `launchService(args)` | Start long-running Python service |
 | `terminateService()` | Kill owned subprocess |
 | `executeService(args)` | One-shot service execution with timeout |
 
-**Not exposed**: `ipcRenderer`, `shell`, `fs`, `path`, `child_process`, `process`, `require`
+## Runtime Resolution
 
-### Input Path Validation
+### Python
 
-- Rejects executable extensions (`.exe`, `.bat`, `.cmd`, `.com`, `.ps1`, `.sh`, `.vbs`)
-- Requires normalized paths (no `..` or `.` segments)
-- Only passed to known application operations
+**Packaged mode** (priority):
+1. `DEPTHWIZARD_PYTHON` env (developer override)
+2. `<resources>/python/python.exe` (managed runtime)
+3. No fallback to system Python
+
+**Development mode**:
+1. `DEPTHWIZARD_PYTHON` env
+2. `python` on PATH
+
+### Checkpoint
+
+1. `DW_DAV2_CKPT` env (explicit override)
+2. `%APPDATA%/DepthWizard/checkpoints/depth_anything_v2_vits.pth` (user data)
+3. `<resources>/checkpoints/depth_anything_v2_vits.pth` (bundled, if present)
 
 ## Process Lifecycle
 
 | Event | Action |
 |-------|--------|
 | App ready | Register IPC, create window |
-| Window close | Set mainWindow = null |
-| `window-all-closed` | Kill service, quit (non-macOS) |
 | `before-quit` | Kill service |
 | `will-quit` | Kill service |
+| `window-all-closed` | Kill service, quit (non-macOS) |
 | Renderer crash | Kill service, log error |
-| Service crash | Clean up process handle |
-| Service timeout | Kill process, reject promise |
+| Service timeout | Kill process, return error |
 
-**No orphan Python processes** after application exit.
-
-## Environment Modes
-
-| Mode | Vite Dev Server | Packaged Assets | Detection |
-|------|----------------|-----------------|-----------|
-| Development | Yes | No | `isDevMode()` = `!app.isPackaged` |
-| Production | No | Yes | `isDevMode()` = `false` |
-
-## Runtime Resolution
-
-| Priority | Source | Fallback |
-|----------|--------|----------|
-| 1 | `DEPTHWIZARD_PYTHON` env | — |
-| 2 | `python` on PATH | — |
-
-The main process decides the executable. The renderer cannot control which Python is used.
-
-## Managed Runtime (Packaged)
-
-```
-<app-root>/
-  python/                         # Managed Python runtime
-    python.exe
-    Lib/site-packages/depthwizard/
-  resources/scripts/
-    depthwiz_service.py
-    backend_bridge.py
-  resources/checkpoints/
-    depth_anything_v2_vits.pth
-```
-
-## Build System
-
-| Tool | Purpose |
-|------|---------|
-| Vite | Renderer build |
-| TypeScript | Main + preload compilation |
-| electron-builder | Packaging + installer |
-
-### Build Commands
+## Build Commands
 
 ```bash
-npm run build:electron        # Build renderer + compile Electron TS
-npm run electron:dev          # Development with hot reload
-npm run electron:build:win    # Windows NSIS installer
-npm run electron:build:portable  # Portable unpacked build
+npm run build:electron          # Build renderer + compile Electron TS
+npm run electron:dev            # Development with hot reload
+npm run electron:build:win      # Windows NSIS installer
+npm run electron:build:portable # Portable unpacked build
 ```
