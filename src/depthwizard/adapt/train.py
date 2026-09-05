@@ -157,6 +157,7 @@ def train_adapted_model(
     weight_decay: float = 0.0,
     seed: int = 0,
     selection_metric: str = "mae",
+    selection_mode: str = "min",
     out_hw: tuple[int, int] = (1024, 1024),
     target_scale: Optional[TargetScale] = None,
     height_weight: Optional[tuple[float, float]] = None,
@@ -165,6 +166,10 @@ def train_adapted_model(
 
     ``height_weight`` is None for standard masked L1, else
     ``(threshold_m, low_weight)`` for low-height-weighted masked L1 (M12).
+
+    ``selection_mode`` is ``"min"`` (e.g. MAE/RMSE) or ``"max"`` (e.g. Pearson
+    for M16 structural selection). Pearson is affine-invariant, so maximizing
+    pooled direct Pearson selects the same structure as the affine protocol.
     """
     torch = _require_torch()
     set_deterministic(seed)
@@ -183,8 +188,10 @@ def train_adapted_model(
         target_scale = TargetScale(mode="zscore", mu=mean, sigma=std)
 
     optimizer = torch.optim.Adam([p for p in model.head.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
+    if selection_mode not in ("min", "max"):
+        raise ValueError(f"selection_mode must be 'min' or 'max', got {selection_mode!r}")
     log_path = out / "log.jsonl"
-    best = {"epoch": -1, "value": float("inf")}
+    best = {"epoch": -1, "value": float("-inf") if selection_mode == "max" else float("inf")}
     history: list[dict[str, Any]] = []
     t0 = time.perf_counter()
     with log_path.open("w", encoding="utf-8") as logf:
@@ -210,7 +217,10 @@ def train_adapted_model(
             logf.flush()
             history.append(row)
             key = va.get(selection_metric)
-            if key is not None and float(key) < best["value"]:
+            if key is not None and (
+                float(key) < best["value"] if selection_mode == "min"
+                else float(key) > best["value"]
+            ):
                 best = {"epoch": epoch, "value": float(key)}
                 model.save_head(ckpt_dir / "best.pt", extra={"epoch": epoch, selection_metric: float(key)})
     # Restore best-val head for downstream evaluation.
@@ -221,6 +231,7 @@ def train_adapted_model(
         "weight_decay": weight_decay,
         "seed": seed,
         "selection_metric": selection_metric,
+        "selection_mode": selection_mode,
         "best_epoch": best["epoch"],
         "best_value": best["value"],
         "history": history,
