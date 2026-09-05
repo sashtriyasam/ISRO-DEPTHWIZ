@@ -1,0 +1,230 @@
+{
+  "kind": "dav2-level3-evidence",
+  "note": "engineering observations, NOT benchmarks",
+  "repository_sha": "07bc635f7ace61370ff9a6d1f9ea778426a8dda7",
+  "os": "Windows 11",
+  "python": "3.12.10",
+  "device": "cpu",
+  "upstream_revision": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf",
+  "checkpoint": {
+    "path": "D:/SIH DEPH WIZARD/checkpoints/depth_anything_v2_vits.pth",
+    "present": true,
+    "sha256": "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378",
+    "matches_code": true,
+    "code_sha256": "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378"
+  },
+  "torch": "2.14.0+cpu",
+  "torchvision": "0.29.0+cpu",
+  "opencv": "5.0.0",
+  "dav2_runtime": "C:\\Users\\Shivam\\AppData\\Local\\Temp\\dav2-upstream\\depth_anything_v2",
+  "model_load_s": 0.881,
+  "cases": [
+    {
+      "name": "small-32x32",
+      "input": {
+        "width": 32,
+        "height": 32,
+        "type": "PNG 3-channel uint8"
+      },
+      "fixture": {
+        "path": "dw-l3-small-32x32.png",
+        "seed": 26175,
+        "sha256": "677bbd220402721bc357c28d95fdd91e23214db4dc0d69dbf4901ce0f1c96109",
+        "bytes": 2036
+      },
+      "backend": "depth-anything-v2-small",
+      "device": "cpu",
+      "inference_s_run1": 1.774,
+      "inference_s_run2": 1.07,
+      "output": {
+        "width": 32,
+        "height": 32,
+        "count": 1024
+      },
+      "finite": true,
+      "depth_scale": "relative",
+      "units": null,
+      "elevation_semantics": "relative_depth",
+      "georeferencing": "non_georeferenced",
+      "deterministic_repeat": true,
+      "value_min": 2.4191,
+      "value_max": 3.1271
+    },
+    {
+      "name": "medium-64x64",
+      "input": {
+        "width": 64,
+        "height": 64,
+        "type": "PNG 3-channel uint8"
+      },
+      "fixture": {
+        "path": "dw-l3-medium-64x64.png",
+        "seed": 26175,
+        "sha256": "585f2b86d9d0b23c0ea7c55908119e877aff63a15caee4c1870b8af92248e50c",
+        "bytes": 7507
+      },
+      "backend": "depth-anything-v2-small",
+      "device": "cpu",
+      "inference_s_run1": 1.129,
+      "inference_s_run2": 1.207,
+      "output": {
+        "width": 64,
+        "height": 64,
+        "count": 4096
+      },
+      "finite": true,
+      "depth_scale": "relative",
+      "units": null,
+      "elevation_semantics": "relative_depth",
+      "georeferencing": "non_georeferenced",
+      "deterministic_repeat": true,
+      "value_min": 2.2139,
+      "value_max": 3.0846
+    },
+    {
+      "name": "photo-small-160x120",
+      "input": {
+        "width": 160,
+        "height": 120,
+        "type": "PNG 3-channel uint8"
+      },
+      "fixture": {
+        "path": "dw-l3-photo-small-160x120.png",
+        "seed": 26175,
+        "sha256": "2d180ccfda5e0c0dd8a2d1f80a6f761582e999a1c132821e0a107b8ac35d06da",
+        "bytes": 33495
+      },
+      "backend": "depth-anything-v2-small",
+      "device": "cpu",
+      "inference_s_run1": 1.862,
+      "inference_s_run2": 1.661,
+      "output": {
+        "width": 160,
+        "height": 120,
+        "count": 19200
+      },
+      "finite": true,
+      "depth_scale": "relative",
+      "units": null,
+      "elevation_semantics": "relative_depth",
+      "georeferencing": "non_georeferenced",
+      "deterministic_repeat": true,
+      "value_min": 2.0013,
+      "value_max": 3.4203
+    },
+    {
+      "name": "photo-320x240",
+      "input": {
+        "width": 320,
+        "height": 240,
+        "type": "PNG 3-channel uint8"
+      },
+      "fixture": {
+        "path": "dw-l3-photo-320x240.png",
+        "seed": 26175,
+        "sha256": "623f6ed899dfc7d2737c8e81585eed585847bf06ae74d946e7fc3471e9f5c18a",
+        "bytes": 131067
+      },
+      "backend": "depth-anything-v2-small",
+      "device": "cpu",
+      "inference_s_run1": 1.76,
+      "inference_s_run2": 1.641,
+      "output": {
+        "width": 320,
+        "height": 240,
+        "count": 76800
+      },
+      "finite": true,
+      "depth_scale": "relative",
+      "units": null,
+      "elevation_semantics": "relative_depth",
+      "georeferencing": "non_georeferenced",
+      "deterministic_repeat": true,
+      "value_min": 1.8441,
+      "value_max": 3.163
+    }
+  ],
+  "pipeline": {
+    "case": "medium-64x64",
+    "direct_stages_s": 0.015,
+    "height_units": "meters",
+    "height_semantics": "height_agl_ndsm",
+    "relative_vs_metric_boundary": "depth relative/units None -> height meters/height_agl_ndsm",
+    "dsm": {
+      "width": 64,
+      "height": 64,
+      "units": "meters",
+      "semantics": "height_agl_ndsm"
+    },
+    "mesh": {
+      "vertices": 4096,
+      "triangles": 7938
+    },
+    "runner_states": [
+      "input_validated",
+      "preprocessing",
+      "inference_running",
+      "calibrating",
+      "dsm_generation",
+      "mesh_generation",
+      "completed"
+    ],
+    "runner_mesh": true,
+    "service_backends": [
+      "depth-anything-v2-small"
+    ],
+    "transport": {
+      "depth_scale": "relative",
+      "units": null,
+      "model": "depth-anything-v2-small",
+      "values": 4096,
+      "provenance_model": "depth-anything-v2-small"
+    }
+  },
+  "packaging_setup": {
+    "install_command": "python -m pip install -e \".[dav2]\"",
+    "isolated_venv": "C:\\Users\\Shivam\\AppData\\Local\\Temp\\opencode\\l3-full (fresh venv, this session)",
+    "install_result": "success",
+    "installed": {
+      "depthwizard": "0.1.0",
+      "torch": "2.14.0+cpu",
+      "torchvision": "0.29.0+cpu",
+      "opencv-python": "5.0.0.93"
+    },
+    "import_check": "torch, torchvision, cv2, DepthAnythingV2Backend all importable; provenance constants match",
+    "weights_tracked": false,
+    "checkpoints_ignored": true
+  },
+  "core_without_dav2": {
+    "isolated_venv": "C:\\Users\\Shivam\\AppData\\Local\\Temp\\opencode\\l3-core (pip install -e . + pytest only)",
+    "core_requires": [
+      "numpy",
+      "Pillow",
+      "pydantic",
+      "rasterio"
+    ],
+    "torch_importable": false,
+    "dav2_module_importable_without_torch": true,
+    "top_level_heavy_imports": 0,
+    "default_backend": "synthetic-depth",
+    "core_tests": "114 passed (test_import, contracts, ingestion, synthetic backend, calibration, pipeline)"
+  },
+  "offline_online": {
+    "network_calls_in_src": 0,
+    "inference_offline_capable": true,
+    "inference_inputs": "local checkpoint file + local upstream source on PYTHONPATH + local input image",
+    "provisioning_requires_network": [
+      "pip packages (torch/torchvision/opencv)",
+      "upstream git clone",
+      "HF checkpoint download"
+    ],
+    "empty_machine_offline_install_claimed": false
+  },
+  "known_limitations": [
+    "Timings are single-session CPU engineering observations, not benchmarks; no GPU measured (no CUDA device).",
+    "No field accuracy or labelled-terrain benchmark evidence; no geographic robustness evidence.",
+    "No packaged end-user installer validation; no long-duration stability run.",
+    "Brief text in task statements transposes checkpoint hash as ...229a8f70cc...; file-verified value ...229f8a70cc... retained.",
+    "Frontend vitest has pre-existing DOM-query failures unrelated to this task (zero frontend files touched)."
+  ]
+}
