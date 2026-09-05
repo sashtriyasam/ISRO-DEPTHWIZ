@@ -45,6 +45,17 @@ describe("detectHost", () => {
     expect(hostLabel(capable)).not.toContain("production");
     expect(hostLabel(capable)).not.toContain("model");
   });
+
+  it("detects Electron as desktop-capable host", () => {
+    const host = detectHost({
+      runtime: "electron",
+      processSpawning: true,
+      localFilesystem: true,
+    });
+    expect(host.runtime).toBe("electron");
+    expect(canSpawnBackend(host)).toBe(true);
+    expect(canStageInputFiles(host)).toBe(true);
+  });
 });
 
 describe("hostLabel", () => {
@@ -56,5 +67,11 @@ describe("hostLabel", () => {
 
   it("never claims production readiness", () => {
     expect(hostLabel(detectHost())).toBe("Desktop host");
+  });
+
+  it("labels Electron host", () => {
+    expect(hostLabel(detectHost({ runtime: "electron" }))).toBe(
+      "Desktop host (Electron)"
+    );
   });
 });

@@ -1,4 +1,4 @@
-export type HostRuntime = "browser" | "node";
+export type HostRuntime = "browser" | "node" | "electron";
 
 export interface HostCapabilities {
   runtime: HostRuntime;
@@ -15,17 +15,21 @@ export interface HostDetectionOverrides {
 function detectRuntime(): HostRuntime {
   if (
     typeof process !== "undefined" &&
-    typeof process.versions !== "undefined" &&
-    typeof process.versions.node !== "undefined"
+    typeof process.versions !== "undefined"
   ) {
-    return "node";
+    if (typeof process.versions.electron !== "undefined") {
+      return "electron";
+    }
+    if (typeof process.versions.node !== "undefined") {
+      return "node";
+    }
   }
   return "browser";
 }
 
 export function detectHost(overrides: HostDetectionOverrides = {}): HostCapabilities {
   const runtime = overrides.runtime ?? detectRuntime();
-  const desktop = runtime === "node";
+  const desktop = runtime === "node" || runtime === "electron";
   return {
     runtime,
     processSpawning: overrides.processSpawning ?? desktop,
@@ -36,6 +40,9 @@ export function detectHost(overrides: HostDetectionOverrides = {}): HostCapabili
 export function hostLabel(capabilities: HostCapabilities): string {
   if (capabilities.runtime === "browser") {
     return "Browser (desktop backend unavailable)";
+  }
+  if (capabilities.runtime === "electron") {
+    return "Desktop host (Electron)";
   }
   return "Desktop host";
 }
