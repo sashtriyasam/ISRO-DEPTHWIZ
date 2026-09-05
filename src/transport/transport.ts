@@ -1,4 +1,8 @@
-import { BackendBridge, OperationCancelledError, type BridgeExecutionHooks } from "../backend/bridge";
+import {
+  BackendBridge,
+  OperationCancelledError,
+  type BridgeExecutionHooks,
+} from "../backend/bridge";
 import type { ArtifactLoadOptions } from "../artifact/types";
 import { LocalServiceClient } from "../service/client";
 import { meshDescriptorOf } from "../service/processing";
@@ -12,7 +16,7 @@ import {
 export interface ArtifactTransport {
   fetchTerrain(
     request: TerrainFetchRequest,
-    options?: ArtifactLoadOptions
+    options?: ArtifactLoadOptions,
   ): Promise<TerrainBundle>;
 }
 
@@ -32,7 +36,7 @@ export class ServiceArtifactTransport implements ArtifactTransport {
 
   async fetchTerrain(
     request: TerrainFetchRequest,
-    options: ArtifactLoadOptions = {}
+    options: ArtifactLoadOptions = {},
   ): Promise<TerrainBundle> {
     const hooks: BridgeExecutionHooks = {
       signal: options.signal,
@@ -46,8 +50,9 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           inputPath: request.stagedPath,
           targetSemantics: request.targetSemantics,
           buildMesh: request.buildMesh ?? true,
+          backend: request.backend,
         },
-        hooks
+        hooks,
       );
       response = execution.response;
     } catch (err) {
@@ -59,7 +64,9 @@ export class ServiceArtifactTransport implements ArtifactTransport {
         code: response.failure?.code ?? "SERVICE_REJECTED",
         message: response.failure?.message ?? "Service execution failed",
         stage: null,
-        detail: response.failure?.stage ? `stage ${response.failure.stage}` : undefined,
+        detail: response.failure?.stage
+          ? `stage ${response.failure.stage}`
+          : undefined,
       });
     }
 
@@ -76,7 +83,8 @@ export class ServiceArtifactTransport implements ArtifactTransport {
       const terrain = await this.bridge.fetchTerrainPayload(
         request.stagedPath,
         hooks,
-        request.targetSemantics
+        request.targetSemantics,
+        request.backend,
       );
       return { response, terrain };
     } catch (err) {
@@ -99,7 +107,10 @@ export class ServiceArtifactTransport implements ArtifactTransport {
     }
   }
 
-  private controlFailure(err: unknown, aborted: boolean): ArtifactTransportFailure {
+  private controlFailure(
+    err: unknown,
+    aborted: boolean,
+  ): ArtifactTransportFailure {
     if (err instanceof OperationCancelledError || aborted) {
       return new ArtifactTransportFailure({
         code: "OPERATION_CANCELLED",

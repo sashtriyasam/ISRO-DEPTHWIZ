@@ -45,9 +45,11 @@ class ServiceRequest(BaseModel):
     contract_version: Literal["1"] = "1"
     input_path: str = Field(min_length=1)
     target_semantics: ElevationSemantics
-    backend: Literal["synthetic-depth"] = Field(
+    backend: str = Field(
         default="synthetic-depth",
-        description="Backend identifier (only supported value today).",
+        min_length=1,
+        description="Backend identifier. Unknown identifiers are rejected "
+        "loudly at execution (no silent fallback).",
     )
     preprocessor: Literal["identity"] = Field(
         default="identity",

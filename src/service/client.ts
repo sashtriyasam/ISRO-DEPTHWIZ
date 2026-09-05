@@ -1,6 +1,10 @@
 import type { BridgeExecutionHooks } from "../backend/bridge";
 import { OperationCancelledError } from "../backend/bridge";
-import { validateServiceCapabilities, validateServiceResponse, ServiceWireError } from "./validator";
+import {
+  validateServiceCapabilities,
+  validateServiceResponse,
+  ServiceWireError,
+} from "./validator";
 import { SubprocessServiceTransport, type ServiceTransport } from "./transport";
 import {
   SERVICE_CONTRACT_VERSION,
@@ -14,6 +18,7 @@ export interface ServiceExecutionArgs {
   inputPath: string;
   targetSemantics?: MetricTargetSemantics;
   buildMesh?: boolean;
+  backend?: string;
 }
 
 export interface ServiceExecution {
@@ -29,7 +34,9 @@ export class LocalServiceClient {
     this.transport = transport ?? new SubprocessServiceTransport();
   }
 
-  async capabilities(hooks: BridgeExecutionHooks = {}): Promise<ServiceCapabilitiesWire> {
+  async capabilities(
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<ServiceCapabilitiesWire> {
     if (this.capabilitiesCache) {
       return this.capabilitiesCache;
     }
@@ -41,26 +48,32 @@ export class LocalServiceClient {
         throw err;
       }
       throw new ServiceWireError(
-        `Service capabilities unavailable: ${err instanceof Error ? err.message : String(err)}`
+        `Service capabilities unavailable: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     if (typeof raw !== "object" || raw === null || !("capabilities" in raw)) {
-      throw new ServiceWireError("Malformed capabilities envelope from service");
+      throw new ServiceWireError(
+        "Malformed capabilities envelope from service",
+      );
     }
-    const parsed = validateServiceCapabilities((raw as { capabilities: unknown }).capabilities);
+    const parsed = validateServiceCapabilities(
+      (raw as { capabilities: unknown }).capabilities,
+    );
     this.capabilitiesCache = parsed;
     return parsed;
   }
 
   buildRequest(args: ServiceExecutionArgs): ServiceRequestWire {
     if (!args.inputPath || args.inputPath.trim().length === 0) {
-      throw new ServiceWireError("Service request needs a non-empty input path");
+      throw new ServiceWireError(
+        "Service request needs a non-empty input path",
+      );
     }
     return {
       contract_version: SERVICE_CONTRACT_VERSION,
       input_path: args.inputPath,
       target_semantics: args.targetSemantics ?? "absolute_elevation_dsm",
-      backend: "synthetic-depth",
+      backend: args.backend ?? "synthetic-depth",
       preprocessor: "identity",
       build_mesh: args.buildMesh ?? true,
       geotiff_path: null,
@@ -71,7 +84,7 @@ export class LocalServiceClient {
 
   async executeService(
     args: ServiceExecutionArgs,
-    hooks: BridgeExecutionHooks = {}
+    hooks: BridgeExecutionHooks = {},
   ): Promise<ServiceExecution> {
     const request = this.buildRequest(args);
     let raw: unknown;
@@ -82,13 +95,17 @@ export class LocalServiceClient {
         throw err;
       }
       throw new ServiceWireError(
-        `Service execution failed: ${err instanceof Error ? err.message : String(err)}`
+        `Service execution failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     if (typeof raw !== "object" || raw === null || !("response" in raw)) {
-      throw new ServiceWireError("Malformed service envelope: missing response");
+      throw new ServiceWireError(
+        "Malformed service envelope: missing response",
+      );
     }
-    const response = validateServiceResponse((raw as { response: unknown }).response);
+    const response = validateServiceResponse(
+      (raw as { response: unknown }).response,
+    );
     return { request, response };
   }
 }

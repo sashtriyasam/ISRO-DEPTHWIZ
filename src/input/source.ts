@@ -15,6 +15,7 @@ export interface FileInputSourceOptions {
   metadata: InputMetadata;
   transport?: ArtifactTransport;
   targetSemantics?: MetricTargetSemantics;
+  backend?: string;
 }
 
 function stableIdFor(metadata: InputMetadata): string {
@@ -37,12 +38,14 @@ export class FileInputSource implements ArtifactSource {
   private stagedPath: string;
   readonly metadata: InputMetadata;
   readonly targetSemantics: MetricTargetSemantics;
+  private backend?: string;
 
   constructor(options: FileInputSourceOptions) {
     this.stagedPath = options.stagedPath;
     this.metadata = options.metadata;
     this.transport = options.transport ?? new ServiceArtifactTransport();
     this.targetSemantics = options.targetSemantics ?? "absolute_elevation_dsm";
+    this.backend = options.backend;
     this.id = stableIdFor(options.metadata);
     this.label = options.metadata.filename;
   }
@@ -50,8 +53,12 @@ export class FileInputSource implements ArtifactSource {
   async load(loadOptions?: ArtifactLoadOptions): Promise<SceneArtifact> {
     try {
       const bundle = await this.transport.fetchTerrain(
-        { stagedPath: this.stagedPath, targetSemantics: this.targetSemantics },
-        loadOptions
+        {
+          stagedPath: this.stagedPath,
+          targetSemantics: this.targetSemantics,
+          backend: this.backend,
+        },
+        loadOptions,
       );
       return resolveTerrainArtifact(bundle);
     } catch (err) {

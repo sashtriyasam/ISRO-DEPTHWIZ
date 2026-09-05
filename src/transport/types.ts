@@ -1,12 +1,16 @@
 import type { BridgeError } from "../backend/bridge";
 import type { BackendTerrainProduct } from "../backend/types";
-import type { MetricTargetSemantics, ServiceResponseWire } from "../service/wireTypes";
+import type {
+  MetricTargetSemantics,
+  ServiceResponseWire,
+} from "../service/wireTypes";
 import type { ProcessingStage } from "../processing/types";
 
 export interface TerrainFetchRequest {
   stagedPath: string;
   targetSemantics?: MetricTargetSemantics;
   buildMesh?: boolean;
+  backend?: string;
 }
 
 export interface TerrainBundle {
@@ -48,7 +52,9 @@ export function toBridgeErrors(error: ArtifactTransportError): BridgeError[] {
   return [
     {
       code: error.code,
-      message: error.detail ? `${error.message} (${error.detail})` : error.message,
+      message: error.detail
+        ? `${error.message} (${error.detail})`
+        : error.message,
       phase: ADAPTER_PHASE_CODES.includes(error.code) ? "adapter" : "process",
     },
   ];

@@ -37,6 +37,7 @@ by the real ScaleOffsetCalibrator.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -77,14 +78,70 @@ except ImportError as exc:
 
 
 # ---------------------------------------------------------------------------
-# Deterministic dev calibration reference (mirrors the sanctioned backend
-# test helper tests/height/support.py::exact_calibration).
+# Backend selection (no silent fallback: unknown/unavailable backends fail
+# loudly with a JSON error and a non-zero exit).
 # ---------------------------------------------------------------------------
 
+SYNTHETIC_BACKEND_NAME = "synthetic-depth"
+DAV2_BACKEND_NAME = "depth-anything-v2-small"
+
 DEV_REFERENCE_ID = "synthetic-dev-ref"
-DEV_PREDICTED = (0.0, 1.0, 2.0, 3.0, 4.0)
-DEV_REFERENCE = (10.0, 12.5, 15.0, 17.5, 20.0)  # exact 2.5x + 10 mapping
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
+
+
+def resolve_backend(name: str, device: str | None = None) -> Any:
+    """Build the requested backend or raise a descriptive error.
+
+    The deterministic synthetic backend is always available. The real
+    DA-V2 backend requires its runtime (upstream source + torch) and an
+    external checkpoint (``DW_DAV2_CKPT`` or ``checkpoints/``); anything
+    missing raises instead of substituting synthetic output.
+    """
+    if name == SYNTHETIC_BACKEND_NAME:
+        return SyntheticDepthBackend()
+    if name == DAV2_BACKEND_NAME:
+        try:
+            from depthwizard.backends.depth_anything_v2 import DepthAnythingV2Backend
+        except ImportError as exc:
+            raise RuntimeError(
+                f"backend {name!r} unavailable: DA-V2 runtime not importable ({exc}). "
+                "Install the 'dav2' extra and provide the upstream source."
+            ) from exc
+        checkpoint = os.environ.get("DW_DAV2_CKPT")
+        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        try:
+            return DepthAnythingV2Backend(
+                checkpoint=Path(checkpoint) if checkpoint else None,
+                device=backend_device,  # type: ignore[arg-type]
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"backend {name!r} unavailable: {exc}. "
+                "Set DW_DAV2_CKPT to an external checkpoint; weights are never committed."
+            ) from exc
+    raise ValueError(
+        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME})"
+    )
+
+
+def fit_dev_calibration(depth: Any, target: ElevationSemantics) -> Any:
+    """Fit the sanctioned deterministic dev calibration to actual values.
+
+    Reference rule ``reference = 2.5 * predicted + 10`` (same as
+    ``tests/pipeline/support.py::SyntheticCalibrationProvider``) fitted
+    with the real ``ScaleOffsetCalibrator`` against the backend's actual
+    depth output. Never production data; the reference id says so.
+    """
+    predicted = depth.depth_values
+    samples = CalibrationSamples(
+        predicted_values=predicted,
+        reference_values=tuple(2.5 * value + 10.0 for value in predicted),
+        reference_id=DEV_REFERENCE_ID,
+        reference_units="meters",
+        target_semantics=target,
+        source_checksum=depth.provenance.input_checksum,
+    )
+    return ScaleOffsetCalibrator().calibrate(samples)
 
 
 def create_synthetic_png(width: int, height: int, path: Path) -> Path:
@@ -112,7 +169,9 @@ def emit_stage(name: str) -> None:
     print(f"STAGE {name}", file=sys.stderr, flush=True)
 
 
-def run_depth_only(width: int, height: int) -> dict[str, Any]:
+def run_depth_only(
+    width: int, height: int, backend_name: str = SYNTHETIC_BACKEND_NAME
+) -> dict[str, Any]:
     """Depth-only path: synthetic input → DepthResult."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -120,25 +179,34 @@ def run_depth_only(width: int, height: int) -> dict[str, Any]:
         create_synthetic_png(width, height, tmp_path)
         inspection = inspect_input(tmp_path)
         emit_stage("preprocessing")
-        result = SyntheticDepthBackend().estimate_depth(inspection)
+        result = resolve_backend(backend_name).estimate_depth(inspection)
         emit_stage("inference_running")
         return dict(result.model_dump())
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
-def run_terrain(width: int, height: int) -> dict[str, Any]:
+def run_terrain(
+    width: int, height: int, backend_name: str = SYNTHETIC_BACKEND_NAME
+) -> dict[str, Any]:
     """Full terrain chain on a generated synthetic input."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
     try:
         create_synthetic_png(width, height, tmp_path)
-        return run_terrain_on_path(tmp_path)
+        return run_terrain_on_path(tmp_path, backend_name=backend_name)
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
 METRIC_TARGETS = ("height_agl_ndsm", "absolute_elevation_dsm")
+
+_USAGE = (
+    "Usage: backend_bridge.py [--backend <name>] [--device <device>] "
+    "<input_path> | --synthetic <w> <h> "
+    "| --terrain <w> <h> | --terrain-file <path> [target] "
+    "| --inspect <path> | --capabilities"
+)
 
 
 def parse_target_semantics(value: str | None) -> ElevationSemantics:
@@ -159,23 +227,28 @@ def parse_target_semantics(value: str | None) -> ElevationSemantics:
     return target
 
 
-def run_terrain_on_path(input_path: Path, target_value: str | None = None) -> dict[str, Any]:
+def run_terrain_on_path(
+    input_path: Path,
+    target_value: str | None = None,
+    backend_name: str = SYNTHETIC_BACKEND_NAME,
+    device: str | None = None,
+) -> dict[str, Any]:
     """Full terrain chain on a real input file using only real backend subsystems."""
     target = parse_target_semantics(target_value)
     inspection = inspect_input(input_path)
     emit_stage("preprocessing")
-    depth = SyntheticDepthBackend().estimate_depth(inspection)
+    backend = resolve_backend(backend_name, device)
+    if hasattr(backend, "load"):
+        backend.load()
+    try:
+        depth = backend.estimate_depth(inspection)
+    finally:
+        close = getattr(backend, "close", None)
+        if callable(close):
+            close()
     emit_stage("inference_running")
 
-    samples = CalibrationSamples(
-        predicted_values=DEV_PREDICTED,
-        reference_values=DEV_REFERENCE,
-        reference_id=DEV_REFERENCE_ID,
-        reference_units="meters",
-        target_semantics=target,
-        source_checksum=inspection.handle.sha256,
-    )
-    calibration = ScaleOffsetCalibrator().calibrate(samples)
+    calibration = fit_dev_calibration(depth, target)
 
     emit_stage("calibrating")
     product = create_scientific_height_product(depth, calibration, target)
@@ -241,53 +314,77 @@ def run_inspect(input_path: Path) -> dict[str, Any]:
 def main() -> None:
     """Main entry point: invoke the actual backend and serialize the result."""
     if len(sys.argv) < 2:
-        print(
-            json.dumps(
-                {
-                    "error": (
-                        "Usage: backend_bridge.py <input_path> | --synthetic <w> <h> "
-                        "| --terrain <w> <h> | --terrain-file <path> "
-                        "| --inspect <path> | --capabilities"
-                    )
-                }
-            )
-        )
+        print(json.dumps({"error": _USAGE}))
         sys.exit(1)
 
+    args = sys.argv[1:]
+    backend_name = SYNTHETIC_BACKEND_NAME
+    device: str | None = None
+    positional: list[str] = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--backend" and i + 1 < len(args):
+            backend_name = args[i + 1]
+            i += 2
+        elif args[i] == "--device" and i + 1 < len(args):
+            device = args[i + 1]
+            i += 2
+        else:
+            positional.append(args[i])
+            i += 1
+
     try:
-        if sys.argv[1] == "--terrain":
-            width = int(sys.argv[2]) if len(sys.argv) > 2 else 8
-            height = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-            print(json.dumps(run_terrain(width, height), allow_nan=False))
-        elif sys.argv[1] == "--terrain-file":
-            if len(sys.argv) < 3:
+        if not positional:
+            print(json.dumps({"error": _USAGE}))
+            sys.exit(1)
+        if positional[0] == "--terrain":
+            width = int(positional[1]) if len(positional) > 1 else 8
+            height = int(positional[2]) if len(positional) > 2 else 8
+            print(
+                json.dumps(
+                    run_terrain(width, height, backend_name=backend_name),
+                    allow_nan=False,
+                )
+            )
+        elif positional[0] == "--terrain-file":
+            if len(positional) < 2:
                 print(json.dumps({"error": "Missing input path for --terrain-file"}))
                 sys.exit(1)
-            input_path = Path(sys.argv[2])
+            input_path = Path(positional[1])
             if not input_path.exists():
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
-            target_value = sys.argv[3] if len(sys.argv) > 3 else None
-            print(json.dumps(run_terrain_on_path(input_path, target_value), allow_nan=False))
-        elif sys.argv[1] == "--inspect":
-            if len(sys.argv) < 3:
+            target_value = positional[2] if len(positional) > 2 else None
+            print(
+                json.dumps(
+                    run_terrain_on_path(
+                        input_path,
+                        target_value,
+                        backend_name=backend_name,
+                        device=device,
+                    ),
+                    allow_nan=False,
+                )
+            )
+        elif positional[0] == "--inspect":
+            if len(positional) < 2:
                 print(json.dumps({"error": "Missing input path for --inspect"}))
                 sys.exit(1)
-            print(json.dumps(run_inspect(Path(sys.argv[2]))))
-        elif sys.argv[1] == "--capabilities":
+            print(json.dumps(run_inspect(Path(positional[1]))))
+        elif positional[0] == "--capabilities":
             print(json.dumps(run_capabilities()))
-        elif sys.argv[1] == "--synthetic":
-            width = int(sys.argv[2]) if len(sys.argv) > 2 else 8
-            height = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-            print(json.dumps(run_depth_only(width, height)))
+        elif positional[0] == "--synthetic":
+            width = int(positional[1]) if len(positional) > 1 else 8
+            height = int(positional[2]) if len(positional) > 2 else 8
+            print(json.dumps(run_depth_only(width, height, backend_name=backend_name)))
         else:
-            input_path = Path(sys.argv[1])
+            input_path = Path(positional[0])
             if not input_path.exists():
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
 
             inspection = inspect_input(input_path)
-            result = SyntheticDepthBackend().estimate_depth(inspection)
+            result = resolve_backend(backend_name).estimate_depth(inspection)
             print(json.dumps(result.model_dump()))
 
     except Exception as e:

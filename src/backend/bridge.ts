@@ -1,7 +1,15 @@
-import type { BackendDepthResult, BackendSpatialContext, BackendTerrainProduct } from "./types";
+import type {
+  BackendDepthResult,
+  BackendSpatialContext,
+  BackendTerrainProduct,
+} from "./types";
 import { adaptBackendResult, type AdapterResult } from "./adapter";
 import { adaptTerrainProduct } from "./meshAdapter";
-import { detectHost, type HostCapabilities, type HostDetectionOverrides } from "../host/host";
+import {
+  detectHost,
+  type HostCapabilities,
+  type HostDetectionOverrides,
+} from "../host/host";
 
 export interface BackendCapabilities {
   contractVersion: string;
@@ -127,6 +135,7 @@ export interface BackendBridgeOptions {
   bridgeScript?: string;
   timeoutMs?: number;
   host?: HostDetectionOverrides;
+  backend?: string;
 }
 
 export class OperationCancelledError extends Error {
@@ -141,56 +150,50 @@ export class BackendBridge {
   private bridgeScript: string;
   private timeoutMs: number;
   private host: HostCapabilities;
+  private backend: string;
 
   constructor(options: BackendBridgeOptions = {}) {
     this.pythonPath = options.pythonPath ?? "python";
     this.bridgeScript = options.bridgeScript ?? "scripts/backend_bridge.py";
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
     this.host = detectHost(options.host);
+    this.backend = options.backend ?? "synthetic-depth";
+  }
+
+  get backendName(): string {
+    return this.backend;
+  }
+
+  private backendArgs(override?: string): string[] {
+    return ["--backend", override ?? this.backend];
   }
 
   get hostCapabilities(): HostCapabilities {
     return this.host;
   }
 
-  async executeSynthetic(width = 8, height = 8, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
-    return this.execute(["--synthetic", String(width), String(height)], hooks);
-  }
-
-  async executeWithInput(inputPath: string, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
-    return this.execute([inputPath], hooks);
-  }
-
-  async executeTerrain(width = 8, height = 8, hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
-    const errors: BridgeError[] = [];
-    const warnings: string[] = [];
-
-    if (!this.host.processSpawning) {
-      errors.push({
-        code: "BROWSER_ENVIRONMENT",
-        message: "Backend bridge requires a desktop host with process spawning",
-        phase: "process",
-      });
-      return { success: false, errors, warnings };
-    }
-
-    if (hooks.signal?.aborted) {
-      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
-      return { success: false, errors, warnings };
-    }
-
-    try {
-      const jsonData = await this.spawnPython(["--terrain", String(width), String(height)], hooks);
-      return this.processTerrainData(jsonData, errors, warnings);
-    } catch (err) {
-      return this.toProcessError(err);
-    }
-  }
-
-  async executeTerrainFile(
-    stagedPath: string,
+  async executeSynthetic(
+    width = 8,
+    height = 8,
     hooks: BridgeExecutionHooks = {},
-    targetSemantics?: string
+  ): Promise<BridgeResult> {
+    return this.execute(
+      [...this.backendArgs(), "--synthetic", String(width), String(height)],
+      hooks,
+    );
+  }
+
+  async executeWithInput(
+    inputPath: string,
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<BridgeResult> {
+    return this.execute([...this.backendArgs(), inputPath], hooks);
+  }
+
+  async executeTerrain(
+    width = 8,
+    height = 8,
+    hooks: BridgeExecutionHooks = {},
   ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
@@ -205,15 +208,66 @@ export class BackendBridge {
     }
 
     if (hooks.signal?.aborted) {
-      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      errors.push({
+        code: "OPERATION_CANCELLED",
+        message: "Operation cancelled",
+        phase: "process",
+      });
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const jsonData = await this.spawnPython(
+        [...this.backendArgs(), "--terrain", String(width), String(height)],
+        hooks,
+      );
+      return this.processTerrainData(jsonData, errors, warnings);
+    } catch (err) {
+      return this.toProcessError(err);
+    }
+  }
+
+  async executeTerrainFile(
+    stagedPath: string,
+    hooks: BridgeExecutionHooks = {},
+    targetSemantics?: string,
+    backendOverride?: string,
+  ): Promise<BridgeResult> {
+    const errors: BridgeError[] = [];
+    const warnings: string[] = [];
+
+    if (!this.host.processSpawning) {
+      errors.push({
+        code: "BROWSER_ENVIRONMENT",
+        message: "Backend bridge requires a desktop host with process spawning",
+        phase: "process",
+      });
+      return { success: false, errors, warnings };
+    }
+
+    if (hooks.signal?.aborted) {
+      errors.push({
+        code: "OPERATION_CANCELLED",
+        message: "Operation cancelled",
+        phase: "process",
+      });
       return { success: false, errors, warnings };
     }
 
     try {
       const args =
         targetSemantics !== undefined
-          ? ["--terrain-file", stagedPath, targetSemantics]
-          : ["--terrain-file", stagedPath];
+          ? [
+              ...this.backendArgs(backendOverride),
+              "--terrain-file",
+              stagedPath,
+              targetSemantics,
+            ]
+          : [
+              ...this.backendArgs(backendOverride),
+              "--terrain-file",
+              stagedPath,
+            ];
       const jsonData = await this.spawnPython(args, hooks);
       return this.processTerrainData(jsonData, errors, warnings);
     } catch (err) {
@@ -224,15 +278,23 @@ export class BackendBridge {
   async fetchTerrainPayload(
     stagedPath: string,
     hooks: BridgeExecutionHooks = {},
-    targetSemantics?: string
+    targetSemantics?: string,
+    backendOverride?: string,
   ): Promise<BackendTerrainProduct> {
     if (!this.host.processSpawning) {
-      throw new Error("Backend bridge requires a desktop host with process spawning");
+      throw new Error(
+        "Backend bridge requires a desktop host with process spawning",
+      );
     }
     const args =
       targetSemantics !== undefined
-        ? ["--terrain-file", stagedPath, targetSemantics]
-        : ["--terrain-file", stagedPath];
+        ? [
+            ...this.backendArgs(backendOverride),
+            "--terrain-file",
+            stagedPath,
+            targetSemantics,
+          ]
+        : [...this.backendArgs(backendOverride), "--terrain-file", stagedPath];
     const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
   }
@@ -240,7 +302,7 @@ export class BackendBridge {
   private processTerrainData(
     jsonData: unknown,
     errors: BridgeError[],
-    warnings: string[]
+    warnings: string[],
   ): BridgeResult {
     let validated: BackendTerrainProduct;
     try {
@@ -248,7 +310,8 @@ export class BackendBridge {
     } catch (err) {
       errors.push({
         code: "TRANSPORT_INVALID",
-        message: err instanceof Error ? err.message : "Invalid terrain transport data",
+        message:
+          err instanceof Error ? err.message : "Invalid terrain transport data",
         phase: "transport",
       });
       return { success: false, errors, warnings };
@@ -261,12 +324,19 @@ export class BackendBridge {
       return { success: false, errors, warnings };
     }
     warnings.push(...adapterResult.warnings);
-    return { success: true, artifact: adapterResult.artifact, errors: [], warnings };
+    return {
+      success: true,
+      artifact: adapterResult.artifact,
+      errors: [],
+      warnings,
+    };
   }
 
   async getCapabilities(): Promise<BackendCapabilities> {
     if (!this.host.processSpawning) {
-      throw new Error("Backend bridge requires a desktop host with process spawning");
+      throw new Error(
+        "Backend bridge requires a desktop host with process spawning",
+      );
     }
     const data = (await this.spawnPython(["--capabilities"])) as {
       contract_version?: unknown;
@@ -281,38 +351,58 @@ export class BackendBridge {
     ) {
       throw new Error("Malformed capabilities response from backend");
     }
-    return { contractVersion: data.contract_version, supportedSuffixes: data.supported_suffixes };
+    return {
+      contractVersion: data.contract_version,
+      supportedSuffixes: data.supported_suffixes,
+    };
   }
 
-  async inspectInputFile(stagedPath: string, hooks: BridgeExecutionHooks = {}): Promise<InspectInputResult> {
+  async inspectInputFile(
+    stagedPath: string,
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<InspectInputResult> {
     if (!this.host.processSpawning) {
-      throw new Error("Backend bridge requires a desktop host with process spawning");
+      throw new Error(
+        "Backend bridge requires a desktop host with process spawning",
+      );
     }
     const data = (await this.spawnPython(["--inspect", stagedPath], hooks)) as {
       valid?: unknown;
       inspection?: unknown;
       failure?: unknown;
     };
-    if (typeof data !== "object" || data === null || typeof data.valid !== "boolean") {
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      typeof data.valid !== "boolean"
+    ) {
       throw new Error("Malformed inspection response from backend");
     }
     if (!data.valid) {
-      const failure = data.failure as { code?: unknown; message?: unknown } | undefined;
+      const failure = data.failure as
+        { code?: unknown; message?: unknown } | undefined;
       return {
         valid: false,
         error: {
-          code: typeof failure?.code === "string" ? failure.code : "invalid_input",
-          message: typeof failure?.message === "string" ? failure.message : "Input rejected by backend",
+          code:
+            typeof failure?.code === "string" ? failure.code : "invalid_input",
+          message:
+            typeof failure?.message === "string"
+              ? failure.message
+              : "Input rejected by backend",
         },
       };
     }
     return { valid: true, inspection: data.inspection as BackendInspection };
   }
 
-  async stageInputBytes(bytes: Uint8Array, filename: string): Promise<StagedInput> {
+  async stageInputBytes(
+    bytes: Uint8Array,
+    filename: string,
+  ): Promise<StagedInput> {
     if (!this.host.localFilesystem) {
       throw new Error(
-        "File staging requires a host filesystem; browser-only contexts cannot stage input files"
+        "File staging requires a host filesystem; browser-only contexts cannot stage input files",
       );
     }
     let fs: typeof import("fs/promises");
@@ -324,7 +414,7 @@ export class BackendBridge {
       path = await import("path");
     } catch {
       throw new Error(
-        "File staging requires a host filesystem; this host cannot stage input files"
+        "File staging requires a host filesystem; this host cannot stage input files",
       );
     }
     const base = filename.split(/[\\/]/).pop() ?? "";
@@ -340,7 +430,10 @@ export class BackendBridge {
     };
   }
 
-  private async execute(args: string[], hooks: BridgeExecutionHooks = {}): Promise<BridgeResult> {
+  private async execute(
+    args: string[],
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
 
@@ -354,7 +447,11 @@ export class BackendBridge {
     }
 
     if (hooks.signal?.aborted) {
-      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      errors.push({
+        code: "OPERATION_CANCELLED",
+        message: "Operation cancelled",
+        phase: "process",
+      });
       return { success: false, errors, warnings };
     }
 
@@ -371,7 +468,11 @@ export class BackendBridge {
     const warnings: string[] = [];
 
     if (err instanceof OperationCancelledError) {
-      errors.push({ code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" });
+      errors.push({
+        code: "OPERATION_CANCELLED",
+        message: "Operation cancelled",
+        phase: "process",
+      });
       return { success: false, errors, warnings };
     }
 
@@ -400,7 +501,10 @@ export class BackendBridge {
     return { success: false, errors, warnings };
   }
 
-  private async spawnPython(args: string[], hooks: BridgeExecutionHooks = {}): Promise<unknown> {
+  private async spawnPython(
+    args: string[],
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<unknown> {
     const { spawn } = await import("child_process");
 
     return new Promise((resolve, reject) => {
@@ -463,19 +567,35 @@ export class BackendBridge {
         if (killed) return;
 
         if (code !== 0) {
-          settle(() => reject(new Error(`Python process exited with code ${code}: ${stderr}`)));
+          settle(() =>
+            reject(
+              new Error(`Python process exited with code ${code}: ${stderr}`),
+            ),
+          );
           return;
         }
 
         try {
           const data = JSON.parse(stdout);
           if (data && typeof data === "object" && "error" in data) {
-            settle(() => reject(new Error(`Backend error: ${(data as Record<string, unknown>).error}`)));
+            settle(() =>
+              reject(
+                new Error(
+                  `Backend error: ${(data as Record<string, unknown>).error}`,
+                ),
+              ),
+            );
             return;
           }
           settle(() => resolve(data));
         } catch {
-          settle(() => reject(new Error(`Failed to parse backend output: ${stdout.slice(0, 200)}`)));
+          settle(() =>
+            reject(
+              new Error(
+                `Failed to parse backend output: ${stdout.slice(0, 200)}`,
+              ),
+            ),
+          );
         }
       });
 
@@ -490,7 +610,7 @@ export class BackendBridge {
   private processTransportData(
     data: unknown,
     errors: BridgeError[],
-    warnings: string[]
+    warnings: string[],
   ): BridgeResult {
     let validated: BackendDepthResult;
 
@@ -528,5 +648,3 @@ export class BackendBridge {
     };
   }
 }
-
-
