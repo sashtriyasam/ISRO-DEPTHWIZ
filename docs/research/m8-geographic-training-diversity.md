@@ -155,7 +155,7 @@ The negative generalization gap (-3.36 m) means cross-city performance is now **
 
 5. **Class imbalance** — PHL has very few tall pixels; NYC 30+m bin has only 636 pixels.
 
-6. **Protocol difference** — M5 primary val uses per-image affine; M6/M8 use direct meters. Not apples-to-apples for DC comparison.
+6. **Protocol note (corrected in M10)** — M5/M8 primary validation uses direct metric prediction in meters under the adaptation evaluation protocol; M6/M8 geographic evaluation also uses direct meters, so the M5-vs-M8 primary comparison is valid. Per-image affine alignment belongs to the frozen relative-depth M3 research protocol only.
 
 ---
 

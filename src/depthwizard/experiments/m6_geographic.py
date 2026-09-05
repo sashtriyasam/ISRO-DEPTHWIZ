@@ -100,19 +100,28 @@ def run_geographic_validation(
     seed: int = 0,
     splits: Optional[list[str]] = None,
     make_visuals: bool = False,
+    target_mu: Optional[float] = None,
+    target_sigma: Optional[float] = None,
 ) -> dict[str, Any]:
     manifest = Path(manifest)
     out_dir = Path(output)
     out_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
 
-    # Load frozen M5 checkpoint
+    # Load frozen adapted checkpoint (M5/M8/M9/M10 head)
     backend = DepthAnythingV2Backend(checkpoint=base_checkpoint, device=device, input_size=input_size, seed=seed)
     backend.load()
     model = AdaptedDepthModel.from_backend(backend, input_size=input_size, seed=seed)
-    # Load only the head state from M5 best checkpoint
+    # Load only the head state from adaptation best checkpoint
     payload = torch.load(str(adapt_checkpoint), map_location="cpu", weights_only=False)
     model.head.load_state_dict(payload["head_state"])
+    # Optional z-score target scale (e.g. M10): inverse-transform predictions to
+    # meters using TRAIN-derived statistics. Default raw preserves legacy behavior.
+    if target_mu is not None or target_sigma is not None:
+        if target_mu is None or target_sigma is None:
+            raise ValueError("Both target_mu and target_sigma are required for z-score geographic eval")
+        from depthwizard.adapt.loss import TargetScale
+        model.target_scale = TargetScale(mode="zscore", mu=float(target_mu), sigma=float(target_sigma))
     model.assert_frozen()
     params = model.parameter_report()
 
@@ -238,11 +247,15 @@ def run_geographic_validation(
         "input_size": input_size,
         "seed": seed,
         "splits": splits,
+        "target_mu": target_mu,
+        "target_sigma": target_sigma,
+        "target_mode": "zscore" if target_mu is not None else "raw",
     }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (out_dir / "results.json").write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (out_dir / "README.md").write_text(
         f"# M6 Geographic Validation\n\n"
-        f"Frozen M5 adapted DA-V2-Small evaluated on {len(cities)} cities.\n"
+        f"Frozen adapted DA-V2-Small evaluated on {len(cities)} cities.\n"
+        f"- Target mode: {'zscore (train-only mu/sigma)' if target_mu is not None else 'raw'}\n"
         f"- Cities: {', '.join(cities)}\n"
         f"- Macro MAE: {macro_mae:.4f} m\n"
         f"- Micro MAE: {micro_mae:.4f} m\n"
@@ -321,6 +334,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--splits", nargs="*", default=["val", "test"])
     ap.add_argument("--visuals", action="store_true")
+    ap.add_argument("--target-mu", type=float, default=None, help="Train-only z-score mu (optional; M10)")
+    ap.add_argument("--target-sigma", type=float, default=None, help="Train-only z-score sigma (optional; M10)")
     args = ap.parse_args()
 
     run_geographic_validation(
@@ -333,6 +348,8 @@ def main() -> None:
         seed=args.seed,
         splits=args.splits,
         make_visuals=args.visuals,
+        target_mu=args.target_mu,
+        target_sigma=args.target_sigma,
     )
 
 
