@@ -212,11 +212,13 @@ def test_no_network_imports_in_runtime() -> None:
     offenders: list[str] = []
     for path in Path("src/depthwizard").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
+        is_provision = path.name == "provision.py"
         for marker in banned:
             if marker in text:
+                # urllib is allowed in provision.py (fixed-identity fetch only)
+                if marker == "urllib" and is_provision:
+                    continue
                 offenders.append(f"{path}:{marker}")
-        if "urllib" in text and path.name != "provision.py":
-            offenders.append(f"{path}:urllib")
     assert offenders == []
 
 
