@@ -1,0 +1,32 @@
+# DepthWizard CODEOWNERS
+
+# These users are requested for review when changes touch matching paths.
+# Usernames must exist on GitHub. Do not invent usernames.
+# If actual usernames differ, update this file.
+
+# Core Python scientific engine (Shivam)
+src/depthwizard/ @sashtriyasam
+
+# ML backends + research (Shravan)
+src/depthwizard/backends/ @jayesh-soni
+
+# Desktop application (Aryan)
+src/ @aryanchodnekar
+
+# Integration contracts + transport (Shared - Shivam primary)
+src/depthwizard/integration/ @sashtriyasam
+
+# Tests follow source ownership
+tests/backends/ @jayesh-soni
+tests/ @sashtriyasam @aryanchodnekar
+
+# Documentation
+docs/ @sashtriyasam @aryanchodnekar @jayesh-soni
+
+# GitHub Actions / CI
+.github/workflows/ @sashtriyasam
+
+# Project governance
+docs/project/ @sashtriyasam
+AGENTS.md @sashtriyasam
+.opencode/ @sashtriyasam

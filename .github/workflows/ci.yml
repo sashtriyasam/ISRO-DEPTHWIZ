@@ -1,0 +1,118 @@
+# DepthWizard CI — Baseline Checks
+#
+# Runs on every push and PR to main.
+# Heavy-model tests (GAMUS, checkpoints) are opt-in via environment variables.
+# Never downloads large assets or requires CUDA for baseline checks.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: python -m pytest
+
+      - name: Ruff check
+        run: python -m ruff check src tests
+
+      - name: Ruff format check
+        run: python -m ruff format --check src tests
+
+      - name: Mypy
+        run: python -m mypy src tests
+
+  frontend:
+    name: Frontend Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  # Opt-in heavy-model validation (triggered manually or via label)
+  heavy-model:
+    name: Heavy-Model Validation (Opt-In)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'heavy-model')
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ML dependencies
+        run: |
+          pip install -U pip
+          pip install -e ".[dev,dav2]"
+
+      - name: Run heavy-model tests
+        env:
+          DEPTHWIZARD_HEAVY_MODEL: "1"
+        run: |
+          python -m pytest tests/ -k "dav2 or gamus or benchmark" -v --tb=short
+        continue-on-error: true
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heavy-model-results
+          path: |
+            benchmarks/
+            evidence/
+          retention-days: 7

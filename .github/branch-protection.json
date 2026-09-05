@@ -1,0 +1,79 @@
+# DepthWizard — Branch Protection Configuration
+#
+# This file documents the desired branch protection rules for the repository.
+# Apply via GitHub UI (Settings → Branches → Branch protection rules) or
+# via `gh api` when admin permissions are available.
+#
+# Target branch: main
+
+ruleset:
+  name: "Protect main"
+  target: "branch"
+  conditions:
+    ref_name:
+      include: ["refs/heads/main"]
+  rules:
+    # No force pushes
+    - type: "non_fast_forward"
+      parameters: {}
+
+    # No branch deletion
+    - type: "deletion"
+      parameters: {}
+
+    # Require pull request
+    - type: "pull_request"
+      parameters:
+        required_approving_review_count: 1
+        dismiss_stale_reviews_on_push: true
+        require_code_owner_review: true
+        required_review_thread_resolution: true
+        allowed_merge_methods: ["merge", "squash"]
+        allow_auto_merge: false
+
+    # Required status checks (must pass before merge)
+    - type: "required_status_checks"
+      parameters:
+        required_checks:
+          - context: "Python Checks"
+          - context: "Frontend Checks"
+        strict_required_status_checks_policy: true
+
+    # Conversation resolution required
+    - type: "required_conversation_resolution"
+      parameters: {}
+
+# Alternative: Classic branch protection (if rulesets not available)
+classic_branch_protection:
+  branch: "main"
+  required_pull_request_reviews:
+    required_approving_review_count: 1
+    dismiss_stale_reviews: true
+    require_code_owner_reviews: true
+    required_review_thread_resolution: true
+  required_status_checks:
+    strict: true
+    contexts:
+      - "Python Checks"
+      - "Frontend Checks"
+  enforce_admins: false
+  restrictions:
+    users: []
+    teams: []
+  required_linear_history: false
+  allow_force_pushes: false
+  allow_deletions: false
+  required_conversation_resolution: true
+  allow_auto_merge: false
+  required_merge_methods: ["merge", "squash"]
+
+# Required status checks (must match CI workflow job names)
+required_checks:
+  - "Python Checks"
+  - "Frontend Checks"
+
+# Notes:
+# - The CI workflow defines two jobs: "Python Checks" and "Frontend Checks"
+# - Heavy-model validation is opt-in and NOT required for merge
+# - Ruleset is preferred over classic protection (more powerful)
+# - Apply via: gh api repos/sashtriyasam/ISRO-DEPTHWIZ/rulesets --input ruleset.json
