@@ -8,7 +8,7 @@ reprojection, DSM/mesh generation, services or desktop integration.
 ```python
 from depthwizard.ingestion import InputHandle, InputInspection, inspect_input
 
-inspection = inspect_input("scene.tif")   # -> InputInspection (frozen)
+inspection = inspect_input("scene.tif")  # -> InputInspection (frozen)
 handle = InputHandle.from_path("photo.jpg")  # identity record only
 ```
 

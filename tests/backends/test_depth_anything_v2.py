@@ -8,6 +8,7 @@ are gated behind actual dependency availability.
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ import pytest
 from depthwizard.backends.depth_anything_v2 import (
     CHECKPOINT_FILE,
     CHECKPOINT_HF_ID,
-    CHECKPOINT_SHA,
+    CHECKPOINT_SHA256,
     DEFAULT_INPUT_SIZE,
     ENCODER_CONFIG,
     MODEL_NAME,
@@ -32,7 +33,7 @@ from depthwizard.contracts.semantics import (
     ElevationSemantics,
     GeoreferencingLevel,
 )
-from depthwizard.contracts.spatial import SpatialKind
+from depthwizard.contracts.spatial import SpatialContext, SpatialKind
 from depthwizard.errors import InvalidInputError, ModelInferenceError
 from depthwizard.ingestion import inspect_input
 from depthwizard.version import __version__
@@ -589,7 +590,7 @@ class TestConfigDict:
         assert cfg["backend"] == "depth-anything-v2-small"
         assert cfg["model"] == MODEL_NAME
         assert cfg["encoder"] == "vits"
-        assert cfg["checkpoint_sha"] == CHECKPOINT_SHA
+        assert cfg["checkpoint_sha256"] == CHECKPOINT_SHA256
         assert cfg["upstream_revision"] == UPSTREAM_REVISION
         assert cfg["device"] == "cpu"
 
@@ -654,8 +655,10 @@ class TestMetadataConstants:
     def test_upstream_revision(self) -> None:
         assert UPSTREAM_REVISION == "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 
-    def test_checkpoint_sha(self) -> None:
-        assert CHECKPOINT_SHA == "03876f8651c73a60fe4c2c48294e09fcb6838fcf"
+    def test_checkpoint_sha256(self) -> None:
+        assert (
+            CHECKPOINT_SHA256 == "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378"
+        )
 
     def test_encoder_config(self) -> None:
         assert ENCODER_CONFIG["encoder"] == "vits"
@@ -664,3 +667,131 @@ class TestMetadataConstants:
 
     def test_default_input_size(self) -> None:
         assert DEFAULT_INPUT_SIZE == 518
+
+    def test_provenance_distinction(self) -> None:
+        """Repository revision (40 hex) and checkpoint SHA-256 (64 hex) are distinct."""
+        assert len(UPSTREAM_REVISION) == 40, "UPSTREAM_REVISION is a git commit hash"
+        assert len(CHECKPOINT_SHA256) == 64, "CHECKPOINT_SHA256 is a file SHA-256"
+        assert UPSTREAM_REVISION != CHECKPOINT_SHA256, "These must be different values"
+
+
+# ---------------------------------------------------------------------------
+# Dependency availability
+# ---------------------------------------------------------------------------
+
+
+class TestDependencyAvailability:
+    """Verify optional dependency behavior."""
+
+    def test_import_without_torch(self) -> None:
+        """depthwizard imports cleanly even when torch is mocked away."""
+        import importlib
+        import sys
+
+        real = sys.modules.get("torch")
+        sys.modules["torch"] = None  # type: ignore[assignment]
+        try:
+            importlib.reload(importlib.import_module("depthwizard.backends.depth_anything_v2"))
+        except Exception:
+            pass
+        finally:
+            if real is not None:
+                sys.modules["torch"] = real
+            else:
+                sys.modules.pop("torch", None)
+
+    def test_torch_available(self) -> None:
+        """torch is available in the test environment."""
+        import torch
+
+        assert torch.__version__
+
+
+# ---------------------------------------------------------------------------
+# Conditional real-model smoke test
+# ---------------------------------------------------------------------------
+
+_REAL_SMOKE_CKPT = os.environ.get("DW_DAV2_CKPT", "")
+_REAL_SMOKE_ENABLED = os.environ.get("DW_DAV2_REAL_SMOKE", "0") == "1"
+_SKIP_REASON = (
+    "Real model smoke skipped: set DW_DAV2_REAL_SMOKE=1 and DW_DAV2_CKPT=<path> to enable"
+)
+
+
+@pytest.mark.skipif(not _REAL_SMOKE_ENABLED or not _REAL_SMOKE_CKPT, reason=_SKIP_REASON)
+class TestRealModelSmoke:
+    """Genuine DA-V2 inference using real checkpoint. Only runs when explicitly enabled."""
+
+    def test_real_inference(self, tmp_path: Path) -> None:
+        import hashlib
+        import time
+
+        import cv2
+        import numpy as np
+
+        from depthwizard.backends.depth_anything_v2 import (
+            CHECKPOINT_SHA256,
+            DepthAnythingV2Backend,
+        )
+        from depthwizard.contracts.semantics import DepthScale
+        from depthwizard.ingestion.formats import DetectedFormat
+        from depthwizard.ingestion.models import InputHandle, InputInspection
+
+        # Verify checkpoint integrity
+        ckpt_path = Path(_REAL_SMOKE_CKPT)
+        assert ckpt_path.is_file(), f"Checkpoint not found: {ckpt_path}"
+        sha256 = hashlib.sha256()
+        with open(ckpt_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256.update(chunk)
+        assert sha256.hexdigest() == CHECKPOINT_SHA256, (
+            f"Checkpoint SHA-256 mismatch: {sha256.hexdigest()} != {CHECKPOINT_SHA256}"
+        )
+
+        # Create test image
+        img_path = tmp_path / "test.png"
+        img = np.random.randint(10, 250, (64, 64, 3), dtype=np.uint8)
+        cv2.imwrite(str(img_path), img)
+
+        # Run inference
+        backend = DepthAnythingV2Backend(checkpoint=ckpt_path, device="cpu")
+        t0 = time.perf_counter()
+        backend.load()
+        load_time = time.perf_counter() - t0
+
+        handle = InputHandle.from_path(str(img_path))
+        inspection = InputInspection(
+            handle=handle,
+            detected_format=DetectedFormat.PNG,
+            width=64,
+            height=64,
+            band_count=3,
+            dtype="uint8",
+            georeferencing=GeoreferencingLevel.NON_GEOREFERENCED,
+            spatial=SpatialContext(kind=SpatialKind.NOT_APPLICABLE),
+        )
+
+        t0 = time.perf_counter()
+        result = backend.estimate_depth(inspection)
+        infer_time = time.perf_counter() - t0
+
+        # Verify output
+        assert len(result.depth_values) == 64 * 64
+        assert all(math.isfinite(v) for v in result.depth_values)
+        assert result.depth_scale == DepthScale.RELATIVE
+        assert result.units is None
+        assert result.valid_mask is None
+        assert result.confidence_values is None
+        assert result.model_name == "depth-anything-v2-small"
+
+        # Verify determinism
+        result2 = backend.estimate_depth(inspection)
+        assert result.depth_values == result2.depth_values
+
+        backend.close()
+
+        # Record diagnostics (not benchmarks)
+        finite = all(math.isfinite(v) for v in result.depth_values)
+        print(f"\nReal DA-V2 smoke: load={load_time:.3f}s, infer={infer_time:.3f}s")
+        print(f"  values={len(result.depth_values)}, finite={finite}")
+        print(f"  min={min(result.depth_values):.4f}, max={max(result.depth_values):.4f}")
