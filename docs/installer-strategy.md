@@ -1,77 +1,86 @@
 # Installer Strategy
 
-Generated: 2026-09-04
+Generated: 2026-09-04 | Updated: 2026-09-05
 
-## Selected Strategy
+## Packaging Tool
 
-**Electron Builder (NSIS installer) — Windows first.**
+**electron-builder 26.0.12** — the single maintained packager for this project.
 
-## Distribution Model
+## Build Configuration
 
-| Aspect | Decision |
-|--------|----------|
-| Framework | Electron Builder |
+| Aspect | Value |
+|--------|-------|
+| App ID | `com.depthwizard.desktop` |
+| Product Name | `DepthWizard` |
 | Format | NSIS installer (Windows) |
-| Package manager | npm (Node.js) |
-| Managed runtime | Bundled Python via `python-embeddable` or `pyinstaller`-bundled service |
-| Checkpoint | External provision (first-run download or manual placement) |
+| Output | `release/` directory |
+| Asar | Enabled, with `scripts/` and `checkpoints/` unpacked |
 
 ## Windows Behavior
 
 | Aspect | Implementation |
 |--------|---------------|
 | Executable | `DepthWizard.exe` |
+| Install directory | User-selectable (default: `%LOCALAPPDATA%/DepthWizard`) |
 | App data | `%APPDATA%/DepthWizard/` |
 | Temp directory | `%TEMP%/DepthWizard/` |
-| Runtime directory | `%LOCALAPPDATA%/DepthWizard/python/` |
+| Runtime directory | `<install>/resources/python/` |
 | Checkpoint location | `%APPDATA%/DepthWizard/checkpoints/` |
 | Logs | `%APPDATA%/DepthWizard/logs/` |
 | Uninstall | Windows Programs & Features + NSIS uninstaller |
+| Desktop shortcut | Created |
+| Start menu shortcut | Created |
+
+## NSIS Configuration
+
+| Setting | Value |
+|---------|-------|
+| One-click | `false` (allows custom install directory) |
+| Change install directory | Allowed |
+| Desktop shortcut | Created |
+| Start menu shortcut | Created |
+| Uninstall display name | `DepthWizard` |
 
 ## Managed Runtime Strategy
 
 The packaged product bundles a Python runtime so users don't need Python installed.
 
-### Options Evaluated
+### Resolution Order
 
-| Option | Pros | Cons |
-|--------|------|------|
-| `python-embeddable` | Official, small, no install | Windows-only, limited pip |
-| `PyInstaller` single-file | Cross-platform, self-contained | Large binary, slow startup |
-| `conda-pack` | Full environment | Very large |
-| User-provided Python | No bundling | Requires user setup |
+1. Explicit managed path (`<install>/resources/python/python.exe`)
+2. `DEPTHWIZARD_PYTHON` environment variable
+3. `python` on PATH (development fallback)
 
-### Selected: python-embeddable + pip install
+### Packaged Layout
 
-Bundle `python-embeddable` for Windows. On first run:
-1. Extract embedded Python to app data directory
-2. Run `python -m pip install -e .` to install depthwizard
-3. Verify with `runtime_check`
-
-This gives a self-contained product without requiring user Python installation.
+```
+DepthWizard-win32-x64/
+  DepthWizard.exe
+  resources/
+    app.asar
+    scripts/
+      depthwiz_service.py
+      backend_bridge.py
+    checkpoints/
+      depth_anything_v2_vits.pth
+```
 
 ## Checkpoint Distribution
 
 | Aspect | Decision |
 |--------|----------|
-| Strategy | First-run download from HuggingFace |
+| Strategy | External provision (not bundled in installer) |
+| Default location | `%APPDATA%/DepthWizard/checkpoints/` |
 | Verification | SHA-256 hash matching |
-| Offline | Manual placement in checkpoints directory |
-| Size | ~100MB (DA-V2 Small weights) |
+| Offline | Manual placement |
+| Size | ~99MB (DA-V2 Small weights) |
 
 ### First-Run Flow
 
 1. Native host checks `%APPDATA%/DepthWizard/checkpoints/depth_anything_v2_vits.pth`
-2. If missing → download from `https://huggingface.co/depth-anything/Depth-Anything-V2-Small/resolve/main/depth_anything_v2_vits.pth`
+2. If missing → prompt user or download from HuggingFace
 3. Verify SHA-256 matches `715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378`
-4. If hash mismatch → delete and retry or report error
-
-### Offline Support
-
-For machines without internet:
-1. User manually downloads checkpoint file
-2. Places it in `%APPDATA%/DepthWizard/checkpoints/`
-3. Native host detects existing file, verifies hash, proceeds
+4. If hash mismatch → delete and report error
 
 ## Upgrade Behavior
 
@@ -82,26 +91,26 @@ For machines without internet:
 
 ## Uninstall Behavior
 
-- NSIS uninstaller removes:
-  - Application files
-  - Python runtime
-  - Checkpoint files
-  - App data (with user confirmation)
-  - Start menu shortcuts
+### Removed
 
-## Application Data Layout
+- Application binaries
+- Start menu shortcuts
+- Desktop shortcuts
+- Bundled resources (scripts, runtime)
 
-```
-%APPDATA%/DepthWizard/
-  checkpoints/
-    depth_anything_v2_vits.pth
-  logs/
-    depthwizard.log
-  config.json
-```
+### Preserved (with user confirmation)
 
-%LOCALAPPDATA%/DepthWizard/
-  python/
-    python.exe
-    Lib/site-packages/depthwizard/
-```
+- User model/runtime cache (`%APPDATA%/DepthWizard/`)
+- Checkpoint files
+- Application data
+- Logs
+
+## License
+
+| Component | License |
+|-----------|---------|
+| Electron | MIT |
+| electron-builder | MIT |
+| DepthWizard | Project license |
+
+No unlicensed binaries.

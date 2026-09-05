@@ -1,88 +1,146 @@
 # Native Host Technology Decision
 
-Generated: 2026-09-04
+Generated: 2026-09-04 | Updated: 2026-09-05
 
-## Candidates
+## Technology
 
-| Criterion | Tauri | Electron | Weight |
-|-----------|-------|----------|--------|
-| 1. Current repo compatibility | ❌ No Rust/Cargo installed | ✅ Node.js v24.14.0 available | High |
-| 2. Vite/React compatibility | ✅ Good (tauri-plugin-vite) | ✅ Excellent (electron-vite) | High |
-| 3. Windows support | ✅ Excellent | ✅ Excellent | High |
-| 4. Python subprocess management | ✅ Rust std::process | ✅ Node child_process | High |
-| 5. Filesystem access | ✅ Rust fs | ✅ Node fs | Medium |
-| 6. Installer support | ✅ tauri-bundler (WiX/NSIS) | ✅ electron-builder (NSIS/WiX) | Medium |
-| 7. Security model | ✅ Rust IPC, capabilities | ⚠️ Node IPC, contextIsolation | Medium |
-| 8. Runtime footprint | ✅ ~5-10MB | ⚠️ ~150-200MB (Chromium) | Low |
-| 9. Build complexity | ⚠️ Requires Rust toolchain | ✅ Node-only | High |
-| 10. CI/build reproducibility | ⚠️ Rust version pinning | ✅ Node version pinning | Medium |
-| 11. Long-term maintenance | ✅ Active, memory-safe | ✅ Active, large ecosystem | Low |
-| 12. License | ✅ MIT/Apache-2.0 | ✅ MIT | Low |
-| 13. Team familiarity (repo evidence) | ❌ No Rust in repo | ✅ Node.js throughout | High |
-| 14. Dependency footprint | ✅ Minimal native deps | ⚠️ Bundles Chromium | Medium |
+**Electron 44.2.0** (stable, released Sep 3, 2026)
 
-## Decision
+- Chromium: 152.0.7977.76
+- Node.js: 24.20.0
+- License: MIT
 
-**Electron** is selected.
+## Architecture
 
-### Evidence-Based Reasons
-
-1. **No Rust toolchain exists** on this system. Installing Rust globally just to make Tauri selectable violates the principle of smallest mature technology.
-
-2. **Node.js is already available** (v24.14.0). Electron requires only Node.js + npm.
-
-3. **The entire repository is Node.js/TypeScript.** Electron integrates naturally with the existing Vite/React build pipeline.
-
-4. **Python subprocess management** is identical in both — `child_process.spawn()` in Electron mirrors what the current `SubprocessServiceTransport` already does via Node.
-
-5. **The team's repo evidence is entirely Node.js.** No Rust, no Cargo, no CMake.
-
-6. **Build complexity** is minimal with Electron — `npm run build` produces the app.
-
-### When Tauri Would Be Preferred
-
-If the project later requires:
-- Native memory safety guarantees
-- <10MB binary size
-- No Chromium bundling
-- Rust backend services
-
-...then a Tauri migration is possible. The host seam is designed to be framework-neutral.
+```
+Renderer (React + Three.js)
+    ↕ contextBridge (preload.ts)
+Electron Main Process (main.ts)
+    ↕ child_process.spawn()
+Python Service (depthwiz_service.py)
+    ↕ depthwizard package
+DA-V2 Backend / Synthetic Backend
+```
 
 ## Security Model
 
-### Allowed (Native Host API)
+### BrowserWindow Configuration
 
-| Capability | Scope |
-|-----------|-------|
-| Get host capabilities | Read-only system info |
-| Resolve Python path | `DEPTHWIZARD_PYTHON` env or `python` on PATH |
-| Resolve checkpoint path | `DW_DAV2_CKPT` env or default location |
-| Launch service | Spawn `depthwiz_service.py` subprocess |
-| Terminate service | Kill owned subprocess |
-| Read stdout/stdout | Protocol data + diagnostics |
-| Stage input files | Write to temp directory |
-| Clean staged files | Delete temp directory |
+| Setting | Value | Reason |
+|---------|-------|--------|
+| `contextIsolation` | `true` | Prevents renderer accessing Electron internals |
+| `nodeIntegration` | `false` | No Node.js APIs in renderer |
+| `sandbox` | `true` | Renderer runs in sandboxed process |
+| `webSecurity` | `true` | Enforces same-origin policy |
+| `allowRunningInsecureContent` | `false` | Blocks mixed content |
+| `experimentalFeatures` | `false` | No experimental Chromium features |
+| `nodeIntegrationInWorker` | `false` | Workers sandboxed |
+| `nodeIntegrationInSubFrames` | `false` | Sub-frames sandboxed |
+| `navigateOnDragDrop` | `false` | No drag-to-navigate |
 
-### Denied (Renderer → Native)
+### Navigation Restrictions
 
-| Capability | Reason |
-|-----------|--------|
-| Arbitrary executable path | Security: code execution |
-| Arbitrary shell strings | Security: injection |
-| Arbitrary URLs | Security: network |
-| Arbitrary pip install | Security: package injection |
-| Arbitrary Python module execution | Security: code execution |
-| Arbitrary filesystem read/write | Security: data exfiltration |
+- `will-navigate`: blocks all navigation except localhost in dev mode
+- `setWindowOpenHandler`: denies all new window creation
+- External URLs are never loaded in the application window
 
-### IPC Boundary
+### Content Security Policy
 
 ```
-Renderer (React)
-    ↕ invoke('method', args)
-Native Main Process (Electron)
-    ↕ child_process.spawn()
-Python Service (depthwiz_service.py)
+default-src 'self';
+script-src 'self';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob:;
+font-src 'self' data:;
+connect-src 'self';
+media-src 'none';
+object-src 'none';
+frame-src 'none';
+worker-src 'self' blob:;
 ```
 
-The renderer never directly spawns processes. All subprocess management goes through the native main process.
+### IPC Security
+
+- **Sender validation**: Every IPC handler verifies the request originates from the main window's WebContents
+- **Channel allowlist**: Preload uses explicit allowlist, rejects unknown channels
+- **No wildcard handlers**: No `ipcMain.handle("*", ...)`
+- **No raw ipcRenderer exposure**: Preload wraps all calls through `safeInvoke()`
+
+### Preload API (Minimized)
+
+| Method | Purpose |
+|--------|---------|
+| `getHostCapabilities()` | Read-only host info |
+| `launchService(args)` | Start Python service subprocess |
+| `terminateService()` | Kill owned subprocess |
+| `executeService(args)` | One-shot service execution with timeout |
+
+**Not exposed**: `ipcRenderer`, `shell`, `fs`, `path`, `child_process`, `process`, `require`
+
+### Input Path Validation
+
+- Rejects executable extensions (`.exe`, `.bat`, `.cmd`, `.com`, `.ps1`, `.sh`, `.vbs`)
+- Requires normalized paths (no `..` or `.` segments)
+- Only passed to known application operations
+
+## Process Lifecycle
+
+| Event | Action |
+|-------|--------|
+| App ready | Register IPC, create window |
+| Window close | Set mainWindow = null |
+| `window-all-closed` | Kill service, quit (non-macOS) |
+| `before-quit` | Kill service |
+| `will-quit` | Kill service |
+| Renderer crash | Kill service, log error |
+| Service crash | Clean up process handle |
+| Service timeout | Kill process, reject promise |
+
+**No orphan Python processes** after application exit.
+
+## Environment Modes
+
+| Mode | Vite Dev Server | Packaged Assets | Detection |
+|------|----------------|-----------------|-----------|
+| Development | Yes | No | `isDevMode()` = `!app.isPackaged` |
+| Production | No | Yes | `isDevMode()` = `false` |
+
+## Runtime Resolution
+
+| Priority | Source | Fallback |
+|----------|--------|----------|
+| 1 | `DEPTHWIZARD_PYTHON` env | — |
+| 2 | `python` on PATH | — |
+
+The main process decides the executable. The renderer cannot control which Python is used.
+
+## Managed Runtime (Packaged)
+
+```
+<app-root>/
+  python/                         # Managed Python runtime
+    python.exe
+    Lib/site-packages/depthwizard/
+  resources/scripts/
+    depthwiz_service.py
+    backend_bridge.py
+  resources/checkpoints/
+    depth_anything_v2_vits.pth
+```
+
+## Build System
+
+| Tool | Purpose |
+|------|---------|
+| Vite | Renderer build |
+| TypeScript | Main + preload compilation |
+| electron-builder | Packaging + installer |
+
+### Build Commands
+
+```bash
+npm run build:electron        # Build renderer + compile Electron TS
+npm run electron:dev          # Development with hot reload
+npm run electron:build:win    # Windows NSIS installer
+npm run electron:build:portable  # Portable unpacked build
+```
