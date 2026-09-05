@@ -1,0 +1,31 @@
+# DepthWizard — SIH Requirement Traceability
+
+Every row traces one SIH 26175 requirement → implementation area →
+owner → verification. Status values mirror the Project `Status` field.
+No requirement is Done without the listed evidence.
+
+| #   | SIH requirement                                                 | Implementation                                                                                                    | Owner              | Track / SIH Area          | Verification         | Evidence required                                                     |
+| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- | -------------------- | --------------------------------------------------------------------- |
+| R1  | RGB image input (PNG/JPG/TIFF/GeoTIFF) + metadata validation    | `depthwizard.ingestion` (`docs/ingestion.md`, `docs/input.md`)                                                    | Shivam             | core / Input              | unit + integration   | Ingestion tests; invalid-input rejection; Path A/B routing            |
+| R2  | Non-georeferenced rDSM (relative output, no invented CRS)       | `depthwizard.rdsm` + relative pipeline path                                                                       | Shivam             | geospatial / Elevation    | unit + scientific    | rDSM tests; LOCAL frame, units absent                                 |
+| R3  | GeoTIFF georeferenced input (CRS/transform preserved)           | `depthwizard.geospatial` (`docs/geospatial.md`)                                                                   | Shivam             | geospatial / Input        | unit + integration   | CRS/transform round-trip tests                                        |
+| R4  | Absolute metric DSM calibration (explicit reference only)       | `depthwizard.calibration` + `controls` + `dem` (`docs/calibration.md`)                                            | Shivam             | calibration / Calibration | scientific           | Calibration quality checks; method + units + provenance recorded      |
+| R5  | Standard geospatial output (GeoTIFF export, nodata, provenance) | `depthwizard.export` (`docs/geotiff-export.md`)                                                                   | Shivam             | dsm / DSM                 | integration          | Export tests; CRS/transform/nodata preserved                          |
+| R6  | Terrain mesh generation (correct spatial geometry)              | `depthwizard.mesh` (`docs/mesh-engine.md`)                                                                        | Shivam             | 3d / 3D                   | unit + integration   | Mesh tests; coordinate preservation                                   |
+| R7  | RGB texture projection (UVs + source identity)                  | mesh UVs (Shivam) → viewer texturing (Aryan)                                                                      | Shivam + Aryan     | 3d / 3D                   | visual + integration | Textured scene; UV coverage                                           |
+| R8  | Interactive 3D flythrough (orbit / FP / aerial, waypoints)      | `src/camera`, `src/flythrough`, `src/viewer` (`docs/flythrough.md`)                                               | Aryan              | desktop / Flythrough      | visual + runtime     | Flythrough tests (`af6d416`); trajectory workflow                     |
+| R9  | Height analysis (inspection, exaggeration, profiles)            | `src/measurement`, `src/inspection`, elevation profile                                                            | Aryan              | desktop / Analysis        | visual + integration | Height readout vs DSM values                                          |
+| R10 | Slope analysis                                                  | desktop analysis tools                                                                                            | Aryan              | desktop / Analysis        | visual + integration | Slope output vs reference computation                                 |
+| R11 | Measurement tools (distance, profiles)                          | `src/measurement`                                                                                                 | Aryan              | desktop / Analysis        | visual + integration | Known-geometry validation                                             |
+| R12 | DSM validation (reference comparison: RMSE/MAE/corr/stability)  | `depthwizard.evaluation` (`docs/evaluation-protocol.md`)                                                          | Shravan (+ Shivam) | qa / Validation           | scientific           | Benchmark runs; `dav2-level3-evidence.md`; significance where claimed |
+| R13 | Visualization / UX (project workflow, sessions, layers)         | `src/session`, `src/processing`, `src/layers`, `src/display`                                                      | Aryan              | desktop / Flythrough      | visual + runtime     | Session lifecycle tests; UX review                                    |
+| R14 | Standalone deployment (native host, installer, fresh-machine)   | provisioning + packaging (`feat/shivam-runtime-provisioning`, `feat/shivam-native-runtime-packaging`, Aryan host) | Aryan (+ Shivam)   | release / Deployment      | end-to-end + runtime | Fresh-machine launch log; no dev-path dependency                      |
+| R15 | Technical documentation (architecture, provenance, licenses)    | `docs/` + this `docs/project/` control plane                                                                      | All                | release / Documentation   | review               | Docs present, verified against code (no stale claims)                 |
+
+## Current scientific caveat (recorded, not hidden)
+
+Frozen DA-V2 Small evidence (S19/S19.1/S20/S21, 32-tile pooled):
+MAE 4.40 m / RMSE 5.86 m / R² 0.23 — pipeline-valid, honestly poor in
+absolute terms. A research signal, **not** SIH validation. SIH-wide
+accuracy, broader-scene evidence, and GPU behaviour remain open
+(R12) and block GATE 8 / GATE 11.
