@@ -209,6 +209,78 @@ class TransportTerrainProduct(BaseModel):
     mesh: TransportMesh
 
 
+class TransportRelativeSurface(BaseModel):
+    """Wire form of an rDSM grid (relative values stay unitless).
+
+    Invalid samples are null, never NaN. Units are absent by
+    construction; no CRS/transform is ever invented here.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    width: int
+    height: int
+    dtype: str
+    units: None = None
+    semantics: str
+    values: list[float | None]
+    valid_mask: list[bool]
+    invalid_count: int
+    georeferencing: str
+    spatial: TransportSpatialContext
+
+
+class TransportRelativeMesh(BaseModel):
+    """Wire form of a relative terrain mesh (LOCAL frame, no metres).
+
+    Mirrors the metric mesh shape minus calibration identity (absent
+    explicitly — a relative product has no calibration) and minus
+    world origin (LOCAL frame has none).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    vertices: list[float]
+    indices: list[int]
+    normals: list[float]
+    uvs: list[float]
+    vertex_source_indices: list[int]
+    vertex_count: int
+    triangle_count: int
+    valid_source_pixels: int
+    invalid_source_pixels: int
+    skipped_cells: int
+    coverage: float
+    frame: Literal["local"] = "local"
+    width: int
+    height: int
+    units: None = None
+    semantics: str
+    georeferencing: str
+    spatial: TransportSpatialContext
+    depth_model_name: str
+    depth_model_version: str | None = None
+    depth_checkpoint_id: str | None = None
+    source_input_id: str | None = None
+    source_checksum: str | None = None
+    provenance: TransportProvenance | None = None
+
+
+class TransportRelativeProduct(BaseModel):
+    """Wire form of the depth+rDSM+mesh relative bundle.
+
+    The ``kind`` discriminator (``relative-terrain`` vs ``terrain``)
+    lets consumers distinguish products without numeric heuristics.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["relative-terrain"] = "relative-terrain"
+    depth_result: TransportDepthResult
+    rsm: TransportRelativeSurface
+    mesh: TransportRelativeMesh
+
+
 class TransportFailure(BaseModel):
     """Wire failure record (category preserved)."""
 

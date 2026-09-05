@@ -23,6 +23,7 @@ from depthwizard.pipeline import (
     PipelineResult,
     PipelineRunner,
 )
+from depthwizard.rdsm.pipeline import run_relative_path
 from depthwizard.service.models import (
     SERVICE_CONTRACT_VERSION,
     ArtifactDescriptor,
@@ -33,6 +34,7 @@ from depthwizard.service.models import (
     ServiceRequest,
     ServiceResponse,
 )
+from depthwizard.version import __version__
 
 
 def _georeferenced(georeferencing: GeoreferencingLevel) -> bool:
@@ -191,6 +193,8 @@ class LocalService:
         backend = self._backends.get(request.backend)
         if backend is None:
             raise PipelineExecutionError(f"unknown backend identifier: {request.backend!r}")
+        if request.output_mode == "relative":
+            return self._execute_relative(request, backend)
         pipeline_request = PipelineRequest(
             input_path=request.input_path,
             backend=backend,
@@ -206,3 +210,67 @@ class LocalService:
         )
         result = PipelineRunner().run(pipeline_request)
         return build_response(result)
+
+    def _execute_relative(self, request: ServiceRequest, backend: DepthBackend) -> ServiceResponse:
+        """Run the calibration-free rDSM path (no metric output, ever).
+
+        The calibration provider is ignored: relative products must not
+        depend on calibration data. Failure modes mirror the pipeline
+        path (loud domain errors, no synthetic fallback).
+        """
+        outcome = run_relative_path(request.input_path, backend)
+        depth = outcome.depth
+        grid = outcome.grid
+        mesh = outcome.mesh
+        georeferenced = _georeferenced(depth.georeferencing)
+        return ServiceResponse(
+            contract_version=SERVICE_CONTRACT_VERSION,
+            success=True,
+            final_state="completed",
+            states=["completed"],
+            failure=None,
+            artifacts=[
+                ArtifactDescriptor(
+                    kind=ArtifactKind.DEPTH,
+                    available=True,
+                    persisted=False,
+                    semantics=depth.elevation_semantics.value,
+                    units=depth.units,
+                    width=depth.output_resolution.width,
+                    height=depth.output_resolution.height,
+                    georeferenced=georeferenced,
+                ),
+                ArtifactDescriptor(
+                    kind=ArtifactKind.RELATIVE_SURFACE,
+                    available=True,
+                    persisted=False,
+                    semantics=grid.semantics.value,
+                    units=grid.units,
+                    width=grid.width,
+                    height=grid.height,
+                    georeferenced=georeferenced,
+                ),
+                ArtifactDescriptor(
+                    kind=ArtifactKind.RELATIVE_MESH,
+                    available=True,
+                    persisted=False,
+                    semantics=mesh.semantics.value,
+                    units=mesh.units,
+                    width=mesh.width,
+                    height=mesh.height,
+                    georeferenced=georeferenced,
+                ),
+            ],
+            summary=RunSummary(
+                input_path=request.input_path,
+                input_checksum=outcome.input_checksum,
+                backend_name=depth.model_name,
+                backend_version=depth.model_version,
+                calibration_method=None,
+                calibration_reference=None,
+                target_semantics=None,
+                mesh_requested=request.build_mesh,
+                geotiff_path=None,
+                engine_version=__version__,
+            ),
+        )

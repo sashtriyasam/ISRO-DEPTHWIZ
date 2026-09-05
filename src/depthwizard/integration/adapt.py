@@ -25,6 +25,9 @@ from depthwizard.integration.transport import (
     TransportFailure,
     TransportMesh,
     TransportProvenance,
+    TransportRelativeMesh,
+    TransportRelativeProduct,
+    TransportRelativeSurface,
     TransportResolution,
     TransportSpatialContext,
     TransportTerrainProduct,
@@ -32,8 +35,10 @@ from depthwizard.integration.transport import (
     _provenance,
     _spatial,
 )
-from depthwizard.mesh.models import TerrainMesh
+from depthwizard.mesh.models import CoordinateFrame, TerrainMesh
 from depthwizard.pipeline.models import PipelineResult
+from depthwizard.rdsm.mesh import RelativeTerrainMesh
+from depthwizard.rdsm.models import RelativeSurfaceGrid
 
 
 def _float_list(values: Any) -> list[float]:
@@ -193,6 +198,79 @@ def terrain_product(depth: DepthResult, dsm: DSMGrid, mesh: TerrainMesh) -> Tran
     )
 
 
+def rsm_to_transport(grid: RelativeSurfaceGrid) -> TransportRelativeSurface:
+    """Map an rDSM grid (invalid samples become null, units stay absent)."""
+    if not isinstance(grid, RelativeSurfaceGrid):
+        raise TypeError(f"expected RelativeSurfaceGrid, got {type(grid).__name__}")
+    flat = grid.array.ravel()
+    mask = grid.valid_mask.ravel()
+    pairs = zip(flat.tolist(), mask.tolist(), strict=True)
+    values: list[float | None] = [float(value) if valid else None for value, valid in pairs]
+    for index, (value, valid) in enumerate(zip(values, mask.tolist(), strict=True)):
+        if valid and value is not None and not math.isfinite(value):
+            raise InvalidInputError(f"rsm value [{index}] marked valid but is not finite")
+    return TransportRelativeSurface(
+        width=grid.width,
+        height=grid.height,
+        dtype=grid.dtype,
+        units=None,
+        semantics=grid.semantics.value,
+        values=values,
+        valid_mask=[bool(value) for value in mask.tolist()],
+        invalid_count=grid.invalid_count,
+        georeferencing=grid.georeferencing.value,
+        spatial=_spatial(grid.spatial),
+    )
+
+
+def relative_mesh_to_transport(mesh: RelativeTerrainMesh) -> TransportRelativeMesh:
+    """Map a relative terrain mesh (LOCAL frame, no metres, no calibration)."""
+    if not isinstance(mesh, RelativeTerrainMesh):
+        raise TypeError(f"expected RelativeTerrainMesh, got {type(mesh).__name__}")
+    if mesh.frame is not CoordinateFrame.LOCAL:
+        raise InvalidInputError(
+            f"relative transport requires the LOCAL frame, got {mesh.frame.value!r}"
+        )
+    return TransportRelativeMesh(
+        vertices=_float_list(mesh.vertices.ravel().tolist()),
+        indices=_int_list(mesh.indices.tolist()),
+        normals=_float_list(mesh.normals.ravel().tolist()),
+        uvs=_float_list(mesh.uvs.ravel().tolist()),
+        vertex_source_indices=_int_list(mesh.vertex_source_indices.tolist()),
+        vertex_count=mesh.vertex_count,
+        triangle_count=mesh.triangle_count,
+        valid_source_pixels=mesh.valid_source_pixels,
+        invalid_source_pixels=mesh.invalid_source_pixels,
+        skipped_cells=mesh.skipped_cells,
+        coverage=float(mesh.coverage),
+        frame="local",
+        width=mesh.width,
+        height=mesh.height,
+        units=None,
+        semantics=mesh.semantics.value,
+        georeferencing=mesh.georeferencing.value,
+        spatial=_spatial(mesh.spatial),
+        depth_model_name=mesh.depth_model_name,
+        depth_model_version=mesh.depth_model_version,
+        depth_checkpoint_id=mesh.depth_checkpoint_id,
+        source_input_id=mesh.source_input_id,
+        source_checksum=mesh.source_checksum,
+        provenance=_provenance(mesh.provenance),
+    )
+
+
+def relative_product(
+    depth: DepthResult, grid: RelativeSurfaceGrid, mesh: RelativeTerrainMesh
+) -> TransportRelativeProduct:
+    """Assemble the kind-tagged relative bundle the desktop validates."""
+    return TransportRelativeProduct(
+        kind="relative-terrain",
+        depth_result=depth_to_transport(depth),
+        rsm=rsm_to_transport(grid),
+        mesh=relative_mesh_to_transport(mesh),
+    )
+
+
 def bundle_from_pipeline(result: PipelineResult) -> dict[str, Any]:
     """Map a pipeline result to a client-facing bundle (lightweight).
 
@@ -234,6 +312,9 @@ def bundle_from_pipeline(result: PipelineResult) -> dict[str, Any]:
 
 __all__ = [
     "TransportProvenance",
+    "TransportRelativeMesh",
+    "TransportRelativeProduct",
+    "TransportRelativeSurface",
     "TransportResolution",
     "TransportSpatialContext",
     "bundle_from_pipeline",
@@ -241,5 +322,8 @@ __all__ = [
     "depth_to_transport",
     "dsm_to_transport",
     "mesh_to_transport",
+    "relative_mesh_to_transport",
+    "relative_product",
+    "rsm_to_transport",
     "terrain_product",
 ]

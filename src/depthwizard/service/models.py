@@ -27,13 +27,15 @@ _METRIC_TARGETS = frozenset(
 
 
 class ArtifactKind(str, Enum):
-    """Artifact types the pipeline can actually produce."""
+    """Artifact types the service can actually produce."""
 
     DEPTH = "depth"
     CALIBRATION = "calibration"
     HEIGHT = "height"
     DSM = "dsm"
     MESH = "mesh"
+    RELATIVE_SURFACE = "relative_surface"
+    RELATIVE_MESH = "relative_mesh"
     GEOTIFF = "geotiff"
 
 
@@ -54,6 +56,11 @@ class ServiceRequest(BaseModel):
     preprocessor: Literal["identity"] = Field(
         default="identity",
         description="Preprocessor identifier (identity only today).",
+    )
+    output_mode: Literal["metric", "relative"] = Field(
+        default="metric",
+        description="Product mode: 'metric' runs the calibrated pipeline, "
+        "'relative' runs the calibration-free rDSM path (no metric output).",
     )
     build_mesh: bool = False
     geotiff_path: str | None = None

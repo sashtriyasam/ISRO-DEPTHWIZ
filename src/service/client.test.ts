@@ -6,7 +6,10 @@ import { LocalServiceClient } from "./client";
 import { ServiceWireError } from "./validator";
 import { makeTestPng, makeCorruptBytes } from "../input/testFixtures";
 
-function stageTempFile(name: string, bytes: Uint8Array): { path: string; cleanup: () => void } {
+function stageTempFile(
+  name: string,
+  bytes: Uint8Array,
+): { path: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "depthwiz-svc-"));
   const path = join(dir, name);
   writeFileSync(path, bytes);
@@ -23,6 +26,7 @@ describe("LocalServiceClient request construction", () => {
       input_path: "tile.png",
       target_semantics: "absolute_elevation_dsm",
       backend: "synthetic-depth",
+      output_mode: "metric",
       preprocessor: "identity",
       build_mesh: true,
       geotiff_path: null,
@@ -31,8 +35,18 @@ describe("LocalServiceClient request construction", () => {
     });
   });
 
+  it("passes an explicit relative output mode through", () => {
+    const request = client.buildRequest({
+      inputPath: "tile.png",
+      outputMode: "relative",
+    });
+    expect(request.output_mode).toBe("relative");
+  });
+
   it("rejects empty input paths without spawning", () => {
-    expect(() => client.buildRequest({ inputPath: "  " })).toThrow(ServiceWireError);
+    expect(() => client.buildRequest({ inputPath: "  " })).toThrow(
+      ServiceWireError,
+    );
   });
 });
 
@@ -42,8 +56,16 @@ describe("LocalServiceClient live wire round-trip", () => {
   it("discovers real capabilities (contract v1)", async () => {
     const capabilities = await client.capabilities();
     expect(capabilities.contract_version).toBe("1");
-    expect(capabilities.supported_input_formats).toEqual([".jpeg", ".jpg", ".png", ".tif", ".tiff"]);
-    expect(capabilities.supported_target_semantics).toContain("absolute_elevation_dsm");
+    expect(capabilities.supported_input_formats).toEqual([
+      ".jpeg",
+      ".jpg",
+      ".png",
+      ".tif",
+      ".tiff",
+    ]);
+    expect(capabilities.supported_target_semantics).toContain(
+      "absolute_elevation_dsm",
+    );
     expect(capabilities.available_backends).toContain("synthetic-depth");
     expect(capabilities.mesh_supported).toBe(true);
   });
@@ -51,7 +73,9 @@ describe("LocalServiceClient live wire round-trip", () => {
   it("executes TypeScript request → Python service → validated response", async () => {
     const staged = stageTempFile("tile.png", makeTestPng(4, 4));
     try {
-      const { request, response } = await client.executeService({ inputPath: staged.path });
+      const { request, response } = await client.executeService({
+        inputPath: staged.path,
+      });
       expect(request.input_path).toBe(staged.path);
       expect(response.success).toBe(true);
       expect(response.final_state).toBe("completed");
@@ -75,7 +99,9 @@ describe("LocalServiceClient live wire round-trip", () => {
   it("maps backend failures with domain categories and stages", async () => {
     const staged = stageTempFile("corrupt.png", makeCorruptBytes());
     try {
-      const { response } = await client.executeService({ inputPath: staged.path });
+      const { response } = await client.executeService({
+        inputPath: staged.path,
+      });
       expect(response.success).toBe(false);
       expect(response.final_state).toBe("failed");
       expect(response.failure?.code).toBe("InvalidInputError");
@@ -90,7 +116,10 @@ describe("LocalServiceClient live wire round-trip", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      client.executeService({ inputPath: "tile.png" }, { signal: controller.signal })
+      client.executeService(
+        { inputPath: "tile.png" },
+        { signal: controller.signal },
+      ),
     ).rejects.toThrow();
   });
 });

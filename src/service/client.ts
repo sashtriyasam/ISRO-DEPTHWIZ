@@ -19,6 +19,7 @@ export interface ServiceExecutionArgs {
   targetSemantics?: MetricTargetSemantics;
   buildMesh?: boolean;
   backend?: string;
+  outputMode?: "metric" | "relative";
 }
 
 export interface ServiceExecution {
@@ -74,6 +75,7 @@ export class LocalServiceClient {
       input_path: args.inputPath,
       target_semantics: args.targetSemantics ?? "absolute_elevation_dsm",
       backend: args.backend ?? "synthetic-depth",
+      output_mode: args.outputMode ?? "metric",
       preprocessor: "identity",
       build_mesh: args.buildMesh ?? true,
       geotiff_path: null,

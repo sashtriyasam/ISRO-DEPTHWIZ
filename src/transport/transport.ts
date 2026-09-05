@@ -5,10 +5,14 @@ import {
 } from "../backend/bridge";
 import type { ArtifactLoadOptions } from "../artifact/types";
 import { LocalServiceClient } from "../service/client";
-import { meshDescriptorOf } from "../service/processing";
+import {
+  meshDescriptorOf,
+  relativeMeshDescriptorOf,
+} from "../service/processing";
 import { ServiceWireError } from "../service/validator";
 import {
   ArtifactTransportFailure,
+  type RelativeBundle,
   type TerrainBundle,
   type TerrainFetchRequest,
 } from "./types";
@@ -18,6 +22,10 @@ export interface ArtifactTransport {
     request: TerrainFetchRequest,
     options?: ArtifactLoadOptions,
   ): Promise<TerrainBundle>;
+  fetchRelative?(
+    request: TerrainFetchRequest,
+    options?: ArtifactLoadOptions,
+  ): Promise<RelativeBundle>;
 }
 
 export interface ServiceArtifactTransportOptions {
@@ -51,6 +59,7 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           targetSemantics: request.targetSemantics,
           buildMesh: request.buildMesh ?? true,
           backend: request.backend,
+          outputMode: "metric",
         },
         hooks,
       );
@@ -101,6 +110,80 @@ export class ServiceArtifactTransport implements ArtifactTransport {
       throw new ArtifactTransportFailure({
         code: "PAYLOAD_FAILED",
         message: "Terrain payload transfer failed",
+        stage: null,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async fetchRelative(
+    request: TerrainFetchRequest,
+    options: ArtifactLoadOptions = {},
+  ): Promise<RelativeBundle> {
+    const hooks: BridgeExecutionHooks = {
+      signal: options.signal,
+      onStage: options.onStage,
+    };
+
+    let response;
+    try {
+      const execution = await this.serviceClient.executeService(
+        {
+          inputPath: request.stagedPath,
+          targetSemantics: request.targetSemantics,
+          buildMesh: request.buildMesh ?? true,
+          backend: request.backend,
+          outputMode: "relative",
+        },
+        hooks,
+      );
+      response = execution.response;
+    } catch (err) {
+      throw this.controlFailure(err, options.signal?.aborted === true);
+    }
+
+    if (!response.success) {
+      throw new ArtifactTransportFailure({
+        code: response.failure?.code ?? "SERVICE_REJECTED",
+        message: response.failure?.message ?? "Service execution failed",
+        stage: null,
+        detail: response.failure?.stage
+          ? `stage ${response.failure.stage}`
+          : undefined,
+      });
+    }
+
+    const mesh = relativeMeshDescriptorOf(response);
+    if (!mesh || !mesh.available) {
+      throw new ArtifactTransportFailure({
+        code: "ARTIFACT_UNAVAILABLE",
+        message:
+          "Service completed without an available relative mesh artifact",
+        stage: null,
+      });
+    }
+
+    try {
+      const relative = await this.bridge.fetchRelativePayload(
+        request.stagedPath,
+        hooks,
+        request.backend,
+      );
+      return { response, relative };
+    } catch (err) {
+      if (err instanceof ArtifactTransportFailure) {
+        throw err;
+      }
+      if (err instanceof OperationCancelledError || options.signal?.aborted) {
+        throw new ArtifactTransportFailure({
+          code: "OPERATION_CANCELLED",
+          message: "Operation cancelled",
+          stage: null,
+        });
+      }
+      throw new ArtifactTransportFailure({
+        code: "PAYLOAD_FAILED",
+        message: "Relative payload transfer failed",
         stage: null,
         detail: err instanceof Error ? err.message : String(err),
       });

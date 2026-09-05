@@ -61,17 +61,22 @@ def _planar_coordinates(
     return cols_f, rows_f, CoordinateFrame.LOCAL, None, None, False
 
 
-def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
-    """Build an owned terrain mesh from a validated DSM grid.
+def _triangulate_surface(
+    values: np.ndarray,
+    valid: np.ndarray,
+    plane_x: np.ndarray,
+    plane_z: np.ndarray,
+    flip: bool,
+    width: int,
+    height: int,
+) -> dict[str, np.ndarray | int | float]:
+    """Shared regular-grid triangulation core (DSM and relative paths).
 
-    Never mutates the source grid. Raises :class:`MeshGenerationError`
-    for degenerate dimensions, absent valid pixels, unusable topology
-    or non-finite generated geometry.
+    One vertex per valid pixel (compacted, row-major), two triangles per
+    fully valid quad, area-weighted accumulated normals with a vertical
+    fallback, normalized UVs. Holes are never bridged. Operates purely
+    on arrays; all contract interpretation stays with the callers.
     """
-    if not isinstance(grid, DSMGrid):
-        raise TypeError(f"build_terrain_mesh requires a DSMGrid; got {type(grid).__name__}")
-    height, width = grid.height, grid.width
-    valid = grid.valid_mask
     valid_count = int(valid.sum())
     invalid_count = width * height - valid_count
     if height < 2 or width < 2:
@@ -88,9 +93,8 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
     index_of[valid] = np.arange(valid_count, dtype=np.int64)
     rows, cols = np.nonzero(valid)
     source_indices = (rows.astype(np.int64) * width + cols.astype(np.int64)).astype(np.int64)
-    local_x, local_z, frame, origin_x, origin_y, flip = _planar_coordinates(grid, cols, rows)
-    elevation = grid.array[valid].astype(np.float64)
-    vertices = np.stack([local_x, elevation, local_z], axis=1)
+    elevation = values[valid].astype(np.float64)
+    vertices = np.stack([plane_x, elevation, plane_z], axis=1)
     corner_00 = valid[:-1, :-1]
     corner_01 = valid[:-1, 1:]
     corner_10 = valid[1:, :-1]
@@ -143,18 +147,48 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
     uvs = np.stack([unit_w, unit_h], axis=1)
     triangle_total = 2 * quad_used
     coverage = triangle_total / (2 * quad_total)
+    return {
+        "vertices": vertices,
+        "indices": triangles.ravel(),
+        "normals": normals,
+        "uvs": uvs,
+        "vertex_source_indices": source_indices,
+        "vertex_count": valid_count,
+        "triangle_count": triangle_total,
+        "valid_source_pixels": valid_count,
+        "invalid_source_pixels": invalid_count,
+        "skipped_cells": skipped,
+        "coverage": coverage,
+    }
+
+
+def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
+    """Build an owned terrain mesh from a validated DSM grid.
+
+    Never mutates the source grid. Raises :class:`MeshGenerationError`
+    for degenerate dimensions, absent valid pixels, unusable topology
+    or non-finite generated geometry.
+    """
+    if not isinstance(grid, DSMGrid):
+        raise TypeError(f"build_terrain_mesh requires a DSMGrid; got {type(grid).__name__}")
+    height, width = grid.height, grid.width
+    valid = grid.valid_mask
+    rows, cols = np.nonzero(valid)
+    local_x, local_z, frame, origin_x, origin_y, flip = _planar_coordinates(grid, cols, rows)
+    surface = _triangulate_surface(grid.array, valid, local_x, local_z, flip, width, height)
+    assert isinstance(surface["vertices"], np.ndarray)
     return TerrainMesh(
-        vertices=vertices,
-        indices=triangles.ravel(),
-        normals=normals,
-        uvs=uvs,
-        vertex_source_indices=source_indices,
-        vertex_count=valid_count,
-        triangle_count=triangle_total,
-        valid_source_pixels=valid_count,
-        invalid_source_pixels=invalid_count,
-        skipped_cells=skipped,
-        coverage=coverage,
+        vertices=surface["vertices"],
+        indices=surface["indices"],  # type: ignore[arg-type]
+        normals=surface["normals"],  # type: ignore[arg-type]
+        uvs=surface["uvs"],  # type: ignore[arg-type]
+        vertex_source_indices=surface["vertex_source_indices"],  # type: ignore[arg-type]
+        vertex_count=int(surface["vertex_count"]),
+        triangle_count=int(surface["triangle_count"]),
+        valid_source_pixels=int(surface["valid_source_pixels"]),
+        invalid_source_pixels=int(surface["invalid_source_pixels"]),
+        skipped_cells=int(surface["skipped_cells"]),
+        coverage=float(surface["coverage"]),
         frame=frame,
         origin_x=origin_x,
         origin_y=origin_y,
