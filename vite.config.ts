@@ -25,7 +25,7 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "electron/**/*.{test,spec}.{ts,tsx}"],
     // Backend-spawning integration tests run real Python subprocesses;
     // the default 5s budget flakes under parallel load.
     testTimeout: 60000,

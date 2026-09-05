@@ -1,0 +1,54 @@
+appId: com.depthwizard.desktop
+productName: DepthWizard
+copyright: Copyright © 2026 ISRO DepthWizard Team
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - dist/**
+  - electron/main.js
+  - electron/preload.js
+  - "!node_modules/**/*"
+
+extraResources:
+  - from: scripts/
+    to: scripts/
+    filter:
+      - "depthwiz_service.py"
+      - "backend_bridge.py"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  forceCodeSigning: false
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DepthWizard
+  uninstallDisplayName: DepthWizard
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Science
+
+asar: true
+asarUnpack:
+  - scripts/**

@@ -1,11 +1,17 @@
 node_modules/
 dist/
+release/
 .vite/
 *.tsbuildinfo
 .env
 .env.local
 .DS_Store
 Thumbs.db
+
+# Electron compiled output
+electron/*.js
+electron/*.js.map
+electron/*.d.ts
 
 # Python scientific engine
 __pycache__/

@@ -4,14 +4,20 @@
   "version": "0.1.0",
   "type": "module",
   "description": "DepthWizard - Single-View Height Estimation and 3D Flythrough",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:electron": "tsc -b && vite build && tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext ts,tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "electron:dev": "concurrently \"vite\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://localhost:1420 && cross-env VITE_DEV_SERVER_URL=http://localhost:1420 electron .\"",
+    "electron:build": "npm run build:electron && electron-builder --config electron-builder.yml",
+    "electron:build:win": "npm run build:electron && electron-builder --config electron-builder.yml --win",
+    "electron:build:portable": "npm run build:electron && electron-builder --config electron-builder.yml --win --dir"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -26,9 +32,14 @@
     "@types/react-dom": "^19.1.6",
     "@types/three": "^0.177.0",
     "@vitejs/plugin-react": "^4.5.2",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.0.12",
     "jsdom": "^26.1.0",
     "typescript": "~5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.1",
+    "wait-on": "^9.1.0"
   }
 }
