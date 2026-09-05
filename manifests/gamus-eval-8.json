@@ -1,0 +1,121 @@
+{
+  "dataset": "gamus",
+  "release": "earthflow/GAMUS (HF, CC-BY-4.0)",
+  "split": "test",
+  "root_env": "GAMUS_ROOT",
+  "selection_rule": "first 8 sorted RGB stems with paired AGL (no score knowledge)",
+  "samples": [
+    {
+      "sample_id": "gamus-test-DC_03_26",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_03_26_RGB.h5",
+      "reference_path": "heights/test/DC_03_26_AGL.h5",
+      "input_checksum": "90644e40ba507fee7fe3a21a53c28a3eb36c94cb6e233f4dc80d3e1f97060934",
+      "reference_checksum": "5594d976c568c53827b29c2fb096dad68935c64a76053a052a57313fc5836f1b",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_03_26",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_05_28",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_05_28_RGB.h5",
+      "reference_path": "heights/test/DC_05_28_AGL.h5",
+      "input_checksum": "43dcd827474dd7db6b8600e268c40f500ec615de87b2ef25352ed0dbee79a89e",
+      "reference_checksum": "e72b9631fe67fb57ed8fc3541edc8463b8233ab142c5a37b226410227efb27f4",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_05_28",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_05_30",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_05_30_RGB.h5",
+      "reference_path": "heights/test/DC_05_30_AGL.h5",
+      "input_checksum": "e9cd98e16b1168a0833e4222838ee0df3a93700f693d2295ecb5ff58c8d7efef",
+      "reference_checksum": "9f73784fafbd4415745d924e9fd02c7209020b358d97b56a40c1a8c4ae8d01bc",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_05_30",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_07_21",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_07_21_RGB.h5",
+      "reference_path": "heights/test/DC_07_21_AGL.h5",
+      "input_checksum": "b31a5bdee94ea39e174e231172888af69d0c9c3d3092987ca150f1e10210cd62",
+      "reference_checksum": "531ecf1b5f4b9fb7d03fb7808862a1266b0cbfa1800bf3672cdee276e1595026",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_07_21",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_07_29",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_07_29_RGB.h5",
+      "reference_path": "heights/test/DC_07_29_AGL.h5",
+      "input_checksum": "5e8f63ca129ed6a1a345217ea331c493e3956138110d006a51a7aef773216f8a",
+      "reference_checksum": "91117655e713bd26be209e30228743fea7da7aa78ac4cb47f14b5aa3932f6725",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_07_29",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_08_27",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_08_27_RGB.h5",
+      "reference_path": "heights/test/DC_08_27_AGL.h5",
+      "input_checksum": "9ef8a563e79d8315e18e12d5c167c76d29436a41c2679c6e36100df431e4c0b9",
+      "reference_checksum": "7f1624ccaa04cd866590829e7600d7c3dfc0bc44c694640e3f3edf1d2192e519",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_08_27",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_09_18",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_09_18_RGB.h5",
+      "reference_path": "heights/test/DC_09_18_AGL.h5",
+      "input_checksum": "4d5ee0fbe5f58926150fc72f740ab67872b1e0cc1751b786740685de035d5898",
+      "reference_checksum": "df9f67591244d433539149b6b489fd001b90eb2237661ddf678a5e083af9fffe",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_09_18",
+        "city": "DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_09_29",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_09_29_RGB.h5",
+      "reference_path": "heights/test/DC_09_29_AGL.h5",
+      "input_checksum": "4400c01f406c60486bed2149e1cf341fde4de6c3292386afe49430973f074587",
+      "reference_checksum": "20404d70178c84a4a94c3f0d634497e9fe5274589fee1914027619664b7d2124",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_09_29",
+        "city": "DC"
+      }
+    }
+  ]
+}

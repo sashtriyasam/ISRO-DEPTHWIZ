@@ -1,0 +1,253 @@
+{
+  "dataset": "gamus",
+  "release": "earthflow/GAMUS (HF, CC-BY-4.0)",
+  "split": "test",
+  "root_env": "GAMUS_ROOT",
+  "selection_rule": "8 DC stems reused from gamus-eval-8 + first 8 sorted PHL stems with paired AGL (no score knowledge)",
+  "city_mapping": {
+    "DC": "Washington DC",
+    "PHL": "Philadelphia"
+  },
+  "samples": [
+    {
+      "sample_id": "gamus-test-DC_03_26",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_03_26_RGB.h5",
+      "reference_path": "heights/test/DC_03_26_AGL.h5",
+      "input_checksum": "90644e40ba507fee7fe3a21a53c28a3eb36c94cb6e233f4dc80d3e1f97060934",
+      "reference_checksum": "5594d976c568c53827b29c2fb096dad68935c64a76053a052a57313fc5836f1b",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_03_26",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_05_28",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_05_28_RGB.h5",
+      "reference_path": "heights/test/DC_05_28_AGL.h5",
+      "input_checksum": "43dcd827474dd7db6b8600e268c40f500ec615de87b2ef25352ed0dbee79a89e",
+      "reference_checksum": "e72b9631fe67fb57ed8fc3541edc8463b8233ab142c5a37b226410227efb27f4",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_05_28",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_05_30",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_05_30_RGB.h5",
+      "reference_path": "heights/test/DC_05_30_AGL.h5",
+      "input_checksum": "e9cd98e16b1168a0833e4222838ee0df3a93700f693d2295ecb5ff58c8d7efef",
+      "reference_checksum": "9f73784fafbd4415745d924e9fd02c7209020b358d97b56a40c1a8c4ae8d01bc",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_05_30",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_07_21",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_07_21_RGB.h5",
+      "reference_path": "heights/test/DC_07_21_AGL.h5",
+      "input_checksum": "b31a5bdee94ea39e174e231172888af69d0c9c3d3092987ca150f1e10210cd62",
+      "reference_checksum": "531ecf1b5f4b9fb7d03fb7808862a1266b0cbfa1800bf3672cdee276e1595026",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_07_21",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_07_29",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_07_29_RGB.h5",
+      "reference_path": "heights/test/DC_07_29_AGL.h5",
+      "input_checksum": "5e8f63ca129ed6a1a345217ea331c493e3956138110d006a51a7aef773216f8a",
+      "reference_checksum": "91117655e713bd26be209e30228743fea7da7aa78ac4cb47f14b5aa3932f6725",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_07_29",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_08_27",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_08_27_RGB.h5",
+      "reference_path": "heights/test/DC_08_27_AGL.h5",
+      "input_checksum": "9ef8a563e79d8315e18e12d5c167c76d29436a41c2679c6e36100df431e4c0b9",
+      "reference_checksum": "7f1624ccaa04cd866590829e7600d7c3dfc0bc44c694640e3f3edf1d2192e519",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_08_27",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_09_18",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_09_18_RGB.h5",
+      "reference_path": "heights/test/DC_09_18_AGL.h5",
+      "input_checksum": "4d5ee0fbe5f58926150fc72f740ab67872b1e0cc1751b786740685de035d5898",
+      "reference_checksum": "df9f67591244d433539149b6b489fd001b90eb2237661ddf678a5e083af9fffe",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_09_18",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-DC_09_29",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/DC_09_29_RGB.h5",
+      "reference_path": "heights/test/DC_09_29_AGL.h5",
+      "input_checksum": "4400c01f406c60486bed2149e1cf341fde4de6c3292386afe49430973f074587",
+      "reference_checksum": "20404d70178c84a4a94c3f0d634497e9fe5274589fee1914027619664b7d2124",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "DC_09_29",
+        "city": "DC",
+        "city_full": "Washington DC"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3431",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3431_RGB.h5",
+      "reference_path": "heights/test/PHL_3431_AGL.h5",
+      "input_checksum": "abc30f0edd607f3419152937dd1ffa4857bfd7743e30bb304c7710a01befd6bf",
+      "reference_checksum": "5f3f13c6da0c5be25e9be3e3335487b4a1a11ccab268659f601d6dd4e9d617ee",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3431",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3432",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3432_RGB.h5",
+      "reference_path": "heights/test/PHL_3432_AGL.h5",
+      "input_checksum": "b46463c3bfc924184166778007569140662168cfc7f76c5e3fa02b5aace85848",
+      "reference_checksum": "d64ea7d87e18bc99aad2688cde2ee0c464479ff91899a1670b2bb6f536c25f7a",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3432",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3433",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3433_RGB.h5",
+      "reference_path": "heights/test/PHL_3433_AGL.h5",
+      "input_checksum": "084ab636985cb93ceb7675a82d9c61c3ae940008368dc15efe99f66b0cf3642f",
+      "reference_checksum": "4462b7ec5281df4bef41ec92173bb8ce2e36098b99972717221390287ea0f974",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3433",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3434",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3434_RGB.h5",
+      "reference_path": "heights/test/PHL_3434_AGL.h5",
+      "input_checksum": "754e80b6418c90628a03abecc6a27e518e8b8de055d60d852f7566a732502809",
+      "reference_checksum": "29dbc770562ca6b2812adbf6dcec00d7ba5587041a5af4068427d805d686f877",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3434",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3435",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3435_RGB.h5",
+      "reference_path": "heights/test/PHL_3435_AGL.h5",
+      "input_checksum": "12f47c6250ccf319f3148692e5ee9354603adfb259e81882358d2644122b3572",
+      "reference_checksum": "38310ba01b6e659efbec7a292c2082751d7e726b2a76070b460b7540ccd6b3e8",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3435",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3436",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3436_RGB.h5",
+      "reference_path": "heights/test/PHL_3436_AGL.h5",
+      "input_checksum": "2956de37d4e8fbd9cb85823ec50af5dd6e71590983eda451b9add4359516fc41",
+      "reference_checksum": "5dfeea9c8edeee2c989cc03e0a3c7488e96804b3de265c55987d22725be74a54",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3436",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3437",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3437_RGB.h5",
+      "reference_path": "heights/test/PHL_3437_AGL.h5",
+      "input_checksum": "6075a364a77f82aada4216be28e89ac79f985a06ef152075e918e62f4176be33",
+      "reference_checksum": "f8717d85453a48a901f736ac27882b39667a8ada38e5ca0d974b94b928a7a533",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3437",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    },
+    {
+      "sample_id": "gamus-test-PHL_3438",
+      "dataset_name": "gamus",
+      "split": "test",
+      "image_path": "images/test/PHL_3438_RGB.h5",
+      "reference_path": "heights/test/PHL_3438_AGL.h5",
+      "input_checksum": "942b921805300e3df363eaacd4a1abbb9e0a5b60c0d5e412c45d7bd01b910619",
+      "reference_checksum": "5a780c47e5f7dde7ca7e3dc1b9d55fbfccc5f64269831ec7c49757c3498e4426",
+      "source": {
+        "release": "earthflow/GAMUS",
+        "tile": "PHL_3438",
+        "city": "PHL",
+        "city_full": "Philadelphia"
+      }
+    }
+  ]
+}
