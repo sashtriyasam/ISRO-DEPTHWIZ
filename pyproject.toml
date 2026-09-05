@@ -76,3 +76,9 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["PIL", "PIL.*"]
 ignore_missing_imports = true
+
+# h5py ships no py.typed marker: skip type analysis of its imports.
+# It is a data-preparation-only dependency (GAMUS tile reading).
+[[tool.mypy.overrides]]
+module = ["h5py", "h5py.*"]
+ignore_missing_imports = true
