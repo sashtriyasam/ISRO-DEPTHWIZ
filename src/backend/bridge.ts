@@ -153,7 +153,12 @@ export class BackendBridge {
   private backend: string;
 
   constructor(options: BackendBridgeOptions = {}) {
-    this.pythonPath = options.pythonPath ?? "python";
+    this.pythonPath =
+      options.pythonPath ??
+      (typeof process !== "undefined"
+        ? process.env.DEPTHWIZARD_PYTHON
+        : undefined) ??
+      "python";
     this.bridgeScript = options.bridgeScript ?? "scripts/backend_bridge.py";
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
     this.host = detectHost(options.host);

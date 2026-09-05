@@ -1,4 +1,11 @@
-import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import { AppShell } from "../components/AppShell/AppShell";
 import { Viewer, type ViewerHandle } from "../viewer/Viewer";
@@ -21,6 +28,7 @@ import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
 import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
 import { MetadataPanel } from "../components/MetadataPanel/MetadataPanel";
+import { sourceStatusLabel } from "../metadata/metadata";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
 import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
@@ -38,7 +46,10 @@ import { createLayerState, setActiveLayer } from "../layers";
 import { DEFAULT_EXAGGERATION } from "../display";
 import { calculateMeasurement } from "../measurement/calculator";
 import { generateProfile } from "../profile/sampler";
-import { updateMeasurementGraphics, updateProfileGraphics } from "../viewer/Viewer";
+import {
+  updateMeasurementGraphics,
+  updateProfileGraphics,
+} from "../viewer/Viewer";
 import type { ArtifactState } from "../artifact/types";
 import type { SceneArtifact } from "../types/scene";
 import type { CameraMode } from "../camera/types";
@@ -46,7 +57,11 @@ import type { LayerId, LayerState, RenderingMode } from "../layers/types";
 import { DEFAULT_RENDERING_MODE } from "../layers";
 import type { ExaggerationLevel } from "../display/types";
 import type { InspectionResult, InspectionState } from "../inspection/types";
-import type { MeasurementMode, MeasurementPoint, MeasurementState } from "../measurement/types";
+import type {
+  MeasurementMode,
+  MeasurementPoint,
+  MeasurementState,
+} from "../measurement/types";
 import type { ProfileState } from "../profile/types";
 
 export function App() {
@@ -54,16 +69,30 @@ export function App() {
   const [artifactState, setArtifactState] = useState<ArtifactState>("idle");
   const [cameraMode, setCameraMode] = useState<CameraMode | null>(null);
   const [layerState, setLayerState] = useState<LayerState | null>(null);
-  const [renderingMode, setRenderingMode] = useState<RenderingMode>(DEFAULT_RENDERING_MODE);
-  const [exaggeration, setExaggeration] = useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
-  const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "empty" });
-  const [measurementMode, setMeasurementMode] = useState<MeasurementMode>("distance");
-  const [measurementState, setMeasurementState] = useState<MeasurementState>({ status: "empty" });
-  const [profileState, setProfileState] = useState<ProfileState>({ status: "empty" });
-  const [processing, setProcessing] = useState<ProcessingState>({ status: "idle" });
+  const [renderingMode, setRenderingMode] = useState<RenderingMode>(
+    DEFAULT_RENDERING_MODE,
+  );
+  const [exaggeration, setExaggeration] =
+    useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
+  const [inspectionState, setInspectionState] = useState<InspectionState>({
+    status: "empty",
+  });
+  const [measurementMode, setMeasurementMode] =
+    useState<MeasurementMode>("distance");
+  const [measurementState, setMeasurementState] = useState<MeasurementState>({
+    status: "empty",
+  });
+  const [profileState, setProfileState] = useState<ProfileState>({
+    status: "empty",
+  });
+  const [processing, setProcessing] = useState<ProcessingState>({
+    status: "idle",
+  });
   const [waypoints, setWaypoints] = useState<FlythroughWaypoint[]>([]);
   const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>("idle");
-  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(DEFAULT_PLAYBACK_SPEED);
+  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(
+    DEFAULT_PLAYBACK_SPEED,
+  );
   const [flythroughIndex, setFlythroughIndex] = useState(0);
   const waypointCounterRef = useRef(0);
   const trajectoryCounterRef = useRef(0);
@@ -71,7 +100,10 @@ export function App() {
   playbackStatusRef.current = playbackStatus;
   const viewerRef = useRef<ViewerHandle>(null);
   const loaderRef = useRef(new ArtifactLoader());
-  const operationRef = useRef<{ sourceId: string; controller: AbortController } | null>(null);
+  const operationRef = useRef<{
+    sourceId: string;
+    controller: AbortController;
+  } | null>(null);
   const operationCounterRef = useRef(0);
   const pendingRef = useRef<ArtifactSource | null>(null);
   const artifactRef = useRef<SceneArtifact | null>(null);
@@ -86,66 +118,69 @@ export function App() {
     viewerRef.current?.clearProfileGraphics();
   }, []);
 
-  const startOperation = useCallback((source: ArtifactSource) => {
-    const active = operationRef.current;
-    if (active && active.sourceId === source.id) {
-      return;
-    }
-    if (active) {
-      active.controller.abort();
-    }
-    if (
-      pendingSelections({
-        measurement: measurementState,
-        profile: profileState,
-        inspection: inspectionState,
-      })
-    ) {
-      viewerRef.current?.clearSelection();
-      setInspectionState({ status: "empty" });
-      setMeasurementState({ status: "empty" });
-      viewerRef.current?.clearMeasurementGraphics();
-      setProfileState({ status: "empty" });
-      viewerRef.current?.clearProfileGraphics();
-    }
-    const controller = new AbortController();
-    operationRef.current = { sourceId: source.id, controller };
-    operationCounterRef.current += 1;
-    const operationId = `op-${operationCounterRef.current}`;
-    void (async () => {
-      const hadArtifact = artifactRef.current !== null;
-      if (!hadArtifact) {
-        setArtifactState("loading");
-      }
-      const outcome = await runProcessingOperation(
-        { status: "idle" },
-        {
-          source,
-          loader: loaderRef.current,
-          operationId,
-          previousAvailable: hadArtifact,
-          signal: controller.signal,
-        },
-        setProcessing
-      );
-      if (operationRef.current?.controller !== controller) {
+  const startOperation = useCallback(
+    (source: ArtifactSource) => {
+      const active = operationRef.current;
+      if (active && active.sourceId === source.id) {
         return;
       }
-      operationRef.current = null;
-      if (outcome.kind === "ready") {
-        setArtifact(outcome.artifact);
-        setLayerState(createLayerState(outcome.artifact));
-        setArtifactState("ready");
-        clearAnalysisState();
-        viewerRef.current?.setFlythroughPreview(null);
-        setWaypoints([]);
-        setPlaybackStatus("idle");
-        setFlythroughIndex(0);
-      } else if (outcome.kind === "failed" && !hadArtifact) {
-        setArtifactState("error");
+      if (active) {
+        active.controller.abort();
       }
-    })();
-  }, [clearAnalysisState, measurementState, profileState, inspectionState]);
+      if (
+        pendingSelections({
+          measurement: measurementState,
+          profile: profileState,
+          inspection: inspectionState,
+        })
+      ) {
+        viewerRef.current?.clearSelection();
+        setInspectionState({ status: "empty" });
+        setMeasurementState({ status: "empty" });
+        viewerRef.current?.clearMeasurementGraphics();
+        setProfileState({ status: "empty" });
+        viewerRef.current?.clearProfileGraphics();
+      }
+      const controller = new AbortController();
+      operationRef.current = { sourceId: source.id, controller };
+      operationCounterRef.current += 1;
+      const operationId = `op-${operationCounterRef.current}`;
+      void (async () => {
+        const hadArtifact = artifactRef.current !== null;
+        if (!hadArtifact) {
+          setArtifactState("loading");
+        }
+        const outcome = await runProcessingOperation(
+          { status: "idle" },
+          {
+            source,
+            loader: loaderRef.current,
+            operationId,
+            previousAvailable: hadArtifact,
+            signal: controller.signal,
+          },
+          setProcessing,
+        );
+        if (operationRef.current?.controller !== controller) {
+          return;
+        }
+        operationRef.current = null;
+        if (outcome.kind === "ready") {
+          setArtifact(outcome.artifact);
+          setLayerState(createLayerState(outcome.artifact));
+          setArtifactState("ready");
+          clearAnalysisState();
+          viewerRef.current?.setFlythroughPreview(null);
+          setWaypoints([]);
+          setPlaybackStatus("idle");
+          setFlythroughIndex(0);
+        } else if (outcome.kind === "failed" && !hadArtifact) {
+          setArtifactState("error");
+        }
+      })();
+    },
+    [clearAnalysisState, measurementState, profileState, inspectionState],
+  );
 
   useEffect(() => {
     return () => {
@@ -154,10 +189,13 @@ export function App() {
     };
   }, []);
 
-  const handleGenerate = useCallback((source: ArtifactSource) => {
-    pendingRef.current = source;
-    startOperation(source);
-  }, [startOperation]);
+  const handleGenerate = useCallback(
+    (source: ArtifactSource) => {
+      pendingRef.current = source;
+      startOperation(source);
+    },
+    [startOperation],
+  );
 
   const handleCancelOperation = useCallback(() => {
     operationRef.current?.controller.abort();
@@ -195,39 +233,52 @@ export function App() {
   const waypointsRef = useRef<FlythroughWaypoint[]>([]);
   waypointsRef.current = waypoints;
 
-  const syncFlythroughPreview = useCallback((points: FlythroughWaypoint[], currentIndex = 0) => {
-    if (points.length >= 2) {
-      viewerRef.current?.setFlythroughPreview(
-        previewPoints({ id: "preview", waypoints: points, segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS }).map((p) => ({ x: p.x, y: p.y, z: p.z })),
-        currentIndex
-      );
-    } else {
-      viewerRef.current?.setFlythroughPreview(null);
-    }
-  }, []);
+  const syncFlythroughPreview = useCallback(
+    (points: FlythroughWaypoint[], currentIndex = 0) => {
+      if (points.length >= 2) {
+        viewerRef.current?.setFlythroughPreview(
+          previewPoints({
+            id: "preview",
+            waypoints: points,
+            segmentDurationMs: DEFAULT_SEGMENT_DURATION_MS,
+          }).map((p) => ({ x: p.x, y: p.y, z: p.z })),
+          currentIndex,
+        );
+      } else {
+        viewerRef.current?.setFlythroughPreview(null);
+      }
+    },
+    [],
+  );
 
   const handleCameraReady = useCallback(() => {
     const desired = desiredCameraModeRef.current;
     setCameraMode(desired);
     viewerRef.current?.setCameraMode(desired);
-    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
+    if (
+      playbackStatusRef.current === "playing" ||
+      playbackStatusRef.current === "paused"
+    ) {
       setPlaybackStatus(waypointsRef.current.length >= 2 ? "ready" : "idle");
       setFlythroughIndex(0);
     }
     syncFlythroughPreview(waypointsRef.current);
   }, [syncFlythroughPreview]);
 
-  const handleCameraModeChange = useCallback((mode: CameraMode) => {
-    if (mode === "first-person") {
-      viewerRef.current?.clearSelection();
-      setInspectionState({ status: "empty" });
-      setMeasurementState({ status: "empty" });
-      viewerRef.current?.clearMeasurementGraphics();
-      setProfileState({ status: "empty" });
-      viewerRef.current?.clearProfileGraphics();
-    }
-    applyCameraMode(mode);
-  }, [applyCameraMode]);
+  const handleCameraModeChange = useCallback(
+    (mode: CameraMode) => {
+      if (mode === "first-person") {
+        viewerRef.current?.clearSelection();
+        setInspectionState({ status: "empty" });
+        setMeasurementState({ status: "empty" });
+        viewerRef.current?.clearMeasurementGraphics();
+        setProfileState({ status: "empty" });
+        viewerRef.current?.clearProfileGraphics();
+      }
+      applyCameraMode(mode);
+    },
+    [applyCameraMode],
+  );
 
   useEffect(() => {
     if (cameraMode !== "first-person") {
@@ -246,7 +297,10 @@ export function App() {
   playbackSpeedRef.current = playbackSpeed;
 
   const handleAddWaypoint = useCallback(() => {
-    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
+    if (
+      playbackStatusRef.current === "playing" ||
+      playbackStatusRef.current === "paused"
+    ) {
       return;
     }
     const manager = viewerRef.current?.getCameraManager();
@@ -260,7 +314,11 @@ export function App() {
     waypointCounterRef.current += 1;
     const waypoint: FlythroughWaypoint = {
       id: `wp-${waypointCounterRef.current}`,
-      position: { x: state.position.x, y: state.position.y, z: state.position.z },
+      position: {
+        x: state.position.x,
+        y: state.position.y,
+        z: state.position.z,
+      },
       target: { x: state.target.x, y: state.target.y, z: state.target.z },
     };
     const next = [...waypointsRef.current, waypoint];
@@ -269,16 +327,24 @@ export function App() {
     setPlaybackStatus(trajectoryStatusForCount(next.length));
   }, [syncFlythroughPreview]);
 
-  const handleRemoveWaypoint = useCallback((id: string) => {
-    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
-      return;
-    }
-    const next = waypointsRef.current.filter((waypoint) => waypoint.id !== id);
-    setWaypoints(next);
-    syncFlythroughPreview(next);
-    setPlaybackStatus(trajectoryStatusForCount(next.length));
-    setFlythroughIndex(0);
-  }, [syncFlythroughPreview]);
+  const handleRemoveWaypoint = useCallback(
+    (id: string) => {
+      if (
+        playbackStatusRef.current === "playing" ||
+        playbackStatusRef.current === "paused"
+      ) {
+        return;
+      }
+      const next = waypointsRef.current.filter(
+        (waypoint) => waypoint.id !== id,
+      );
+      setWaypoints(next);
+      syncFlythroughPreview(next);
+      setPlaybackStatus(trajectoryStatusForCount(next.length));
+      setFlythroughIndex(0);
+    },
+    [syncFlythroughPreview],
+  );
 
   const clearFlythroughState = useCallback(() => {
     viewerRef.current?.setFlythroughPreview(null);
@@ -288,7 +354,10 @@ export function App() {
   }, []);
 
   const handleClearWaypoints = useCallback(() => {
-    if (playbackStatusRef.current === "playing" || playbackStatusRef.current === "paused") {
+    if (
+      playbackStatusRef.current === "playing" ||
+      playbackStatusRef.current === "paused"
+    ) {
       return;
     }
     clearFlythroughState();
@@ -296,7 +365,7 @@ export function App() {
 
   const sessionPhase = useMemo(
     () => deriveSessionPhase({ hasArtifact: artifact !== null, processing }),
-    [artifact, processing]
+    [artifact, processing],
   );
 
   const sessionModified = useMemo(
@@ -306,7 +375,7 @@ export function App() {
         measurement: measurementState,
         profile: profileState,
       }),
-    [waypoints, measurementState, profileState]
+    [waypoints, measurementState, profileState],
   );
 
   const handleResetWorkspace = useCallback(() => {
@@ -350,7 +419,7 @@ export function App() {
           viewerRef.current?.stopFlythrough();
           setPlaybackStatus("completed");
         },
-      }
+      },
     );
     if (started) {
       setFlythroughIndex(0);
@@ -408,16 +477,16 @@ export function App() {
     const center = new THREE.Vector3(
       (b.minX + b.maxX) / 2,
       (b.minY + b.maxY) / 2,
-      (b.minZ + b.maxZ) / 2
+      (b.minZ + b.maxZ) / 2,
     );
     const size = new THREE.Vector3(
       b.maxX - b.minX,
       b.maxY - b.minY,
-      b.maxZ - b.minZ
+      b.maxZ - b.minZ,
     );
     const box = new THREE.Box3(
       new THREE.Vector3(b.minX, b.minY, b.minZ),
-      new THREE.Vector3(b.maxX, b.maxY, b.maxZ)
+      new THREE.Vector3(b.maxX, b.maxY, b.maxZ),
     );
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
@@ -429,7 +498,7 @@ export function App() {
   }, []);
 
   const handleLayerSelect = useCallback((layerId: LayerId) => {
-    setLayerState((prev) => prev ? setActiveLayer(prev, layerId) : prev);
+    setLayerState((prev) => (prev ? setActiveLayer(prev, layerId) : prev));
     viewerRef.current?.clearSelection();
     setInspectionState({ status: "empty" });
     setMeasurementState({ status: "empty" });
@@ -443,9 +512,16 @@ export function App() {
   }, []);
 
   const getArtifactUnits = useCallback(() => {
-    if (!artifact?.metadata.backend) return { units: "meters" as const, source: "fixture-coordinate-system" as const };
+    if (!artifact?.metadata.backend)
+      return {
+        units: "meters" as const,
+        source: "fixture-coordinate-system" as const,
+      };
     return {
-      units: artifact.metadata.backend.depth_scale === "metric" ? "meters" as const : "relative" as const,
+      units:
+        artifact.metadata.backend.depth_scale === "metric"
+          ? ("meters" as const)
+          : ("relative" as const),
       source: "backend" as const,
     };
   }, [artifact]);
@@ -471,51 +547,80 @@ export function App() {
     setMeasurementState({ status: "selecting-first" });
   }, []);
 
-  const handleMeasurementModeChange = useCallback((mode: MeasurementMode) => {
-    setMeasurementMode(mode);
-    if (measurementState.status !== "empty") {
-      setMeasurementState({ status: "empty" });
-      viewerRef.current?.clearMeasurementGraphics();
-    }
-  }, [measurementState.status]);
-
-  const handleMeasurementPointSelected = useCallback((point: MeasurementPoint | null) => {
-    if (!point) {
-      setMeasurementState({ status: "empty" });
-      viewerRef.current?.clearMeasurementGraphics();
-      return;
-    }
-
-    setMeasurementState((prev) => {
-      if (prev.status === "selecting-first") {
-        return { status: "selecting-second", pointA: point };
+  const handleMeasurementModeChange = useCallback(
+    (mode: MeasurementMode) => {
+      setMeasurementMode(mode);
+      if (measurementState.status !== "empty") {
+        setMeasurementState({ status: "empty" });
+        viewerRef.current?.clearMeasurementGraphics();
       }
-      if (prev.status === "selecting-second") {
-        const result = calculateMeasurement(measurementMode, prev.pointA, point, getArtifactUnits());
-        return { status: "completed", result };
+    },
+    [measurementState.status],
+  );
+
+  const handleMeasurementPointSelected = useCallback(
+    (point: MeasurementPoint | null) => {
+      if (!point) {
+        setMeasurementState({ status: "empty" });
+        viewerRef.current?.clearMeasurementGraphics();
+        return;
       }
-      return prev;
-    });
-  }, [measurementMode, getArtifactUnits]);
+
+      setMeasurementState((prev) => {
+        if (prev.status === "selecting-first") {
+          return { status: "selecting-second", pointA: point };
+        }
+        if (prev.status === "selecting-second") {
+          const result = calculateMeasurement(
+            measurementMode,
+            prev.pointA,
+            point,
+            getArtifactUnits(),
+          );
+          return { status: "completed", result };
+        }
+        return prev;
+      });
+    },
+    [measurementMode, getArtifactUnits],
+  );
 
   useEffect(() => {
     if (measurementState.status === "selecting-first") {
       updateMeasurementGraphics(
-        viewerRef.current as unknown as { threeScene: null; measurementMarkerA: null; measurementMarkerB: null; measurementLine: null; verticalScaleRef: number },
+        viewerRef.current as unknown as {
+          threeScene: null;
+          measurementMarkerA: null;
+          measurementMarkerB: null;
+          measurementLine: null;
+          verticalScaleRef: number;
+        },
         null,
-        null
+        null,
       );
     } else if (measurementState.status === "selecting-second") {
       updateMeasurementGraphics(
-        viewerRef.current as unknown as { threeScene: null; measurementMarkerA: null; measurementMarkerB: null; measurementLine: null; verticalScaleRef: number },
+        viewerRef.current as unknown as {
+          threeScene: null;
+          measurementMarkerA: null;
+          measurementMarkerB: null;
+          measurementLine: null;
+          verticalScaleRef: number;
+        },
         measurementState.pointA,
-        null
+        null,
       );
     } else if (measurementState.status === "completed") {
       updateMeasurementGraphics(
-        viewerRef.current as unknown as { threeScene: null; measurementMarkerA: null; measurementMarkerB: null; measurementLine: null; verticalScaleRef: number },
+        viewerRef.current as unknown as {
+          threeScene: null;
+          measurementMarkerA: null;
+          measurementMarkerB: null;
+          measurementLine: null;
+          verticalScaleRef: number;
+        },
         measurementState.result.pointA,
-        measurementState.result.pointB
+        measurementState.result.pointB,
       );
     }
   }, [measurementState]);
@@ -533,53 +638,75 @@ export function App() {
     setProfileState({ status: "selecting-first" });
   }, []);
 
-  const handleProfilePointSelected = useCallback((point: MeasurementPoint | null) => {
-    if (!point) {
-      setProfileState({ status: "empty" });
-      viewerRef.current?.clearProfileGraphics();
-      return;
-    }
+  const handleProfilePointSelected = useCallback(
+    (point: MeasurementPoint | null) => {
+      if (!point) {
+        setProfileState({ status: "empty" });
+        viewerRef.current?.clearProfileGraphics();
+        return;
+      }
 
-    setProfileState((prev) => {
-      if (prev.status === "selecting-first") {
-        return { status: "selecting-second", pointA: point };
-      }
-      if (prev.status === "selecting-second") {
-        const profile = generateProfile(
-          prev.pointA,
-          point,
-          artifact?.elevation,
-          artifact?.layers?.agl,
-          artifact?.metadata.transform,
-          {
-            ...getArtifactUnits(),
-            elevationSemantics: artifact?.metadata.backend?.elevation_semantics,
-          }
-        );
-        return { status: "completed", profile };
-      }
-      return prev;
-    });
-  }, [artifact, getArtifactUnits]);
+      setProfileState((prev) => {
+        if (prev.status === "selecting-first") {
+          return { status: "selecting-second", pointA: point };
+        }
+        if (prev.status === "selecting-second") {
+          const profile = generateProfile(
+            prev.pointA,
+            point,
+            artifact?.elevation,
+            artifact?.layers?.agl,
+            artifact?.metadata.transform,
+            {
+              ...getArtifactUnits(),
+              elevationSemantics:
+                artifact?.metadata.backend?.elevation_semantics,
+            },
+          );
+          return { status: "completed", profile };
+        }
+        return prev;
+      });
+    },
+    [artifact, getArtifactUnits],
+  );
 
   useEffect(() => {
     if (profileState.status === "selecting-first") {
       updateProfileGraphics(
-        viewerRef.current as unknown as { threeScene: null; profileMarkerA: null; profileMarkerB: null; profileLine: null; verticalScaleRef: number },
+        viewerRef.current as unknown as {
+          threeScene: null;
+          profileMarkerA: null;
+          profileMarkerB: null;
+          profileLine: null;
+          verticalScaleRef: number;
+        },
         null,
-        null
+        null,
       );
     } else if (profileState.status === "selecting-second") {
       updateProfileGraphics(
-        viewerRef.current as unknown as { threeScene: null; profileMarkerA: null; profileMarkerB: null; profileLine: null; verticalScaleRef: number },
+        viewerRef.current as unknown as {
+          threeScene: null;
+          profileMarkerA: null;
+          profileMarkerB: null;
+          profileLine: null;
+          verticalScaleRef: number;
+        },
         profileState.pointA,
-        null
+        null,
       );
     } else if (profileState.status === "completed") {
       updateProfileGraphics(
-        viewerRef.current as unknown as { threeScene: null; profileMarkerA: null; profileMarkerB: null; profileLine: null; verticalScaleRef: number },
+        viewerRef.current as unknown as {
+          threeScene: null;
+          profileMarkerA: null;
+          profileMarkerB: null;
+          profileLine: null;
+          verticalScaleRef: number;
+        },
         profileState.profile.pointA,
-        profileState.profile.pointB
+        profileState.profile.pointB,
       );
     }
   }, [profileState]);
@@ -607,7 +734,16 @@ export function App() {
               onProfilePointSelected={handleProfilePointSelected}
             />
           ) : (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}>
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--color-text-muted)",
+              }}
+            >
               {artifactState === "loading"
                 ? "Generating terrain…"
                 : artifactState === "error"
@@ -651,7 +787,9 @@ export function App() {
               onModeChange={handleCameraModeChange}
               onFrameScene={handleFrameScene}
               onReset={handleReset}
-              navigationLocked={playbackStatus === "playing" || playbackStatus === "paused"}
+              navigationLocked={
+                playbackStatus === "playing" || playbackStatus === "paused"
+              }
             />
             <FlythroughPanel
               waypoints={waypoints}
@@ -659,7 +797,9 @@ export function App() {
               speed={playbackSpeed}
               currentIndex={flythroughIndex}
               canCapture={cameraMode !== "trajectory" && artifact !== null}
-              navigationLocked={playbackStatus === "playing" || playbackStatus === "paused"}
+              navigationLocked={
+                playbackStatus === "playing" || playbackStatus === "paused"
+              }
               onAddWaypoint={handleAddWaypoint}
               onRemoveWaypoint={handleRemoveWaypoint}
               onClear={handleClearWaypoints}
@@ -693,32 +833,31 @@ export function App() {
               onModeChange={handleMeasurementModeChange}
               onStartMeasurement={handleStartMeasurement}
               onClear={handleClearMeasurement}
-              startDisabled={playbackStatus === "playing" || playbackStatus === "paused"}
+              startDisabled={
+                playbackStatus === "playing" || playbackStatus === "paused"
+              }
             />
             <ProfilePanel
               state={profileState}
               onStartProfile={handleStartProfile}
               onClear={handleClearProfile}
-              startDisabled={playbackStatus === "playing" || playbackStatus === "paused"}
+              startDisabled={
+                playbackStatus === "playing" || playbackStatus === "paused"
+              }
             />
             <InspectorPanel
               state={inspectionState}
               metadata={artifact?.metadata}
               onClear={handleClearInspection}
             />
-            <MetadataPanel
-              artifact={artifact}
-              activeLayerId={activeLayerId}
-            />
+            <MetadataPanel artifact={artifact} activeLayerId={activeLayerId} />
             <SceneInfo
               artifact={artifact}
               state={artifactState}
               sourceLabel={
-                artifact?.metadata.backend
-                  ? "Synthetic Development Backend"
-                  : artifact
-                    ? "Development Fixture"
-                    : "No input selected"
+                artifact
+                  ? sourceStatusLabel(artifact.metadata)
+                  : "No input selected"
               }
             />
           </SidePanel>
@@ -731,9 +870,23 @@ export function App() {
 
 function Header() {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)", height: "100%" }}>
-      <span style={{ fontWeight: 600, fontSize: "var(--font-size-md)" }}>DepthWizard</span>
-      <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--spacing-md)",
+        height: "100%",
+      }}
+    >
+      <span style={{ fontWeight: 600, fontSize: "var(--font-size-md)" }}>
+        DepthWizard
+      </span>
+      <span
+        style={{
+          color: "var(--color-text-muted)",
+          fontSize: "var(--font-size-xs)",
+        }}
+      >
         v0.1.0-dev
       </span>
     </div>
@@ -742,10 +895,15 @@ function Header() {
 
 function SidePanel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: "var(--spacing-md)", display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
+    <div
+      style={{
+        padding: "var(--spacing-md)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--spacing-md)",
+      }}
+    >
       {children}
     </div>
   );
 }
-
-

@@ -21,7 +21,9 @@ describe("BackendBridge", () => {
       const result = await bridge.executeSynthetic(4, 4);
       expect(result.success).toBe(true);
       expect(result.artifact!.metadata.backend?.depth_scale).toBe("relative");
-      expect(result.artifact!.metadata.backend?.elevation_semantics).toBe("relative_depth");
+      expect(result.artifact!.metadata.backend?.elevation_semantics).toBe(
+        "relative_depth",
+      );
     });
 
     it("generates deterministic output", async () => {
@@ -47,7 +49,9 @@ describe("BackendBridge", () => {
       const result = await bridge.executeSynthetic(8, 8);
       expect(result.success).toBe(true);
       expect(result.artifact!.metadata.source).toBe("backend");
-      expect(result.artifact!.metadata.backend?.model_name).toBe("synthetic-depth");
+      expect(result.artifact!.metadata.backend?.model_name).toBe(
+        "synthetic-depth",
+      );
     });
 
     it("includes warnings for relative data", async () => {
@@ -80,6 +84,38 @@ describe("BackendBridge", () => {
       const result = await badBridge.executeSynthetic();
       expect(result.success).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("python interpreter resolution", () => {
+    it("reports BACKEND_UNAVAILABLE for an explicit bad interpreter", async () => {
+      const badBridge = new BackendBridge({
+        pythonPath: "definitely-not-a-python-xyz",
+      });
+      const result = await badBridge.executeSynthetic();
+      expect(result.success).toBe(false);
+      expect(result.errors.some((e) => e.code === "BACKEND_UNAVAILABLE")).toBe(
+        true,
+      );
+    });
+
+    it("consults DEPTHWIZARD_PYTHON when no explicit interpreter is set", async () => {
+      const previous = process.env.DEPTHWIZARD_PYTHON;
+      process.env.DEPTHWIZARD_PYTHON = "definitely-not-a-python-xyz";
+      try {
+        const envBridge = new BackendBridge({});
+        const result = await envBridge.executeSynthetic();
+        expect(result.success).toBe(false);
+        expect(
+          result.errors.some((e) => e.code === "BACKEND_UNAVAILABLE"),
+        ).toBe(true);
+      } finally {
+        if (previous === undefined) {
+          delete process.env.DEPTHWIZARD_PYTHON;
+        } else {
+          process.env.DEPTHWIZARD_PYTHON = previous;
+        }
+      }
     });
   });
 });

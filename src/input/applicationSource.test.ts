@@ -15,10 +15,13 @@ const SUFFIXES = [".jpeg", ".jpg", ".png", ".tif", ".tiff"];
 const bridge = new BackendBridge({ bridgeScript: "scripts/backend_bridge.py" });
 
 async function validatedTile() {
-  return validateInputFile(makeClientFile("tile.png", makeTestPng(4, 4), "image/png"), {
-    bridge,
-    supportedSuffixes: SUFFIXES,
-  });
+  return validateInputFile(
+    makeClientFile("tile.png", makeTestPng(4, 4), "image/png"),
+    {
+      bridge,
+      supportedSuffixes: SUFFIXES,
+    },
+  );
 }
 
 describe("ApplicationBackendSource", () => {
@@ -35,7 +38,9 @@ describe("ApplicationBackendSource", () => {
       expect(source.id).toMatch(/^file-[0-9a-f]{16}$/);
       expect(source.label).toBe("tile.png");
       const artifact = await source.load();
-      expect(artifact.metadata.backend?.elevation_semantics).toBe("absolute_elevation_dsm");
+      expect(artifact.metadata.backend?.elevation_semantics).toBe(
+        "absolute_elevation_dsm",
+      );
       expect(artifact.metadata.backend?.depth_scale).toBe("metric");
     } finally {
       await validated.cleanup();
@@ -72,7 +77,9 @@ describe("ApplicationBackendSource", () => {
       });
       const sections = describeArtifact(artifact, "dsm");
       const provenance = sections.find((s) => s.id === "provenance")!;
-      expect(provenance.rows.some((r) => r.value.includes("synthetic-depth"))).toBe(true);
+      expect(
+        provenance.rows.some((r) => r.value.includes("synthetic-depth")),
+      ).toBe(true);
       const after = JSON.stringify({
         grid: Array.from(artifact.elevation!.grid),
         backend: artifact.metadata.backend,
@@ -111,7 +118,9 @@ describe("ApplicationBackendSource", () => {
         targetSemantics: "height_agl_ndsm",
       });
       const artifact = await source.load();
-      expect(artifact.metadata.backend?.elevation_semantics).toBe("height_agl_ndsm");
+      expect(artifact.metadata.backend?.elevation_semantics).toBe(
+        "height_agl_ndsm",
+      );
       expect(artifact.elevation!.unit).toBe("meters");
       const layers = createLayerState(artifact);
       const dsm = layers.layers.find((l) => l.id === "dsm");
@@ -142,10 +151,28 @@ describe("ApplicationBackendSource", () => {
       const first = await source.load();
       const second = await source.load();
       expect(first.id).toBe(second.id);
-      expect(Array.from(first.elevation!.grid)).toEqual(Array.from(second.elevation!.grid));
-      expect(Array.from(first.mesh.vertices)).toEqual(Array.from(second.mesh.vertices));
+      expect(Array.from(first.elevation!.grid)).toEqual(
+        Array.from(second.elevation!.grid),
+      );
+      expect(Array.from(first.mesh.vertices)).toEqual(
+        Array.from(second.mesh.vertices),
+      );
     } finally {
       await validated.cleanup();
     }
+  });
+
+  it("labels a real backend by model instead of synthetic", () => {
+    const source = new ApplicationBackendSource({
+      backend: "depth-anything-v2-small",
+    });
+    expect(source.backendLabel).toBe("Backend model (depth-anything-v2-small)");
+    expect(source.backendLabel).not.toBe("Synthetic Development Backend");
+  });
+
+  it("keeps the synthetic label when no backend is requested", () => {
+    expect(new ApplicationBackendSource({}).backendLabel).toBe(
+      APPLICATION_BACKEND_LABEL,
+    );
   });
 });

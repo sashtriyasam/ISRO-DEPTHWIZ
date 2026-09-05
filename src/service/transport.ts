@@ -1,6 +1,10 @@
 import type { BridgeExecutionHooks } from "../backend/bridge";
 import { OperationCancelledError } from "../backend/bridge";
-import { detectHost, type HostCapabilities, type HostDetectionOverrides } from "../host/host";
+import {
+  detectHost,
+  type HostCapabilities,
+  type HostDetectionOverrides,
+} from "../host/host";
 
 export interface ServiceTransportOptions {
   pythonPath?: string;
@@ -22,7 +26,12 @@ export class SubprocessServiceTransport implements ServiceTransport {
   private host: HostCapabilities;
 
   constructor(options: ServiceTransportOptions = {}) {
-    this.pythonPath = options.pythonPath ?? "python";
+    this.pythonPath =
+      options.pythonPath ??
+      (typeof process !== "undefined"
+        ? process.env.DEPTHWIZARD_PYTHON
+        : undefined) ??
+      "python";
     this.serviceScript = options.serviceScript ?? "scripts/depthwiz_service.py";
     this.timeoutMs = options.timeoutMs ?? SERVICE_TIMEOUT_MS;
     this.host = detectHost(options.host);
@@ -32,9 +41,14 @@ export class SubprocessServiceTransport implements ServiceTransport {
     return this.host;
   }
 
-  async invoke(payload: unknown, hooks: BridgeExecutionHooks = {}): Promise<unknown> {
+  async invoke(
+    payload: unknown,
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<unknown> {
     if (!this.host.processSpawning) {
-      throw new Error("Service transport requires a desktop host with process spawning");
+      throw new Error(
+        "Service transport requires a desktop host with process spawning",
+      );
     }
     if (hooks.signal?.aborted) {
       throw new OperationCancelledError();
@@ -80,13 +94,23 @@ export class SubprocessServiceTransport implements ServiceTransport {
         clearTimeout(timer);
         hooks.signal?.removeEventListener("abort", onAbort);
         if (code !== 0) {
-          settle(() => reject(new Error(`Service process exited with code ${code}: ${stderr.slice(0, 500)}`)));
+          settle(() =>
+            reject(
+              new Error(
+                `Service process exited with code ${code}: ${stderr.slice(0, 500)}`,
+              ),
+            ),
+          );
           return;
         }
         try {
           settle(() => resolve(JSON.parse(stdout)));
         } catch {
-          settle(() => reject(new Error(`Malformed service output: ${stdout.slice(0, 200)}`)));
+          settle(() =>
+            reject(
+              new Error(`Malformed service output: ${stdout.slice(0, 200)}`),
+            ),
+          );
         }
       });
       proc.on("error", (err) => {

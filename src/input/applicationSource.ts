@@ -11,7 +11,8 @@ export type ApplicationBackendKind = "file" | "synthetic";
 
 export const APPLICATION_BACKEND_LABEL = "Synthetic Development Backend";
 
-export const DEFAULT_TARGET_SEMANTICS: MetricTargetSemantics = "absolute_elevation_dsm";
+export const DEFAULT_TARGET_SEMANTICS: MetricTargetSemantics =
+  "absolute_elevation_dsm";
 
 export interface ApplicationBackendOptions {
   stagedPath?: string;
@@ -20,6 +21,7 @@ export interface ApplicationBackendOptions {
   targetSemantics?: MetricTargetSemantics;
   transport?: ArtifactTransport;
   bridge?: BackendBridge;
+  backend?: string;
 }
 
 export class ApplicationBackendSource implements ArtifactSource {
@@ -27,7 +29,7 @@ export class ApplicationBackendSource implements ArtifactSource {
   readonly label: string;
   readonly kind: ApplicationBackendKind;
   readonly targetSemantics: MetricTargetSemantics;
-  readonly backendLabel = APPLICATION_BACKEND_LABEL;
+  readonly backendLabel: string;
 
   private fileSource: FileInputSource | null;
   private bridge: BackendBridge;
@@ -36,7 +38,12 @@ export class ApplicationBackendSource implements ArtifactSource {
 
   constructor(options: ApplicationBackendOptions = {}) {
     this.targetSemantics = options.targetSemantics ?? DEFAULT_TARGET_SEMANTICS;
-    this.bridge = options.bridge ?? new BackendBridge();
+    this.backendLabel =
+      options.backend && options.backend !== "synthetic-depth"
+        ? `Backend model (${options.backend})`
+        : APPLICATION_BACKEND_LABEL;
+    this.bridge =
+      options.bridge ?? new BackendBridge({ backend: options.backend });
     if (options.stagedPath && options.metadata) {
       this.kind = "file";
       this.fileSource = new FileInputSource({
@@ -44,6 +51,7 @@ export class ApplicationBackendSource implements ArtifactSource {
         metadata: options.metadata,
         transport: options.transport,
         targetSemantics: this.targetSemantics,
+        backend: options.backend,
       });
       this.id = this.fileSource.id;
       this.label = this.fileSource.label;
@@ -64,7 +72,7 @@ export class ApplicationBackendSource implements ArtifactSource {
     const result: BridgeResult = await this.bridge.executeTerrain(
       this.syntheticWidth,
       this.syntheticHeight,
-      { signal: loadOptions?.signal, onStage: loadOptions?.onStage }
+      { signal: loadOptions?.signal, onStage: loadOptions?.onStage },
     );
     if (!result.success || !result.artifact) {
       throw new BackendOperationError(result.errors);
