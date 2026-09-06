@@ -1,6 +1,6 @@
-# DepthWizard — Project Status (evidence-based, 2026-09-05)
+# DepthWizard — Project Status (evidence-based, 2026-09-06)
 
-Source: `main` @ `6ed623e`, branch inventory (~50 branches),
+Source: `main` @ `8aafc41`, working branch `feat/shivam-bugfixes-progress-relay`,
 `docs/sih-architecture.md`, `docs/dav2-level3-evidence.md`.
 Uncertainty is marked; nothing below is a planning guess presented
 as completion.
@@ -13,7 +13,7 @@ as completion.
 | Calibration           | In Progress | Engine + DEM reference + controls branches exist; merge/verification state to confirm                          |
 | DSM / rDSM            | In Progress | DSM engine, height semantics, GeoTIFF export branches exist; GIS-open check pending                            |
 | Mesh                  | In Progress | Renderer-independent mesh engine exists; viewer texturing pending (Aryan)                                      |
-| Desktop               | In Progress | Session, camera, flythrough, measurement, layers branches exist; ~25 Aryan branches mostly unmerged            |
+| Desktop app & IPC     | Done        | Electron IPC stage relay, Python 3.13 discovery, process safety, ISRO space radar telemetry loader overlay    |
 | 3D / flythrough       | In Progress | Waypoint flythrough + visual validation (`448ea52`, `af6d416`) on branches, not all on main                    |
 | Integration           | Integration | Canonical adapter + transport exist; Path A desktop path accepted on main (`31d9173`); Path B metric E2E open  |
 | Scientific validation | Blocked     | GAMUS 32-tile: MAE 4.40 m / RMSE 5.86 m / R² 0.23 — real but poor; SIH-wide accuracy unproven                  |
@@ -22,10 +22,13 @@ as completion.
 
 ## Head state
 
-- `main` = `6ed623e` "fix(runtime): validate real DA-V2 desktop execution".
-- Working branch for this governance change:
-  `feat/shivam-project-governance` (cut from `main`).
-- Open PRs: 0. Repo issues before this change: 0.
+- `main` = `8aafc41`
+- Open PR #8 (`feat/shivam-bugfixes-progress-relay`):
+  - Fixes Windows Python 3.13 discovery & 0-byte Store alias fallback
+  - IPC handler order fix & payload size / `stagedDirs` cleanup safety checks
+  - IPC `service-stage-update` real-time progress relay
+  - Accessible ISRO telemetry space loader with stage progress bar and screen reader isolation
+  - Vitest: 627 passed | Pytest: 549 passed
 - Teammate branches are **preserved untouched**; no merges, no
   deletions, no history rewrites performed by this change.
 
