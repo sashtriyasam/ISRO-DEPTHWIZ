@@ -68,14 +68,23 @@
 
 ---
 
+## Requirement Closure Review (2026-09-06)
+
+| Requirement                        | Interpretation                                                                     | Current implementation                                   | Evidence                                                                                                    | Gap                                                         | Classification              | Minimum implementation                                                                                     | Owner        |
+| ---------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------ |
+| Solar-shadow geometry/trigonometry | Per-structure heights from shadow length + solar angles, as calibration references | None (0 matches in `src/`)                               | Verified search + `docs/ps-solar-shadow-closure.md` §§1–12                                                  | Full chain absent                                           | **C — MAJOR NEW SUBSYSTEM** | New `depthwizard.solar` package feeding `CalibrationSamples`; tests per closure §14                        | Shivam       |
+| 3D neural rendering                | Learned scene representation + neural view synthesis                               | Three.js rasterization only (0 neural matches in `src/`) | Verified search + `docs/ps-neural-rendering-closure.md` §§1–4; in-repo PS sources contain no neural wording | Representation + synthesizer + GPU/packaging program absent | **C — MAJOR NEW SUBSYSTEM** | Per-scene fit + versioned artifact + WebGL/WASM renderer + held-out metrics; or accept rasterization claim | Aryan/Shivam |
+
+**Decision:** **C for both** — from evidence, not impression. No implementation started (closure analysis only).
+
 ## Required Actions for SIH Compliance
 
-| Action                                                                                                            | Owner        | Timeline                    |
-| ----------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------- |
-| Implement solar geometry pipeline (shadow detection → solar angle → trigonometric height)                         | Shivam       | Required for SIH compliance |
-| Clarify "3D neural rendering" requirement: implement NeRF/GS or document rasterization as accepted interpretation | Aryan/Shivam | Required for SIH compliance |
-| Document single-tile vs city-scale scope limitation                                                               | Aryan/Shivam | Documentation               |
-| Freeze final ML candidate with solar-aware model                                                                  | Shravan      | Required for SIH compliance |
+| Action                                                                                                                                                                                          | Owner        | Timeline                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------- |
+| Accept or reject the solar C-classification; if accepted, scope `depthwizard.solar` as a separate program (`docs/ps-solar-shadow-closure.md` §14)                                               | Shivam       | Required for SIH compliance |
+| Accept or reject the neural-rendering C-classification; if binding, scope the NeRF/GS program (`docs/ps-neural-rendering-closure.md` §5) or record rasterization as the accepted interpretation | Aryan/Shivam | Required for SIH compliance |
+| Document single-tile vs city-scale scope limitation                                                                                                                                             | Aryan/Shivam | Documentation               |
+| Freeze final ML candidate with solar-aware model                                                                                                                                                | Shravan      | Required for SIH compliance |
 
 ---
 
