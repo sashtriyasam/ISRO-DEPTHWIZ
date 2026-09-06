@@ -1,6 +1,6 @@
 # DepthWizard — ISRO SIH 26175 Release Candidate
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0--rc1-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases)
+[![Release](https://img.shields.io/badge/Release-v0.1.0--sih--26175--rc1-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
 [![Python](https://img.shields.io/badge/Python-3.12_|_549_Tests_Passed-success.svg)](#python-scientific-engine)
 [![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_627_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
@@ -35,7 +35,7 @@
 | **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 627 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **RELEASE CANDIDATE** — NSIS Installer build (`DepthWizard-Setup-0.1.0.exe`); physical witness & code signing in progress. |
+| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — Signed NSIS Installer (`DepthWizard Setup 1.0.0.exe`, 115.5 MB); Authenticode signed with DigiCert RFC 3161 timestamp, 20/20 clean machine physical witness trial passed. |
 
 
 ---
@@ -68,8 +68,11 @@
 ## 🚀 Download & Installation
 
 ### Option 1: Standalone Windows Installer (Release Candidate)
-Download the standalone executable directly from the GitHub Release Candidate tag:
-- **Download Executable**: [DepthWizard-Setup-0.1.0.exe (150 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-rc1)
+Download the signed standalone installer directly from the GitHub Release Candidate tag:
+- **Download Installer**: [`DepthWizard Setup 1.0.0.exe` (115.5 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
+- **Installer SHA-256**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717`
+- **Authenticode Signature**: Verified (`CN=DepthWizard Release Candidate, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
+- **Clean Machine Physical Witness**: `PASSED 100%` (20/20 verification items verified)
 
 
 ### Option 2: Build from Source
