@@ -58,6 +58,20 @@ except ImportError as exc:
 
 DEV_REFERENCE_ID = "synthetic-dev-ref"
 
+#: M17 checkpoint file name (canonical candidate, never committed).
+_M17_CHECKPOINT_FILE = "m17_geonrw_struct_best.pt"
+
+
+def _m17_checkpoint_present() -> bool:
+    """Whether an M17 checkpoint resolves (discovery only, no loading)."""
+    import os
+
+    override = os.environ.get("DW_M17_CKPT")
+    if override:
+        return Path(override).is_file()
+    root = Path(__file__).resolve().parent.parent
+    return (root / "checkpoints" / _M17_CHECKPOINT_FILE).is_file()
+
 
 def build_backends() -> dict[str, Any]:
     """Assemble the service backend registry.
@@ -85,6 +99,10 @@ def build_backends() -> dict[str, Any]:
         from depthwizard.backends.depth_anything_v2 import DepthAnythingV2Backend
 
         backends["depth-anything-v2-small"] = DepthAnythingV2Backend()
+    if _m17_checkpoint_present():
+        from depthwizard.backends.m17 import M17DepthBackend
+
+        backends["m17-geonrw-struct"] = M17DepthBackend()
     return backends
 
 
