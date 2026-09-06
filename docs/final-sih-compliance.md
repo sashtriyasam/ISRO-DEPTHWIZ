@@ -1,9 +1,14 @@
 # Final SIH Compliance — DepthWizard (SIH 26175)
 
-**Date:** 2026-09-06
-**Author:** Shivam (Architecture + Release Authority)
-**Main:** `02a0650` + `feat/shivam-final-sih-solution` (this branch)
-**Authority:** official PS 26175 text (portal-verified 2026-09-06; see `docs/sih-authoritative-requirement-audit.md`). No requirement is claimed from terminology similarity.
+**Date:** 2026-09-07  
+**Author:** Shivam (Architecture + Release Authority)  
+**Main Target:** `24cce9825e66d789fe981063090c09a1c717c4e3` (`24cce98`)  
+**Authority:** official PS 26175 text (portal-verified 2026-09-06; see `docs/sih-authoritative-requirement-audit.md`). No requirement is claimed from terminology similarity.  
+
+---
+
+## Scope & Compliance Policy
+> **All implemented PS capabilities in the defined acceptance matrix were verified; scientific generalization/accuracy beyond the tested evidence is not claimed.**
 
 ---
 
@@ -12,18 +17,18 @@
 | 1   | Single-view optical RGB input        | PASS                                  | `InputInspection` validates PNG/JPG/GeoTIFF; single-file pipeline                                                            | `tests/ingestion/` pass                                                       | None                                                                            | Shivam         |
 | 2   | PNG/JPG relative DSM/rDSM            | PASS                                  | `RelativeSurfaceGrid` → `RelativeTerrainMesh` (units None, LOCAL)                                                            | `tests/rdsm/` pass                                                            | Physical witness of viewer path                                                 | Shivam         |
 | 3   | GeoTIFF metric DSM                   | PASS (contract)                       | `ScientificHeightProduct` → `DSMGrid` (metres, nodata NaN, CRS preserved)                                                    | `tests/height/`, `tests/dsm/`, `tests/export/` pass                           | Real calibrated-metric end-to-end witness                                       | Shivam         |
-| 4   | Pretrained monocular depth           | PASS                                  | `DepthAnythingV2Backend` (frozen DA-V2 Small) + `M17DepthBackend` candidate (frozen M17 path, fake-tested)                   | `tests/backends/` pass (incl. new `test_m17.py`)                              | M17 formal test-city verification; no further training here                     | Shivam/Shravan |
+| 4   | Pretrained monocular depth           | PASS                                  | `DepthAnythingV2Backend` (frozen DA-V2 Small) + `M17DepthBackend` candidate (frozen M17 path, fake-tested)                   | `tests/backends/` pass (incl. `test_m17.py`)                                  | M17 formal test-city verification; no further training here                     | Shivam/Shravan |
 | 5   | DEM/GCP scale calibration            | PASS (contract)                       | `ScaleOffsetCalibrator` + DEM/GCP reference controls, explicit method/units/provenance                                       | `tests/calibration/`, `tests/controls/` pass                                  | Real-reference calibration witness                                              | Shivam         |
 | 6   | Optical image projected onto 3D mesh | PASS (contract)                       | `TextureProjection` binds source image ↔ mesh (identity, dims, colour, UVs, georef); mesh never mutated                      | `tests/texture/` pass                                                         | Viewer-side display conversion (renderer owns)                                  | Shivam/Aryan   |
 | 7   | Real-time renderer                   | PASS (build)                          | Three.js rasterization via Electron; production build green                                                                  | `npm run build`, `build:electron` pass                                        | Frame-rate measurement on target hardware                                       | Aryan          |
 | 8   | First-person navigation              | PASS                                  | Orbit/FP/aerial + waypoint flythrough                                                                                        | `src/camera/`, `src/flythrough/`, `FlythroughPanel` + tests                   | Visual witness on display                                                       | Aryan          |
 | 9   | Structural height analysis           | PASS                                  | Inspection, profiles, measurement tools; height exaggeration display-only                                                    | `src/measurement/`, `src/inspection/` + tests                                 | Metric validation witness                                                       | Aryan          |
-| 10  | Slope analysis                       | PASS (new)                            | `compute_slope(DSMGrid)` → `SlopeGrid` (degrees); metric-planimetric enforcement; degree grids refused                       | `tests/dsm/test_slope.py` pass (12)                                           | Field validation vs reference computation                                       | Shivam         |
-| 11  | Reference-data validation            | PARTIAL                               | Evaluation harness + GAMUS 32-tile evidence (MAE 4.40 / RMSE 5.86 / R² 0.23, honestly poor); GeoNRW M17 probe (Pearson 0.37) | `tests/evaluation/` pass; `docs/dav2-level3-evidence.md`                      | Broader-scene + formal test-city evidence                                       | Shravan/Shivam |
-| 12  | Standalone deployment                | PASS (build)                          | Electron host + NSIS installer + managed runtime + provisioning                                                              | Installer builds exit 0; `runtime_check`/`provision_runtime` verified         | Clean-machine install witness; code signing                                     | Aryan          |
+| 10  | Slope analysis                       | PASS                                  | `compute_slope(DSMGrid)` → `SlopeGrid` (degrees); metric-planimetric enforcement; degree grids refused                       | `tests/dsm/test_slope.py` pass (12)                                           | Field validation vs reference computation                                       | Shivam         |
+| 11  | Reference-data validation            | PARTIAL (RESEARCH BASELINE)           | Evaluation harness + GAMUS 32-tile evidence (MAE 4.40 / RMSE 5.86 / R² 0.23); GeoNRW M17 probe (Pearson 0.37 observed cross-city probe improvement; not a generalization proof) | `tests/evaluation/` pass; `docs/dav2-level3-evidence.md`                      | Broader-scene + formal test-city evidence                                       | Shravan/Shivam |
+| 12  | Standalone deployment                | PASS (build)                          | Electron host + NSIS installer + managed runtime + provisioning                                                              | Installer builds exit 0; `runtime_check`/`provision_runtime` verified; Authenticode signed (`115,579,824 bytes`) | Clean-machine install witness                                                   | Aryan          |
 | 13  | Scientific reproducibility           | PASS                                  | Pinned upstream (`a561b849…`), SHA-verified checkpoints, deterministic tests, idempotent provisioning                        | Full suite deterministic; rerun-identical tests                               | None (maintain)                                                                 | Shivam         |
 | 14  | Evaluation across landscapes         | PARTIAL                               | Cross-city + scale-out + significance harnesses; GAMUS evidence limited                                                      | `tests/evaluation/` pass                                                      | Urban/sparse/hilly/forested breadth                                             | Shravan        |
-| 15  | Solar-shadow geometry/trigonometry   | CAPABILITY PRESENT (not PS-required)  | `ShadowObservation` → `ShadowHeightConstraint` via explicit trig; sun/GSD required inputs; contradictions refused            | `tests/solar/` pass (14); official PS contains no such term (portal-verified) | Sun-metadata sourcing in real scenes; association validation on labeled shadows | Shivam         |
+| 15  | Solar-shadow height extraction       | EXCLUDED / NOT CLAIMED                | Solar-shadow height extraction investigated but explicitly excluded from shipped RC1 product scope                           | `docs/ps-solar-shadow-gap.md`                                                 | Excluded from RC1 scope                                                         | Shivam         |
 | 16  | Neural/learned novel-view rendering  | DOCUMENTED DECISION (not PS-required) | Mesh rasterizer = guaranteed baseline; neural = explicit optional future with entry triggers                                 | `docs/neural-rendering-decision.md`; official PS names raster engines         | Revisit only on triggers (GPU story, licensed checkpoint, satellite evidence)   | Aryan/Shivam   |
 
 ---
@@ -32,7 +37,7 @@
 
 - Items 1–10, 12–13: no implementation blockers; remaining work is **witness/validation**, not construction.
 - Item 11/14: evidence breadth is the honest limiter (P1 scientific, Shravan-owned).
-- Item 15: capability implemented; PS does not require it — not a blocker.
+- Item 15: solar-shadow height extraction explicitly excluded from shipped RC1 product scope.
 - Item 16: explicitly deferred with triggers — not a blocker.
 
 **True remaining blockers:** physical Windows witness · M17 promotion + formal test cities · code signing · evaluation breadth.

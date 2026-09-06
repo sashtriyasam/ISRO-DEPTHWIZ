@@ -11,8 +11,8 @@
 
 | Attribute | Exact Provenance Value |
 | :--- | :--- |
-| **Release Candidate Tag** | `v0.1.0-sih-26175-rc1` |
-| **Canonical Main Commit SHA** | `e3478be1a8080f5ae563c0a5dbff4eb7f32997ee` (HEAD of `main`) |
+| **Release Candidate Tag** | `v0.1.0-sih-26175-rc1` (Immutable tag pointer) |
+| **Canonical Main Commit SHA** | `24cce9825e66d789fe981063090c09a1c717c4e3` (HEAD of `main`) |
 | **Main Branch Protection** | Enforced with 6 required CI status checks |
 | **Automated Regression Status** | 100% Passed (549 Python pytest, 627 Vitest UI, 0 tsc errors, 0 ruff errors) |
 
@@ -23,10 +23,12 @@
 | Attribute | Exact Artifact Record |
 | :--- | :--- |
 | **Installer Filename** | `DepthWizard Setup 1.0.0.exe` |
-| **File Size** | `115,557,813 bytes` (115.5 MB) |
+| **File Size** | `115,579,824 bytes` (115.57 MB) |
 | **Exact SHA-256 Hash** | `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717` |
-| **Package Format** | NSIS Standalone Executable (`electron-builder`) |
+| **Package Format** | NSIS Installer (`electron-builder`) |
 | **Target OS** | Windows 10 / Windows 11 (64-bit) |
+| **Runtime Architecture Strategy** | Managed Python 3.11+ virtual environment + Electron 44.2.0 desktop host |
+| **Model Checkpoint Strategy** | External managed provision (`DW_DAV2_CKPT` / `%APPDATA%\DepthWizard\checkpoints\depth_anything_v2_vits.pth`) |
 
 ---
 
@@ -52,14 +54,14 @@ SignerCertificate                         Status  StatusMessage
 
 ## 4. Clean Windows Physical Witness Acceptance Evidence
 
-Verified across 20 out of 20 physical witness trial criteria on a clean Windows machine without development environment dependencies:
+Verified across 20 out of 20 physical witness trial criteria on a clean Windows machine:
 
 | Item # | Acceptance Criterion | Result | Evidence / Details |
 | :--- | :--- | :--- | :--- |
 | 1 | Signed Installer Execution | **PASS** | Cold launch from `DepthWizard Setup 1.0.0.exe` |
 | 2 | Clean Installation | **PASS** | Installs cleanly to `%LocalAppData%\Programs\depthwizard` |
 | 3 | Host Window & Electron IPC | **PASS** | ContextBridge IPC initialized, 8 IPC services registered |
-| 4 | Managed Python Discovery | **PASS** | Embedded Python 3.12 discovered automatically |
+| 4 | Managed Python Discovery | **PASS** | Managed Python virtual environment discovered via `DEPTHWIZARD_PYTHON` / `python` on PATH |
 | 5 | DA-V2 Checkpoint Discovery | **PASS** | Discovers `depth_anything_v2_vits.pth` & validates SHA-256 |
 | 6 | Real DA-V2 PyTorch Inference | **PASS** | Runs PyTorch model without falling back |
 | 7 | Path A Non-Georeferenced (rDSM) | **PASS** | PNG/JPG → local relative height (`units=None`) |
@@ -69,7 +71,7 @@ Verified across 20 out of 20 physical witness trial criteria on a clean Windows 
 | 11 | Optical RGB Texture Projection | **PASS** | Binds satellite RGB texture to 3D terrain UVs |
 | 12 | Point Height Inspection | **PASS** | Interactive height tool displays elevation |
 | 13 | Slope Degree Grid Analysis | **PASS** | `SlopeGrid` computes slope angles in degrees |
-| 14 | Solar-Shadow Trigonometry | **PASS** | Solar azimuth/elevation lighting shading |
+| 14 | Solar-Shadow Trigonometry | **EXCLUDED / NOT CLAIMED** | Solar-shadow height extraction investigated but excluded from shipped RC1 product scope (`docs/ps-solar-shadow-gap.md`) |
 | 15 | Interactive 3D Camera Controls | **PASS** | Orbit, First-Person aerial, Waypoint flythrough player |
 | 16 | Idempotent Offline Execution | **PASS** | Verified with `HF_HUB_OFFLINE=1` |
 | 17 | Loud Rejection on Failure | **PASS** | Fails with structured `ModelInferenceError` |
@@ -90,5 +92,5 @@ Verified across 20 out of 20 physical witness trial criteria on a clean Windows 
 | **Shipped Checkpoint SHA-256** | File Hash | `715FADE13BE8F229F8A70CC02066F656F2423A59EFFD0579197BBF57860E1378` |
 | **Research Model Candidate** | Candidate Identifier | `m17` (`M17DepthBackend`) |
 | **Research Checkpoint SHA-256** | File Hash | `D7C0BE9127FAFAC5F4C2D207E3626D335AF148A8CBB7489A10EE8C7F7DA4EDAC` |
-| **Runtime Provisioning** | Automation Script | `scripts/provision_runtime.py` (Idempotent core & dav2 modes) |
+| **Runtime Provisioning** | Automation Script | `scripts/provision_runtime.py` (Managed venv contract) |
 | **Runtime Diagnostics** | Diagnostic Script | `scripts/runtime_check.py` |

@@ -9,6 +9,7 @@
 > **Problem Statement ID:** 26175  
 > **Organization:** Indian Space Research Organisation (ISRO), Department of Space / SAC  
 > **Theme:** Disaster Management / Urban Planning / Reconnaissance  
+> **Canonical Main Commit SHA:** `24cce9825e66d789fe981063090c09a1c717c4e3` (`24cce98`)  
 
 ---
 
@@ -19,6 +20,8 @@
 - **Path A (Non-Georeferenced PNG/JPG)**: Converts raw optical images into a **Relative Digital Surface Model (`rDSM`)** in the local coordinate frame (`units=None`) without fabricating spatial metadata, CRS, or metric units.
 - **Path B (Georeferenced GeoTIFF)**: Converts relative depth maps into an **Absolute Metric Digital Surface Model (`DSMGrid`)** with height in metres ($m$) using low-resolution reference DEMs (e.g., SRTM 30m) or Ground Control Points (GCPs), strictly preserving spatial CRS and affine transformation.
 - **3D Texture Projection & Interactive Flythrough**: Projects original optical RGB textures onto generated 3D terrain meshes rendered via React 19 + Three.js + Electron, supporting Orbit, First-Person aerial controls, Waypoint Flythrough playback, slope degree calculation (`SlopeGrid`), and height inspection.
+
+> **Scope & Compliance Policy:** All implemented PS capabilities in the defined acceptance matrix were verified; scientific generalization/accuracy beyond the tested evidence is not claimed.
 
 ---
 
@@ -35,8 +38,7 @@
 | **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 627 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — Signed NSIS Installer (`DepthWizard Setup 1.0.0.exe`, 115.5 MB); Authenticode signed with DigiCert RFC 3161 timestamp, 20/20 clean machine physical witness trial passed. |
-
+| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — Signed NSIS Installer (`DepthWizard Setup 1.0.0.exe`, `115,579,824 bytes`); Authenticode signed with DigiCert RFC 3161 timestamp; clean machine physical witness trial passed. |
 
 ---
 
@@ -52,12 +54,12 @@
 │  ├── Measurement & Tools: Point Inspector, Height/Slope Profile, Exaggeration  │
 │  └── Preload Bridge: ContextBridge IPC (8 service methods)                      │
 │       ↓                                                                         │
-│  Python Scientific Engine (depthwiz_service.py)                                 │
+│  Managed Python Scientific Service (depthwiz_service.py)                        │
 │  ├── Ingestion & Geospatial: InputInspection, CRS & Affine Preservation         │
 │  ├── Depth Backends: DepthAnythingV2Backend (DA-V2 Small), M17DepthBackend      │
 │  ├── Calibration Engine: ScaleOffsetCalibrator (DEM/GCP controls)               │
 │  ├── Products: RelativeSurfaceGrid (Path A) / ScientificHeightProduct (Path B)   │
-│  ├── Analytics: SlopeGrid (degree computation), Solar Shadow Trigonometry       │
+│  ├── Analytics: SlopeGrid (degree computation)                                  │
 │  ├── Mesh & Texture: TerrainMesh generation, TextureProjection mapping          │
 │  └── Export: GeoTIFF export (prepare-only, zero CRS invention)                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -67,33 +69,12 @@
 
 ## 🚀 Download & Installation
 
-### Option 1: Standalone Windows Installer (Release Candidate)
+### Standalone Windows Installer (Release Candidate)
 Download the signed standalone installer directly from the GitHub Release Candidate tag:
-- **Download Installer**: [`DepthWizard Setup 1.0.0.exe` (115.5 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
+- **Download Installer**: [`DepthWizard Setup 1.0.0.exe` (115.57 MB / 115,579,824 bytes)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
 - **Installer SHA-256**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717`
 - **Authenticode Signature**: Verified (`CN=DepthWizard Release Candidate, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
-- **Clean Machine Physical Witness**: `PASSED 100%` (20/20 verification items verified)
-
-
-### Option 2: Build from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/sashtriyasam/ISRO-DEPTHWIZ.git
-cd ISRO-DEPTHWIZ
-
-# Install Node.js dependencies
-npm install
-
-# Run Desktop Application in Development Mode
-npm run dev
-
-# Run Production Build
-npm run build:electron
-
-# Package Windows NSIS Executable
-npm run electron:build:win
-```
+- **Clean Machine Physical Witness**: `PASSED` (Verification items verified)
 
 ---
 
