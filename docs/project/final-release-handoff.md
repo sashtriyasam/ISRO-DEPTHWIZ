@@ -152,27 +152,23 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 ## Release Gate Matrix (Current)
 
-| Gate                         | Status           | Blocker                   |
-| ---------------------------- | ---------------- | ------------------------- |
-| G1 Scientific contracts      | **PASS**         | —                         |
-| G2 Real DA-V2 inference      | **NOT VERIFIED** | **Yes** (physical)        |
-| G3 Metric calibration        | **PASS**         | —                         |
-| G4 DSM generation            | **PASS**         | —                         |
-| G5 Terrain mesh              | **PASS**         | —                         |
-| G6 Relative/non-geo path     | **PASS**         | —                         |
-| G7 Native Electron host      | **PASS**         | —                         |
-| G8 Managed runtime           | **PASS**         | —                         |
-| G9 Runtime provisioning      | **PASS**         | —                         |
-| G10 Installer build          | **PASS** (build) | **Yes** (physical)        |
-| G11 Offline execution        | **PASS**         | —                         |
-| G12 Error/failure behavior   | **PASS**         | —                         |
-| G13 Reproducibility          | **PASS**         | —                         |
-| G14 Physical Windows witness | **NOT VERIFIED** | **Yes**                   |
-| G15 ML final candidate       | **BLOCKED**      | **Yes**                   |
-| G16 Documentation            | **PASS**         | —                         |
-| G17 GitHub hygiene           | **PARTIAL**      | CI created, BP documented |
+Canonical matrix: `docs/final-release-gate.md` (G1–G19). Summary:
 
-**Current Decision:** **RELEASE CANDIDATE — PHYSICAL WITNESS REQUIRED**
+| Gate group                                               | Status                                                | Blocker            |
+| -------------------------------------------------------- | ----------------------------------------------------- | ------------------ |
+| G1 Scientific contracts, G4–G7 Calibration/DSM/rDSM/Mesh | **PASS**                                              | —                  |
+| G2 Final ML candidate                                    | **PARTIAL** (M17 locked in research, not promoted)    | **Yes**            |
+| G3 Real DA-V2 runtime                                    | **NOT VERIFIED** (assets-gated)                       | **Yes** (physical) |
+| G8–G10 Native host / runtime / provisioning              | **PASS**                                              | —                  |
+| G11 Installer (build)                                    | **PASS** (build)                                      | **Yes** (physical) |
+| G12–G13 Offline / failure handling / reproducibility     | **PASS**                                              | —                  |
+| G14 Physical Windows witness                             | **NOT VERIFIED**                                      | **Yes**            |
+| G15 PS compliance                                        | **PARTIAL** (solar MISSING, neural rendering PARTIAL) | **Yes**            |
+| G16 Scientific evidence                                  | **PARTIAL** (honest caveats)                          | **Yes**            |
+| G18 Documentation                                        | **PARTIAL** (this branch updates stale docs)          | —                  |
+| G19 Governance                                           | **PARTIAL** (CI + CODEOWNERS created; BP manual)      | —                  |
+
+**Current Decision:** **RELEASE CANDIDATE — PHYSICAL WITNESS REQUIRED** (with scientific-candidate requirement noted)
 
 ---
 
@@ -204,12 +200,12 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 ### SHRAVAN (Exact Action)
 
-> **Freeze final ML candidate:**
+> **Complete final ML candidate evidence (M17 locked in research):**
 >
-> 1. Consolidate M14/M17 findings
-> 2. Produce frozen checkpoint: `depth_anything_v2_vits.pth`
-> 3. Deliver: SHA256 + upstream revision (`a561b849...`) + evaluation metrics + geographic evidence + limitations doc
-> 4. Update `docs/final-release-gate.md` G15 to PASS
+> 1. Formal duesseldorf/herne/neuss verification rerun is BLOCKED on data access — record unblock requirements
+> 2. Deliver frozen M17 evidence pack: checkpoint `experiments/m17-geonrw-struct-e01/checkpoints/best.pt` (SHA256 `D7C0BE91…EDAC`) + upstream revision + protocol + metrics + limitations
+> 3. Propose product-path promotion (Shivam must accept; no silent model swap)
+> 4. Update `docs/final-release-gate.md` G2 only with real evidence
 
 ### SHIVAM (Exact Action)
 
