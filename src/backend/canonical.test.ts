@@ -7,7 +7,11 @@ import { join, resolve } from "path";
 const REPO_ROOT = resolve(__dirname, "..", "..");
 const SCRIPTS_DIR = join(REPO_ROOT, "scripts");
 
-const PYTHON_BIN = process.env.DEPTHWIZARD_PYTHON || "python";
+const PYTHON_BIN =
+  process.env.DEPTHWIZARD_PYTHON ||
+  (process.platform === "win32"
+    ? "C:\\Users\\Shivam\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"
+    : "python3");
 
 function runPython(args: string[], input?: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {
