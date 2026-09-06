@@ -102,7 +102,7 @@ npm run electron:build:win
 ### Python Core Engine
 ```bash
 # Execute all 553 Python tests (549 passed, 4 skipped opt-in heavy models)
-& "C:\Users\Shivam\AppData\Local\Programs\Python\Python312\python.exe" -m pytest tests/
+python -m pytest tests/
 
 # Code quality & typing checks
 python -m ruff check src tests

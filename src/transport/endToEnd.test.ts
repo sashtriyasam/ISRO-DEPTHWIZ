@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { execFile } from "child_process";
-import { mkdtempSync, rmSync } from "fs";
+import { mkdtempSync, rmSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { BackendBridge } from "../backend/bridge";
@@ -30,11 +30,14 @@ function writeGeoTiff(dir: string): Promise<string> {
     "    dst.write(grid, 1)",
     "print(p)",
   ].join("\n");
-  const pythonBin =
-    process.env.DEPTHWIZARD_PYTHON ||
-    (process.platform === "win32"
-      ? "C:\\Users\\Shivam\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"
-      : "python3");
+  const pythonBin = (() => {
+    if (process.env.DEPTHWIZARD_PYTHON) return process.env.DEPTHWIZARD_PYTHON;
+    if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+      const candidate = join(process.env.LOCALAPPDATA, "Programs", "Python", "Python312", "python.exe");
+      if (existsSync(candidate)) return candidate;
+    }
+    return process.platform === "win32" ? "python" : "python3";
+  })();
   return new Promise((resolve, reject) => {
     execFile(pythonBin, ["-c", script], (err, stdout, stderr) => {
       if (err) {
