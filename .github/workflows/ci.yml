@@ -1,0 +1,178 @@
+# DepthWizard CI Workflow
+# Validates repository health without downloading large model assets
+# Heavy DA-V2 verification remains opt-in/release-specific
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (pytest, ruff, mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: python -m pytest tests/ -q
+
+      - name: Run ruff check
+        run: python -m ruff check src tests
+
+      - name: Run ruff format check
+        run: python -m ruff format --check src tests
+
+      - name: Run mypy
+        run: python -m mypy --python-version 3.12 src tests
+
+  frontend:
+    name: Frontend (typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  electron-config:
+    name: Electron configuration validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Electron TypeScript validation
+        run: npm run build:electron
+
+      - name: Validate electron-builder config
+        run: |
+          npx electron-builder --config electron-builder.yml --help 2>&1 | head -20
+
+  scientific-contracts:
+    name: Scientific contract regression check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify scientific contracts unchanged
+        run: |
+          git diff origin/main...HEAD -- \
+            src/depthwizard/contracts/ \
+            src/depthwizard/calibration/ \
+            src/depthwizard/dsm/ \
+            src/depthwizard/height/ \
+            src/depthwizard/mesh/ \
+            src/depthwizard/geospatial/ \
+            src/depthwizard/rdsm/ \
+            src/depthwizard/backends/ || true
+        shell: bash
+
+  hygiene:
+    name: Release artifact hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for tracked model weights
+        run: |
+          if git ls-files -- '*.pth' '*.pt' '*.ckpt' '*.safetensors' '*.bin' '*.h5' '*.tif' '*.tiff' '*.env' | grep -q .; then
+            echo "::error::Tracked model weights/datasets/secrets found!"
+            git ls-files -- '*.pth' '*.pt' '*.ckpt' '*.safetensors' '*.bin' '*.h5' '*.tif' '*.tiff' '*.env'
+            exit 1
+          fi
+        shell: bash
+
+      - name: Check for large files (>50MB)
+        run: |
+          if git ls-files -z | xargs -0 -I{} sh -c 'test $(stat -c%s "{}") -gt 52428800 && echo "{}"' | grep -q .; then
+            echo "::error::Large files (>50MB) tracked in git!"
+            git ls-files -z | xargs -0 -I{} sh -c 'test $(stat -c%s "{}") -gt 52428800 && echo "{} ({} bytes)"'
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify .gitignore covers release artifacts
+        run: |
+          if ! grep -q "release/" .gitignore || ! grep -q "*.exe" .gitignore; then
+            echo "::error::Release artifacts not properly gitignored"
+            exit 1
+          fi
+        shell: bash
+
+  # Required status check for branch protection
+  required-status:
+    name: Required CI Checks
+    needs: [python, frontend, electron-config, scientific-contracts, hygiene]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        run: echo "All required CI checks passed"

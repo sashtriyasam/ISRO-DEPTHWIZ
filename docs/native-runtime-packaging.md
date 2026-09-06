@@ -1,6 +1,8 @@
 # Native Runtime Packaging Contract
 
-## Current state
+**Updated:** 2026-09-06 — Native host + installer now ON MAIN (PR #2)
+
+## Current State
 
 ```text
 Vite production build
@@ -8,9 +10,11 @@ Vite production build
 canonical Python service (depthwiz_service / backend_bridge)
 +
 native host boundary abstraction (HostCapabilities)
++
+Electron native host (44.2.0) + NSIS installer
 ```
 
-## What exists
+## What Exists
 
 - `HostCapabilities` (`src/host/host.ts`): `runtime`/`processSpawning`/
   `localFilesystem` detection with overrides. Canonical — reused, not
@@ -29,35 +33,40 @@ native host boundary abstraction (HostCapabilities)
   explicit → `DW_DAV2_CKPT` → packaged data dir → repo-dev
   `checkpoints/` → `cwd/checkpoints/`; SHA-256 verification;
   import-discovery availability; upstream revision reporting.
+- **Electron native host (44.2.0)** (`electron/main.ts`, `electron/preload.ts`)
+- **Windows NSIS installer** (`electron-builder.yml`) — 115 MB installer, 334 MB portable
+- **Windows release preflight** (`scripts/windows_release_preflight.ps1`)
 - DA-V2 runtime (pinned `a561b84`) + external checkpoint policy
   (git-ignored, SHA-pinned).
 
-## What is missing
+## What Was Missing (Now Resolved)
 
-- Native host executable (no Electron/Tauri/Neutralino in dependencies).
-- Installer of any kind.
-- Managed/embedded Python runtime (strategy selected below, not yet built).
-- Packaged checkpoint distribution (location contract defined below).
-- First-run setup automation beyond `runtime_check` reporting.
+| Item                             | Status       | Location                                      |
+| -------------------------------- | ------------ | --------------------------------------------- |
+| Native host executable           | ✅ RESOLVED  | `electron/main.ts` (Electron 44.2.0)          |
+| Installer                        | ✅ RESOLVED  | `electron-builder.yml` (NSIS, 115 MB)         |
+| Managed/embedded Python runtime  | ✅ RESOLVED  | `scripts/provision_runtime.py` (managed venv) |
+| Packaged checkpoint distribution | ❌ BY DESIGN | External provision (`DW_DAV2_CKPT`)           |
+| First-run setup automation       | ✅ PARTIAL   | `provision_runtime.py` + `runtime_check.py`   |
 
-## Native-framework audit (verified from package.json)
+## Native-Framework Audit (Verified from package.json)
 
-| Item                                                      | Status                                 |
-| --------------------------------------------------------- | -------------------------------------- |
-| Electron / Tauri / Neutralino / native host               | absent (no dependency, no executable)  |
-| Installer                                                 | absent                                 |
-| Python bundling (PyInstaller/Nuitka/Briefcase/conda-pack) | absent                                 |
-| Model bundling                                            | absent (checkpoint external by policy) |
-| `electron-to-chromium` in node_modules                    | transitive only, not a host            |
+| Item                                                      | Status                                      |
+| --------------------------------------------------------- | ------------------------------------------- |
+| Electron / Tauri / Neutralino / native host               | ✅ Electron 44.2.0                          |
+| Installer                                                 | ✅ NSIS via electron-builder 26.0.12        |
+| Python bundling (PyInstaller/Nuitka/Briefcase/conda-pack) | ✅ Managed venv (selected strategy)         |
+| Model bundling                                            | ❌ External by policy (checkpoint external) |
+| `electron-to-chromium` in node_modules                    | Transitive only, not a host                 |
 
-## Recommended final architecture
+## Recommended Final Architecture
 
 ```text
 Installed DepthWizard
         ↓
-Native Host (Aryan-owned implementation)
+Native Host (Electron, Aryan-owned)
         ↓
-Managed Python Runtime (venv, provisioned; §strategy)
+Managed Python Runtime (venv, provisioned via S18)
         ↓
 depthwiz_service (control) + backend_bridge (payload)
         ↓
@@ -68,7 +77,7 @@ PipelineRunner
 DepthAnythingV2Backend (checkpoint via DW_DAV2_CKPT)
 ```
 
-## Python runtime strategy (evaluated)
+## Python Runtime Strategy (Evaluated)
 
 - **A — System Python**: rejected for production. Windows PATH
   unreliability already observed (`python` missing → error 9009);
@@ -76,8 +85,7 @@ DepthAnythingV2Backend (checkpoint via DW_DAV2_CKPT)
 - **B — Managed virtual environment: SELECTED.** Provisioned once
   (network), then offline-capable; isolated; upgradable by
   re-provisioning; permissions are ordinary user-dir writes. Verified
-  this task with two fresh venvs (full `[dav2]` install; core-only
-  install + 114 passing tests).
+  this task with fresh venvs (core install + 503 passing tests).
 - **C — Embedded Python**: deferred. Viable later for a zero-dependency
   installer, but larger build/licensing surface; no evidence it is
   needed yet.
@@ -86,7 +94,7 @@ DepthAnythingV2Backend (checkpoint via DW_DAV2_CKPT)
   would complicate checkpoint/data-dir layout; revisit only with
   measured need.
 
-## Dependency inventory
+## Dependency Inventory
 
 | Package                                 | Tier                                    |
 | --------------------------------------- | --------------------------------------- |
@@ -97,7 +105,7 @@ DepthAnythingV2Backend (checkpoint via DW_DAV2_CKPT)
 | `depth_anything_v2_vits.pth`            | external model asset (never committed)  |
 | pytest, mypy, ruff, vitest tooling      | development only                        |
 
-## Checkpoint strategy
+## Checkpoint Strategy
 
 - File: `depth_anything_v2_vits.pth`, SHA-256
   `715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378`
@@ -112,7 +120,7 @@ DepthAnythingV2Backend (checkpoint via DW_DAV2_CKPT)
   rejects hash mismatches; service registry stays synthetic-only
   without a verified asset.
 
-## Provisioning (verified this task)
+## Provisioning (Verified)
 
 ```bash
 python -m venv <runtime-dir>
@@ -122,8 +130,7 @@ python -m venv <runtime-dir>
 python scripts/runtime_check.py --require-dav2 --pretty
 ```
 
-Observed: cold model load ≈ 5–9 s, 64×64 inference ≈ 0.9–1.5 s CPU
-(engineering observations, not benchmarks).
+Observed: core provisioning → `ready: true`, `service_launch_ready: true`, `offline_ready: true`
 
 ## Runtime
 
@@ -143,11 +150,10 @@ no URL downloads in runtime code (verified by test); checkpoints
 hash-pinned; writes confined to caller-chosen outputs, temp staging,
 and the data dir; reports use location labels, not absolute paths.
 
-## Release blockers (explicit)
+## Release Blockers (Explicit)
 
-1. Native host executable + installer (Aryan-owned).
-2. Managed-venv provisioning automation in the installer (Shivam
-   contract defined here; host-side implementation pending).
+1. ~~Native host executable + installer (Aryan-owned).~~ → **RESOLVED** (PR #2)
+2. Managed-venv provisioning automation in the installer → **RESOLVED** (S18 on main)
 3. Checkpoint distribution channel (host-side; hash contract defined).
 4. GPU/long-run evidence, field accuracy (science track).
 
