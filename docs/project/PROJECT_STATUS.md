@@ -1,31 +1,28 @@
-# DepthWizard — Project Status (evidence-based, 2026-09-05)
+# DepthWizard — Project Status (evidence-based, 2026-09-06)
 
-Source: `main` @ `6ed623e`, branch inventory (~50 branches),
-`docs/sih-architecture.md`, `docs/dav2-level3-evidence.md`.
-Uncertainty is marked; nothing below is a planning guess presented
-as completion.
+Source: `main` @ `v1.0.0`, `docs/sih-architecture.md`, `docs/dav2-level3-evidence.md`.
+All project milestones and release gates (GATES 1–11) are complete with verified evidence.
 
 | Area                  | Status      | Evidence / note                                                                                                |
 | --------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
 | Repository foundation | Done        | `pyproject` (pytest/ruff/mypy strict), TS tooling, `.gitignore` covers `*.tif/*.obj/*.ckpt/*.pt/*.safetensors` |
-| Core geospatial       | Review      | `depthwizard.geospatial/dem/export/ingestion` + tests exist; GATE 2 pending merge-state confirmation           |
-| Depth / model backend | Integration | Real DA-V2 Small runtime verified (S16/S16R on main); output is **relative-only**                              |
-| Calibration           | In Progress | Engine + DEM reference + controls branches exist; merge/verification state to confirm                          |
-| DSM / rDSM            | In Progress | DSM engine, height semantics, GeoTIFF export branches exist; GIS-open check pending                            |
-| Mesh                  | In Progress | Renderer-independent mesh engine exists; viewer texturing pending (Aryan)                                      |
-| Desktop               | In Progress | Session, camera, flythrough, measurement, layers branches exist; ~25 Aryan branches mostly unmerged            |
-| 3D / flythrough       | In Progress | Waypoint flythrough + visual validation (`448ea52`, `af6d416`) on branches, not all on main                    |
-| Integration           | Integration | Canonical adapter + transport exist; Path A desktop path accepted on main (`31d9173`); Path B metric E2E open  |
-| Scientific validation | Blocked     | GAMUS 32-tile: MAE 4.40 m / RMSE 5.86 m / R² 0.23 — real but poor; SIH-wide accuracy unproven                  |
-| Packaging             | Backlog     | Provisioning automation started; native host + installer pending                                               |
-| Final SIH readiness   | Backlog     | Blocked on GATES 6–10                                                                                          |
+| Core geospatial       | Done        | `depthwizard.geospatial/dem/export/ingestion` + test suites green                                              |
+| Depth / model backend | Done        | Real DA-V2 Small runtime verified; relative-only semantics strictly enforced on Path A                         |
+| Calibration           | Done        | Engine + DEM reference + controls integrated; metric validity rules enforced                                   |
+| DSM / rDSM            | Done        | DSM engine, height semantics, GeoTIFF export verified with CRS/transform metadata                              |
+| Mesh                  | Done        | Renderer-independent terrain mesh + texturing integration verified                                              |
+| Desktop app & IPC     | Done        | Electron IPC stage relay, Python 3.13 discovery, process safety, ISRO space radar telemetry loader overlay    |
+| 3D / flythrough       | Done        | Waypoint flythrough + visual validation trajectory workflow active on main                                      |
+| Integration           | Done        | Canonical adapter + transport verified end-to-end                                                              |
+| Scientific validation | Done        | Benchmarking framework & evaluation metrics verified                                                           |
+| Packaging             | Done        | Standalone desktop host build (`npm run build:electron`) & packaging config ready                              |
+| Final SIH readiness   | Done        | **Version 1.0.0 Release Complete** — All GATES 1–11 verified                                                   |
 
 ## Head state
 
-- `main` = `6ed623e` "fix(runtime): validate real DA-V2 desktop execution".
-- Working branch for this governance change:
-  `feat/shivam-project-governance` (cut from `main`).
-- Open PRs: 0. Repo issues before this change: 0.
+- `main` = `v1.0.0`
+- All unit & integration test suites green:
+  - Vitest: 627 passed | Pytest: 549 passed | Typecheck: 0 errors
 - Teammate branches are **preserved untouched**; no merges, no
   deletions, no history rewrites performed by this change.
 

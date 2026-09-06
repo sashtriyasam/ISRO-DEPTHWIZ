@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "depthwizard"
-version = "0.1.0"
+version = "1.0.0"
 description = "DepthWizard scientific engine — single-view height estimation contracts (foundation only, no inference)"
 readme = "README.md"
 requires-python = ">=3.11"
