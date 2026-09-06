@@ -302,6 +302,13 @@ function registerIpcHandlers(): void {
         return { error: "unauthorized" };
       }
       try {
+        const MAX_STAGE_SIZE = 500 * 1024 * 1024; // 500 MB maximum payload limit
+        const byteCount = Buffer.isBuffer(args.bytes)
+          ? args.bytes.length
+          : (args.bytes as Uint8Array)?.length ?? 0;
+        if (byteCount > MAX_STAGE_SIZE) {
+          return { error: "Staged payload exceeds maximum limit of 500 MB." };
+        }
         const base = path.basename(args.filename || "input");
         const trimmed = base.slice(-128) || "input";
         const osTmp = app.getPath("temp");
@@ -334,6 +341,7 @@ function registerIpcHandlers(): void {
           const resolved = path.resolve(dir);
           const resolvedTmp = path.resolve(osTmp);
           if (
+            stagedDirs.has(resolved) &&
             path.basename(resolved).startsWith("depthwiz-") &&
             path.dirname(resolved) === resolvedTmp
           ) {
@@ -522,11 +530,15 @@ function registerIpcHandlers(): void {
           stdout += chunk.toString();
         });
 
+        let stderrBuffer = "";
         proc.stderr?.on("data", (chunk: Buffer) => {
           const text = chunk.toString();
           stderr += text;
+          stderrBuffer += text;
+          const lines = stderrBuffer.split(/\r?\n/);
+          stderrBuffer = lines.pop() ?? "";
           if (mainWindow && !mainWindow.isDestroyed()) {
-            for (const line of text.split(/\r?\n/)) {
+            for (const line of lines) {
               if (line.startsWith("STAGE ")) {
                 mainWindow.webContents.send(
                   "service-stage-update",

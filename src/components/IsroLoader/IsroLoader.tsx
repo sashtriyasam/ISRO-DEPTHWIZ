@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ALL_STAGES, type ProcessingStage } from "../../processing/types";
 import "./IsroLoader.css";
 
@@ -43,11 +43,13 @@ export function IsroLoader({
   // Clamp between 5 % (always some fill) and 95 % (never fake "done").
   const progressPct = Math.min(95, Math.max(5, rawPct));
 
-  // Use a ref to track the previous live stage text for the aria-live region
-  // so we only announce real stage changes, not telemetry noise.
-  const prevStageRef = useRef(stageText);
-  const stageChanged = prevStageRef.current !== stageText;
-  if (stageChanged) prevStageRef.current = stageText;
+  // Track stage text changes via useEffect for screen reader live region announcements
+  // avoiding inline ref mutation during render.
+  const [announcedStage, setAnnouncedStage] = useState(stageText);
+
+  useEffect(() => {
+    setAnnouncedStage(stageText);
+  }, [stageText]);
 
   return (
     <div
@@ -57,7 +59,7 @@ export function IsroLoader({
     >
       {/* Only announce stage changes to screen readers, not telemetry updates */}
       <div className="isro-sr-live" aria-live="polite" aria-atomic="true">
-        {stageChanged ? stageText : null}
+        {announcedStage}
       </div>
 
       <div className="isro-radar-grid" aria-hidden="true" />
