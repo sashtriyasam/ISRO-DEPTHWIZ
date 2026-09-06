@@ -169,6 +169,23 @@ export class OperationCancelledError extends Error {
   }
 }
 
+function defaultPythonExecutable(): string {
+  if (typeof process !== "undefined") {
+    if (process.env.DEPTHWIZARD_PYTHON) {
+      return process.env.DEPTHWIZARD_PYTHON;
+    }
+    if (process.platform === "win32") {
+      const candidate = "C:\\Users\\Shivam\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
+      try {
+        if (require("fs").existsSync(candidate)) return candidate;
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  return "python";
+}
+
 export class BackendBridge {
   private pythonPath: string;
   private bridgeScript: string;
@@ -178,12 +195,8 @@ export class BackendBridge {
   private mode: "metric" | "relative";
 
   constructor(options: BackendBridgeOptions = {}) {
-    this.pythonPath =
-      options.pythonPath ??
-      (typeof process !== "undefined"
-        ? process.env.DEPTHWIZARD_PYTHON
-        : undefined) ??
-      "python";
+    this.pythonPath = options.pythonPath ?? defaultPythonExecutable();
+
     this.bridgeScript = options.bridgeScript ?? "scripts/backend_bridge.py";
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
     this.host = detectHost(options.host);
