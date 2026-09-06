@@ -14,6 +14,7 @@ from depthwizard.dsm.grid import (
     ResamplingPolicy,
 )
 from depthwizard.dsm.rasterize import rasterize_height_product
+from depthwizard.dsm.slope import SLOPE_UNIT, SlopeGrid, compute_slope
 
 __all__ = [
     "BAND_COUNT",
@@ -22,5 +23,8 @@ __all__ = [
     "DSMProfile",
     "RasterizeOptions",
     "ResamplingPolicy",
+    "SLOPE_UNIT",
+    "SlopeGrid",
+    "compute_slope",
     "rasterize_height_product",
 ]
