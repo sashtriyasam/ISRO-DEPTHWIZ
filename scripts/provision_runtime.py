@@ -4,7 +4,7 @@
 Establishes ``<runtime-dir>`` as an isolated virtual environment,
 installs the project (core or ``[dav2]``), provisions the pinned
 DA-V2 source and SHA-verified checkpoint into the host data dir, then
-reports provision → verify → launch-readiness as one JSON document.
+reports provision -> verify -> launch-readiness as one JSON document.
 
 Provisioning steps (pip, git clone, checkpoint fetch) may use the
 network. Runtime inference afterwards must not.

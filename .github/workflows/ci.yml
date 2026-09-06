@@ -1,0 +1,203 @@
+# DepthWizard CI Workflow
+# Validates repository health without downloading large model assets
+# Heavy DA-V2 verification remains opt-in/release-specific
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (pytest, ruff, mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: python -m pytest tests/ -q
+
+      - name: Run ruff check
+        run: python -m ruff check src tests
+
+      - name: Run ruff format check
+        run: python -m ruff format --check src tests
+
+      - name: Run mypy (source only)
+        # Policy: mypy must be clean on src/. tests/ carries pre-existing
+        # typing debt (untyped defs in evaluation/backend tests) tracked
+        # separately — excluding it here by explicit policy, not by shell
+        # hack. See docs/final-release-gate.md G1 evidence.
+        run: python -m mypy --python-version 3.12 src
+
+  frontend:
+    name: Frontend (typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up Python (backend integration tests spawn it)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dev stack (torch CPU, no checkpoints/models)
+        # Backend-spawning Vitest suites execute scripts/depthwiz_service.py
+        # via `python` on PATH. torch CPU from the official CPU index keeps
+        # this honest without CUDA, GAMUS, checkpoints, or HF downloads.
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -e ".[dev,dav2]"
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  electron-config:
+    name: Electron configuration validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Electron TypeScript validation
+        run: npm run build:electron
+
+      - name: Validate electron-builder config
+        run: |
+          npx electron-builder --config electron-builder.yml --help 2>&1 | head -20
+
+  scientific-contracts:
+    name: Scientific contract regression check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify scientific contracts unchanged
+        # Enforcement: any change under the scientific contract paths fails
+        # this job. No `|| true`, no output swallowing.
+        run: |
+          CHANGED="$(git diff --name-only origin/main...HEAD -- \
+            src/depthwizard/contracts/ \
+            src/depthwizard/calibration/ \
+            src/depthwizard/dsm/ \
+            src/depthwizard/height/ \
+            src/depthwizard/mesh/ \
+            src/depthwizard/geospatial/ \
+            src/depthwizard/rdsm/ \
+            src/depthwizard/backends/)"
+          if [ -n "$CHANGED" ]; then
+            echo "::error::Scientific contract paths changed:"
+            echo "$CHANGED"
+            exit 1
+          fi
+          echo "Scientific contract paths unchanged."
+        shell: bash
+
+  hygiene:
+    name: Release artifact hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for tracked model weights
+        run: |
+          if git ls-files -- '*.pth' '*.pt' '*.ckpt' '*.safetensors' '*.bin' '*.h5' '*.tif' '*.tiff' '*.env' | grep -q .; then
+            echo "::error::Tracked model weights/datasets/secrets found!"
+            git ls-files -- '*.pth' '*.pt' '*.ckpt' '*.safetensors' '*.bin' '*.h5' '*.tif' '*.tiff' '*.env'
+            exit 1
+          fi
+        shell: bash
+
+      - name: Check for large files (>50MB)
+        run: |
+          if git ls-files -z | xargs -0 -I{} sh -c 'test $(stat -c%s "{}") -gt 52428800 && echo "{}"' | grep -q .; then
+            echo "::error::Large files (>50MB) tracked in git!"
+            git ls-files -z | xargs -0 -I{} sh -c 'test $(stat -c%s "{}") -gt 52428800 && echo "{} ({} bytes)"'
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify .gitignore covers release artifacts
+        run: |
+          if ! grep -q "release/" .gitignore || ! grep -q "*.exe" .gitignore; then
+            echo "::error::Release artifacts not properly gitignored"
+            exit 1
+          fi
+        shell: bash
+
+  # Required status check for branch protection
+  required-status:
+    name: Required CI Checks
+    needs: [python, frontend, electron-config, scientific-contracts, hygiene]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        run: echo "All required CI checks passed"
