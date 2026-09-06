@@ -30,8 +30,9 @@ function writeGeoTiff(dir: string): Promise<string> {
     "    dst.write(grid, 1)",
     "print(p)",
   ].join("\n");
+  const pythonBin = process.env.DEPTHWIZARD_PYTHON || "python";
   return new Promise((resolve, reject) => {
-    execFile("python", ["-c", script], (err, stdout, stderr) => {
+    execFile(pythonBin, ["-c", script], (err, stdout, stderr) => {
       if (err) {
         reject(new Error(`GeoTIFF fixture failed: ${stderr}`));
       } else {

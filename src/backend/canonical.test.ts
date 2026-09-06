@@ -7,9 +7,11 @@ import { join, resolve } from "path";
 const REPO_ROOT = resolve(__dirname, "..", "..");
 const SCRIPTS_DIR = join(REPO_ROOT, "scripts");
 
+const PYTHON_BIN = process.env.DEPTHWIZARD_PYTHON || "python";
+
 function runPython(args: string[], input?: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {
-    const proc = execFile("python", args, { cwd: REPO_ROOT }, (err, stdout, stderr) => {
+    const proc = execFile(PYTHON_BIN, args, { cwd: REPO_ROOT }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(`python ${args.join(" ")} failed: ${stderr.slice(0, 500)}`));
       } else {
@@ -78,7 +80,7 @@ describe("canonical wire compatibility", () => {
       const { stdout: check } = await new Promise<{ stdout: string; stderr: string }>(
         (resolvePromise, reject) => {
           require("fs").writeFileSync(outPath, JSON.stringify(parsed));
-          execFile("python", ["-c", checkScript, outPath], { cwd: REPO_ROOT }, (err, stdout, stderr) => {
+          execFile(PYTHON_BIN, ["-c", checkScript, outPath], { cwd: REPO_ROOT }, (err, stdout, stderr) => {
             if (err) {
               reject(new Error(`canonical validation failed: ${stderr.slice(0, 800)}`));
             } else {
