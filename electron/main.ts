@@ -17,6 +17,9 @@ let serviceStderr = "";
 let activeServiceResolve: ((result: unknown) => void) | null = null;
 let activeServiceReject: ((err: Error) => void) | null = null;
 
+// Registry of staged temp directories so they can be cleaned up on crash/quit.
+const stagedDirs = new Set<string>();
+
 const SERVICE_SCRIPT = "depthwiz_service.py";
 const EXPECTED_CHECKPOINT_HASH =
   "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378";
@@ -219,12 +222,6 @@ function setupServiceListeners(proc: ChildProcess): void {
 
 // ---------------------------------------------------------------------------
 // Input path validation
-//
-// Rejects:
-//   - empty/non-string
-//   - executable extensions
-//   - path traversal (.. segments)
-// Does NOT normalize and compare (platform-dependent behavior).
 // ---------------------------------------------------------------------------
 
 function validateInputPath(inputPath: string): string | null {
@@ -235,18 +232,31 @@ function validateInputPath(inputPath: string): string | null {
   if (trimmed.length === 0) {
     return "inputPath must not be empty";
   }
-  // Reject path traversal
   const segments = trimmed.split(/[\\/]/);
   if (segments.includes("..")) {
     return "inputPath must not contain .. segments";
   }
-  // Reject executable extensions
   const ext = path.extname(trimmed).toLowerCase();
   const dangerous = [".exe", ".bat", ".cmd", ".com", ".ps1", ".sh", ".vbs"];
   if (dangerous.includes(ext)) {
     return `inputPath must not be an executable (${ext})`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Staged-dir emergency cleanup (renderer crash / app quit)
+// ---------------------------------------------------------------------------
+
+function cleanAllStagedDirs(): void {
+  for (const dir of stagedDirs) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* noop */
+    }
+  }
+  stagedDirs.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +288,66 @@ function registerIpcHandlers(): void {
     if (rejectUnauthorized(event, "get-scripts-dir")) return null;
     return getScriptsDir();
   });
+
+  ipcMain.handle(
+    "stage-input-bytes",
+    async (
+      event,
+      args: {
+        bytes: Uint8Array | Buffer;
+        filename: string;
+      },
+    ) => {
+      if (rejectUnauthorized(event, "stage-input-bytes")) {
+        return { error: "unauthorized" };
+      }
+      try {
+        const base = path.basename(args.filename || "input");
+        const trimmed = base.slice(-128) || "input";
+        const osTmp = app.getPath("temp");
+        const tempDir = fs.mkdtempSync(path.join(osTmp, "depthwiz-"));
+        const targetPath = path.join(tempDir, trimmed);
+        const buffer = Buffer.isBuffer(args.bytes)
+          ? args.bytes
+          : Buffer.from(args.bytes);
+        fs.writeFileSync(targetPath, buffer);
+        stagedDirs.add(tempDir);
+        return { path: targetPath };
+      } catch (err) {
+        return {
+          error: `Failed to stage file: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "cleanup-staged-input",
+    async (event, args: { stagedPath: string }) => {
+      if (rejectUnauthorized(event, "cleanup-staged-input")) {
+        return { cleaned: false };
+      }
+      try {
+        if (args.stagedPath && typeof args.stagedPath === "string") {
+          const dir = path.dirname(args.stagedPath);
+          const osTmp = app.getPath("temp");
+          const resolved = path.resolve(dir);
+          const resolvedTmp = path.resolve(osTmp);
+          if (
+            path.basename(resolved).startsWith("depthwiz-") &&
+            path.dirname(resolved) === resolvedTmp
+          ) {
+            fs.rmSync(resolved, { recursive: true, force: true });
+            stagedDirs.delete(resolved);
+            return { cleaned: true };
+          }
+        }
+      } catch {
+        /* noop */
+      }
+      return { cleaned: false };
+    },
+  );
 
   ipcMain.handle(
     "launch-service",
@@ -356,7 +426,39 @@ function registerIpcHandlers(): void {
       }
 
       const python = getPythonPath();
-      const script = path.join(getScriptsDir(), SERVICE_SCRIPT);
+
+      // ---------------------------------------------------------------------------
+      // bridgeArgs allowlist
+      // ---------------------------------------------------------------------------
+      const ALLOWED_FLAGS = new Set([
+        "--inspect", "--capabilities", "--backend", "--mode",
+        "--terrain-file", "--terrain", "--synthetic",
+      ]);
+      const DANGEROUS_EXT = /\.(exe|bat|cmd|com|ps1|sh|vbs)$/i;
+
+      const isBridgeArgs =
+        typeof args.payload === "object" &&
+        args.payload !== null &&
+        "bridgeArgs" in args.payload &&
+        Array.isArray((args.payload as { bridgeArgs: unknown }).bridgeArgs);
+
+      if (isBridgeArgs) {
+        const bridgeArgs = (args.payload as { bridgeArgs: unknown[] }).bridgeArgs;
+        for (const arg of bridgeArgs) {
+          if (typeof arg !== "string") {
+            return { error: "bridgeArgs must be an array of strings" };
+          }
+          if (arg.startsWith("--") && !ALLOWED_FLAGS.has(arg)) {
+            return { error: `Disallowed bridgeArgs flag: ${arg}` };
+          }
+          if (arg.includes("..") || DANGEROUS_EXT.test(arg)) {
+            return { error: `Unsafe bridgeArg value: ${arg}` };
+          }
+        }
+      }
+
+      const scriptName = isBridgeArgs ? "backend_bridge.py" : SERVICE_SCRIPT;
+      const script = path.join(getScriptsDir(), scriptName);
 
       if (!fs.existsSync(script)) {
         return { error: `Service script not found: ${script}` };
@@ -389,8 +491,15 @@ function registerIpcHandlers(): void {
         }, timeoutMs);
 
         try {
-          proc = spawn(python, [script], {
-            stdio: ["pipe", "pipe", "pipe"],
+          const spawnArgs = isBridgeArgs
+            ? [script, ...((args.payload as { bridgeArgs: string[] }).bridgeArgs)]
+            : [script];
+          const stdioMode: ("pipe" | "ignore")[] = isBridgeArgs
+            ? ["ignore", "pipe", "pipe"]
+            : ["pipe", "pipe", "pipe"];
+
+          proc = spawn(python, spawnArgs, {
+            stdio: stdioMode as ("pipe" | "ignore")[],
             env: { ...process.env },
             windowsHide: true,
           });
@@ -414,7 +523,18 @@ function registerIpcHandlers(): void {
         });
 
         proc.stderr?.on("data", (chunk: Buffer) => {
-          stderr += chunk.toString();
+          const text = chunk.toString();
+          stderr += text;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            for (const line of text.split(/\r?\n/)) {
+              if (line.startsWith("STAGE ")) {
+                mainWindow.webContents.send(
+                  "service-stage-update",
+                  line.slice("STAGE ".length).trim(),
+                );
+              }
+            }
+          }
         });
 
         proc.on("close", (code) => {
@@ -446,8 +566,10 @@ function registerIpcHandlers(): void {
         });
 
         try {
-          proc.stdin?.write(JSON.stringify(args.payload));
-          proc.stdin?.end();
+          if (!isBridgeArgs) {
+            proc.stdin?.write(JSON.stringify(args.payload));
+            proc.stdin?.end();
+          }
         } catch (err) {
           clearTimeout(timer);
           settle(() => {
@@ -469,12 +591,24 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 1024,
+    minHeight: 640,
     title: "DepthWizard",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      // sandbox: false is required because the preload script uses CommonJS
+      // `require` (compiled from TypeScript by tsc, not ESM-bundled). Electron's
+      // sandboxed renderer restricts `require` in preloads to a subset that
+      // excludes `contextBridge` calls with complex objects on some Windows
+      // builds, causing a `binding.startupData` null crash.
+      // Mitigations in place: contextIsolation: true, nodeIntegration: false,
+      // IPC sender validation on every handler, CSP via session headers,
+      // navigation locked to localhost in dev mode.
+      // TODO(security): investigate bundling the preload with esbuild/vite so
+      // it can run under sandbox: true.
+      sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
       experimentalFeatures: false,
@@ -542,6 +676,9 @@ function createWindow(): void {
   mainWindow.webContents.on("render-process-gone", () => {
     console.error("[depthwizard] Renderer process crashed");
     killServiceProcess();
+    // Clean up any staged temp files so they don't leak if the renderer
+    // crashes before it can call cleanup-staged-input.
+    cleanAllStagedDirs();
   });
 }
 
@@ -562,6 +699,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   killServiceProcess();
+  cleanAllStagedDirs();
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -569,8 +707,10 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   killServiceProcess();
+  cleanAllStagedDirs();
 });
 
 app.on("will-quit", () => {
   killServiceProcess();
+  cleanAllStagedDirs();
 });

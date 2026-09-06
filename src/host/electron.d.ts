@@ -27,6 +27,18 @@ export interface DepthWizardElectron {
     payload: unknown;
     timeoutMs?: number;
   }): Promise<unknown>;
+  stageInputBytes(args: {
+    bytes: Uint8Array;
+    filename: string;
+  }): Promise<{ path: string } | { error: string }>;
+  cleanupStagedInput(args: {
+    stagedPath: string;
+  }): Promise<{ cleaned: boolean }>;
+  /**
+   * Subscribe to stage-update events pushed by the main process during
+   * execute-service. Returns an unsubscribe function.
+   */
+  onStageUpdate(callback: (stage: string) => void): () => void;
 }
 
 declare global {
