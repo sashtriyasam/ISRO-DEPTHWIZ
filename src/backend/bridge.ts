@@ -174,8 +174,14 @@ function defaultPythonExecutable(): string {
     if (process.env.DEPTHWIZARD_PYTHON) {
       return process.env.DEPTHWIZARD_PYTHON;
     }
-    if (process.platform === "win32") {
-      const candidate = "C:\\Users\\Shivam\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
+    if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+      const candidate = require("path").join(
+        process.env.LOCALAPPDATA,
+        "Programs",
+        "Python",
+        "Python312",
+        "python.exe"
+      );
       try {
         if (require("fs").existsSync(candidate)) return candidate;
       } catch {
