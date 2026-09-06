@@ -327,27 +327,27 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 ## 13. Final Release Gate Matrix
 
-| Gate                             | Status              | Evidence                                                                                                                                                    | Owner        | Blocker            |
-| -------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------ |
-| G1 — Scientific contracts        | **PASS**            | Zero diff in contracts/calibration/DSM/mesh/geospatial/rdsm/backends                                                                                        | Shivam       | No                 |
-| G2 — Real DA-V2 inference        | **NOT VERIFIED**    | Requires physical Windows + checkpoint + display                                                                                                            | Aryan/Shivam | **Yes**            |
-| G3 — Metric calibration path     | **PASS** (contract) | `CalibrationSamples` → `CalibrationResult` → `ScientificHeightProduct`                                                                                      | Shivam       | No                 |
-| G4 — DSM generation              | **PASS** (contract) | `DSMGrid.rasterize()` verified in tests                                                                                                                     | Shivam       | No                 |
-| G5 — Terrain mesh                | **PASS** (contract) | `TerrainMesh.build()` verified in tests                                                                                                                     | Shivam       | No                 |
-| G6 — Relative/non-geo path       | **PASS**            | Mode A: PNG/JPG → rDSM → rMesh → Desktop                                                                                                                    | Shivam       | No                 |
-| G7 — Native Electron host        | **PASS**            | Electron 44.2.0, sandbox, CSP, 8 IPC methods                                                                                                                | Aryan        | No                 |
-| G8 — Managed runtime             | **PASS**            | `provision_runtime.py` — venv, pip, git, checkpoint, idempotent                                                                                             | Shivam       | No                 |
-| G9 — Runtime provisioning        | **PASS**            | `provision_runtime.py` + `runtime_check.py` verified                                                                                                        | Shivam       | No                 |
-| G10 — Installer                  | **PASS** (build)    | NSIS 115 MB, portable 334 MB, clean contents                                                                                                                | Aryan        | **Yes** (physical) |
-| G11 — Offline execution          | **PASS**            | `HF_HUB_OFFLINE=1`, no network imports in engine                                                                                                            | Shivam       | No                 |
-| G12 — Error/failure behavior     | **PASS**            | Structured codes, no silent fallback, quarantine on mismatch                                                                                                | Shivam       | No                 |
-| G13 — Reproducibility            | **PASS**            | Deterministic installer, pinned upstream, hash-verified checkpoint                                                                                          | Shivam/Aryan | No                 |
-| G14 — Physical Windows witness   | **NOT VERIFIED**    | Requires clean Windows VM + display + checkpoint                                                                                                            | Aryan        | **Yes**            |
-| G15 — ML final candidate         | **PARTIAL**         | M17 locked in research (`origin/feat/shravan-final-ml-release` @ `b920772`, SHA256 `D7C0BE91…EDAC`); NOT promoted to product (main = canonical DA-V2 Small) | Shravan      | **Yes**            |
-| G15A — Solar-shadow sub-gate     | **MISSING**         | Zero implementation; gap filed (`docs/ps-solar-shadow-gap.md`); decision C — new R&D subsystem                                                              | Shivam       | **Yes**            |
-| G15B — Neural-rendering sub-gate | **MISSING**         | Zero implementation (Three.js rasterization only); gap filed (`docs/ps-neural-rendering-gap.md`); decision C — new R&D subsystem                            | Aryan/Shivam | **Yes**            |
-| G16 — Documentation              | **PARTIAL**         | Core docs accurate; this branch updates README, aryan-runtime-integration, native-runtime-packaging, gate matrix                                            | Shivam       | No                 |
-| G17 — Repository/GitHub hygiene  | **PARTIAL**         | Branch hygiene OK; CI workflow + CODEOWNERS created this branch; branch protection documented (manual UI config)                                            | Shivam       | No                 |
+| Gate                             | Status                   | Evidence                                                                                                                                                    | Owner        | Blocker            |
+| -------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------ |
+| G1 — Scientific contracts        | **PASS**                 | Zero diff in contracts/calibration/DSM/mesh/geospatial/rdsm/backends                                                                                        | Shivam       | No                 |
+| G2 — Real DA-V2 inference        | **NOT VERIFIED**         | Requires physical Windows + checkpoint + display                                                                                                            | Aryan/Shivam | **Yes**            |
+| G3 — Metric calibration path     | **PASS** (contract)      | `CalibrationSamples` → `CalibrationResult` → `ScientificHeightProduct`                                                                                      | Shivam       | No                 |
+| G4 — DSM generation              | **PASS** (contract)      | `DSMGrid.rasterize()` verified in tests                                                                                                                     | Shivam       | No                 |
+| G5 — Terrain mesh                | **PASS** (contract)      | `TerrainMesh.build()` verified in tests                                                                                                                     | Shivam       | No                 |
+| G6 — Relative/non-geo path       | **PASS**                 | Mode A: PNG/JPG → rDSM → rMesh → Desktop                                                                                                                    | Shivam       | No                 |
+| G7 — Native Electron host        | **PASS**                 | Electron 44.2.0, sandbox, CSP, 8 IPC methods                                                                                                                | Aryan        | No                 |
+| G8 — Managed runtime             | **PASS**                 | `provision_runtime.py` — venv, pip, git, checkpoint, idempotent                                                                                             | Shivam       | No                 |
+| G9 — Runtime provisioning        | **PASS**                 | `provision_runtime.py` + `runtime_check.py` verified                                                                                                        | Shivam       | No                 |
+| G10 — Installer                  | **PASS** (build)         | NSIS 115 MB, portable 334 MB, clean contents                                                                                                                | Aryan        | **Yes** (physical) |
+| G11 — Offline execution          | **PASS**                 | `HF_HUB_OFFLINE=1`, no network imports in engine                                                                                                            | Shivam       | No                 |
+| G12 — Error/failure behavior     | **PASS**                 | Structured codes, no silent fallback, quarantine on mismatch                                                                                                | Shivam       | No                 |
+| G13 — Reproducibility            | **PASS**                 | Deterministic installer, pinned upstream, hash-verified checkpoint                                                                                          | Shivam/Aryan | No                 |
+| G14 — Physical Windows witness   | **NOT VERIFIED**         | Requires clean Windows VM + display + checkpoint                                                                                                            | Aryan        | **Yes**            |
+| G15 — ML final candidate         | **PARTIAL**              | M17 locked in research (`origin/feat/shravan-final-ml-release` @ `b920772`, SHA256 `D7C0BE91…EDAC`); NOT promoted to product (main = canonical DA-V2 Small) | Shravan      | **Yes**            |
+| G15A — Solar-shadow sub-gate     | **NOT REQUIRED**         | Absent from official PS 26175 text (portal-verified 2026-09-06); correctly unimplemented                                                                    | Shivam       | No                 |
+| G15B — Neural-rendering sub-gate | **SATISFIED AS WRITTEN** | Official PS names raster engines ("Unity, Three.js, or Babylon.js"); Three.js present                                                                       | Aryan/Shivam | No                 |
+| G16 — Documentation              | **PARTIAL**              | Core docs accurate; this branch updates README, aryan-runtime-integration, native-runtime-packaging, gate matrix                                            | Shivam       | No                 |
+| G17 — Repository/GitHub hygiene  | **PARTIAL**              | Branch hygiene OK; CI workflow + CODEOWNERS created this branch; branch protection documented (manual UI config)                                            | Shivam       | No                 |
 
 ---
 
@@ -355,11 +355,11 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 ### Stale Documents (Must Update)
 
-| Document                             | Stale Content                                                | Action                                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `docs/aryan-runtime-integration.md`  | Claimed S17/S18 "NOT ON MAIN"                                | **Updated this branch** — reflects merged status                                                           |
-| `docs/canonical-release-baseline.md` | Written for integration branch (dddae24), not main (809801d) | Left untouched (stale, untracked) — canonical docs are `final-release-status.md` + `final-release-gate.md` |
-| `README.md`                          | Only npm commands; no Python/Electron/installer info         | **Updated this branch** — full project overview                                                            |
+| Document                             | Stale Content                                        | Action                                                                                                     |
+| ------------------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `docs/aryan-runtime-integration.md`  | Claimed S17/S18 "NOT ON MAIN"                        | **Updated this branch** — reflects merged status                                                           |
+| `docs/canonical-release-baseline.md` | Written for an older baseline, not main (02a0650)    | Left untouched (stale, untracked) — canonical docs are `final-release-status.md` + `final-release-gate.md` |
+| `README.md`                          | Only npm commands; no Python/Electron/installer info | **Updated this branch** — full project overview                                                            |
 
 ### Current Documents (Accurate)
 
@@ -375,7 +375,7 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 ## 15. Final Release Decision
 
-### **RELEASE CANDIDATE — PHYSICAL WITNESS REQUIRED** (with scientific-candidate requirement noted)
+### **RELEASE CANDIDATE — PHYSICAL WITNESS REQUIRED** (with scientific-candidate requirement noted; PS solar/neural gaps resolved 2026-09-06 by portal evidence)
 
 **Rationale:**
 
@@ -412,7 +412,7 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 | **Physical Windows acceptance** | Aryan        | Run `npm run electron:build:win` on clean Windows VM → install → launch → verify runtime resolution → service capabilities → real DA-V2 (with checkpoint) → calibration → metric DSM → mesh → renderer |
 | **Freeze final ML candidate**   | Shravan      | Consolidate M14/M17 → deliver frozen checkpoint + SHA256 + upstream revision + evaluation evidence                                                                                                     |
 | **Code signing**                | Shivam/Aryan | Obtain certificate for production distribution                                                                                                                                                         |
-| **CI/Branch protection**        | Shivam       | Add GitHub Actions workflow + branch protection ruleset                                                                                                                                                |
+| **CI/Branch protection**        | Shivam       | CI workflow + CODEOWNERS in this branch; apply branch protection via GitHub UI per `docs/github-branch-protection.md`                                                                                  |
 | **Final release tag**           | Shivam       | After all gates PASS: `git tag v0.1.0-sih-26175-rc1` (Shivam explicit authorization only)                                                                                                              |
 
 ---

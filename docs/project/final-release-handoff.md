@@ -1,8 +1,8 @@
 # Final Release Handoff — DepthWizard (SIH 26175)
 
 **Date:** 2026-09-06  
-**Canonical Main SHA:** `809801d45ac7f3be857b284539e4d9028e914e09`  
-**Release Control Branch:** `feat/shivam-final-release-control` (to be created)  
+**Canonical Main SHA:** `02a065070ba88c75f016956ae651a3269c55da63`
+**Release Control Branch:** `feat/shivam-release-closure` (this branch; supersedes `feat/shivam-final-release-control`, do not rebase/merge the old branch)
 **Release Authority:** Shivam (final merge authority)
 
 ---
@@ -11,8 +11,8 @@
 
 ### Current Main
 
-- **HEAD:** `809801d45ac7f3be857b284539e4d9028e914e09`
-- **origin/main:** `809801d45ac7f3be857b284539e4d9028e914e09` ✅ Synced
+- **HEAD:** `02a065070ba88c75f016956ae651a3269c55da63`
+- **origin/main:** `02a065070ba88c75f016956ae651a3269c55da63` ✅ Synced
 - **Working Tree:** Clean (modified docs only)
 
 ### Open PRs / Issues
@@ -154,19 +154,19 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 Canonical matrix: `docs/final-release-gate.md` (G1–G19). Summary:
 
-| Gate group                                               | Status                                                                                                                                | Blocker            |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| G1 Scientific contracts, G4–G7 Calibration/DSM/rDSM/Mesh | **PASS**                                                                                                                              | —                  |
-| G2 Final ML candidate                                    | **PARTIAL** (M17 locked in research, not promoted)                                                                                    | **Yes**            |
-| G3 Real DA-V2 runtime                                    | **NOT VERIFIED** (assets-gated)                                                                                                       | **Yes** (physical) |
-| G8–G10 Native host / runtime / provisioning              | **PASS**                                                                                                                              | —                  |
-| G11 Installer (build)                                    | **PASS** (build)                                                                                                                      | **Yes** (physical) |
-| G12–G13 Offline / failure handling / reproducibility     | **PASS**                                                                                                                              | —                  |
-| G14 Physical Windows witness                             | **NOT VERIFIED**                                                                                                                      | **Yes**            |
-| G15 PS compliance (+G15A/G15B)                           | **PARTIAL** (solar MISSING/C, neural MISSING/C; closures in `docs/ps-solar-shadow-closure.md`, `docs/ps-neural-rendering-closure.md`) | **Yes**            |
-| G16 Scientific evidence                                  | **PARTIAL** (honest caveats)                                                                                                          | **Yes**            |
-| G18 Documentation                                        | **PARTIAL** (this branch updates stale docs)                                                                                          | —                  |
-| G19 Governance                                           | **PARTIAL** (CI + CODEOWNERS created; BP manual)                                                                                      | —                  |
+| Gate group                                               | Status                                                                                  | Blocker            |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------ |
+| G1 Scientific contracts, G4–G7 Calibration/DSM/rDSM/Mesh | **PASS**                                                                                | —                  |
+| G2 Final ML candidate                                    | **PARTIAL** (M17 locked in research, not promoted)                                      | **Yes**            |
+| G3 Real DA-V2 runtime                                    | **NOT VERIFIED** (assets-gated)                                                         | **Yes** (physical) |
+| G8–G10 Native host / runtime / provisioning              | **PASS**                                                                                | —                  |
+| G11 Installer (build)                                    | **PASS** (build)                                                                        | **Yes** (physical) |
+| G12–G13 Offline / failure handling / reproducibility     | **PASS**                                                                                | —                  |
+| G14 Physical Windows witness                             | **NOT VERIFIED**                                                                        | **Yes**            |
+| G15 PS compliance (+G15A/G15B)                           | **PARTIAL** (solar/neural NOT REQUIRED per portal 2026-09-06; city-scale scope PARTIAL) | **Yes** (scope)    |
+| G16 Scientific evidence                                  | **PARTIAL** (honest caveats)                                                            | **Yes**            |
+| G18 Documentation                                        | **PARTIAL** (this branch updates stale docs)                                            | —                  |
+| G19 Governance                                           | **PARTIAL** (CI + CODEOWNERS created; BP manual)                                        | —                  |
 
 **Current Decision:** **RELEASE CANDIDATE — PHYSICAL WITNESS REQUIRED** (with scientific-candidate requirement noted)
 
