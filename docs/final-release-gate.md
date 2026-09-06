@@ -52,6 +52,8 @@
 | **G13** Failure handling                 | **PASS**         | `CHECKPOINT_MISSING` / `CHECKPOINT_HASH_MISMATCH` / `PYTHON_VERSION_UNSUPPORTED` / `UPSTREAM_*_MISMATCH` / `DEVICE_UNAVAILABLE`; quarantine `.invalid`; never synthetic substitution                                                       | Shivam         | No                 |
 | **G14** Physical Windows witness         | **NOT VERIFIED** | Requires clean Windows VM + display + checkpoint: install → launch → runtime → service → DA-V2 → calibration → DSM → mesh → renderer (see `docs/windows-release-acceptance.md`)                                                            | Aryan          | **Yes**            |
 | **G15** SIH problem-statement compliance | **PARTIAL**      | 5/9 PASS, 2/9 PARTIAL, 2/9 MISSING per `docs/sih-compliance-matrix.md`: solar shadow geometry/trigonometry MISSING; 3D neural rendering PARTIAL (rasterization, not NeRF/GS)                                                               | Shivam         | **Yes**            |
+| **G15A** Solar-shadow sub-gate           | **MISSING**      | Zero implementation in `src/` (verified search); gap filed in `docs/ps-solar-shadow-gap.md`; decision **C — MAJOR GAP, new R&D subsystem**                                                                                                 | Shivam         | **Yes**            |
+| **G15B** 3D neural rendering sub-gate    | **MISSING**      | Zero implementation in `src/` (verified search); Three.js rasterization only; gap filed in `docs/ps-neural-rendering-gap.md`; decision **C — MAJOR GAP, new R&D subsystem**                                                                | Aryan/Shivam   | **Yes**            |
 | **G16** Scientific evidence              | **PARTIAL**      | GAMUS 32-tile pooled MAE 4.40 m / RMSE 5.86 m / R² 0.23 recorded honestly (research signal, not SIH validation); GeoNRW M17 probe Pearson 0.37 (research branch); SIH-wide accuracy unproven                                               | Shravan/Shivam | **Yes**            |
 | **G17** Reproducibility                  | **PASS**         | Pinned upstream `a561b849…`, checkpoint SHA256 verification, deterministic data dirs, deterministic installer config                                                                                                                       | Shivam/Aryan   | No                 |
 | **G18** Documentation                    | **PARTIAL**      | Core docs accurate; `README.md`, `aryan-runtime-integration.md`, `native-runtime-packaging.md`, `canonical-release-baseline.md` updated this branch; `final-release-status.md` decision section pending update                             | Shivam         | No                 |
@@ -61,13 +63,13 @@
 
 ## Blocker Summary
 
-| Blocker                                       | Gates Affected   | Resolution                                                                          |
-| --------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------- |
-| Physical Windows acceptance                   | G3, G11, G14     | Run `docs/windows-release-acceptance.md` on clean Windows VM + display + checkpoint |
-| Real DA-V2 runtime                            | G3               | Checkpoint + display + upstream source (`DW_DAV2_ACCEPT=1`)                         |
-| Final ML candidate promotion                  | G2               | Shravan: freeze M17 evidence; Shivam: promote via product path (no silent swap)     |
-| SIH compliance gaps (solar, neural rendering) | G15              | Report filed; implementation is a new program, not this closure                     |
-| Code signing                                  | G11 (production) | Obtain EV certificate for production distribution                                   |
+| Blocker                                       | Gates Affected   | Resolution                                                                                                                                    |
+| --------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Physical Windows acceptance                   | G3, G11, G14     | Run `docs/windows-release-acceptance.md` on clean Windows VM + display + checkpoint                                                           |
+| Real DA-V2 runtime                            | G3               | Checkpoint + display + upstream source (`DW_DAV2_ACCEPT=1`)                                                                                   |
+| Final ML candidate promotion                  | G2               | Shravan: freeze M17 evidence; Shivam: promote via product path (no silent swap)                                                               |
+| SIH compliance gaps (solar, neural rendering) | G15/G15A/G15B    | Gaps filed (`docs/ps-solar-shadow-gap.md`, `docs/ps-neural-rendering-gap.md`); decision C — implementation is a new program, not this closure |
+| Code signing                                  | G11 (production) | Obtain EV certificate for production distribution                                                                                             |
 
 ---
 
