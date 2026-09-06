@@ -14,6 +14,12 @@ export interface HostDetectionOverrides {
 
 function detectRuntime(): HostRuntime {
   if (
+    typeof window !== "undefined" &&
+    typeof window.depthwizard !== "undefined"
+  ) {
+    return "electron";
+  }
+  if (
     typeof process !== "undefined" &&
     typeof process.versions !== "undefined"
   ) {

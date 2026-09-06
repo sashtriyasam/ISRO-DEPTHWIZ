@@ -268,9 +268,19 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       {capabilitiesError && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
           <div style={errorStyle}>Supported formats could not be loaded: {capabilitiesError}</div>
-          <button onClick={() => void loadCapabilities()} style={actionButtonStyle}>
-            Retry
-          </button>
+          <div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
+            <button onClick={() => void loadCapabilities()} style={actionButtonStyle}>
+              Retry
+            </button>
+            {typeof window !== "undefined" && window.depthwizard?.showBackendSetup && (
+              <button
+                onClick={() => void window.depthwizard?.showBackendSetup?.()}
+                style={primaryButtonStyle}
+              >
+                Setup Backend Python
+              </button>
+            )}
+          </div>
         </div>
       )}
 

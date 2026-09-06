@@ -45,6 +45,15 @@ export class SubprocessServiceTransport implements ServiceTransport {
     payload: unknown,
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
+    if (typeof window !== "undefined" && window.depthwizard?.executeService) {
+      if (hooks.signal?.aborted) {
+        throw new OperationCancelledError();
+      }
+      return await window.depthwizard.executeService({
+        payload,
+        timeoutMs: this.timeoutMs,
+      });
+    }
     if (!this.host.processSpawning) {
       throw new Error(
         "Service transport requires a desktop host with process spawning",

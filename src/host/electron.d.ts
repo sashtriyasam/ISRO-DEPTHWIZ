@@ -34,6 +34,7 @@ export interface DepthWizardElectron {
   cleanupStagedInput(args: {
     stagedPath: string;
   }): Promise<{ cleaned: boolean }>;
+  showBackendSetup?(): Promise<void>;
   /**
    * Subscribe to stage-update events pushed by the main process during
    * execute-service. Returns an unsubscribe function.

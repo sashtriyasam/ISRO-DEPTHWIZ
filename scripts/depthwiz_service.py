@@ -33,7 +33,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_script_dir = Path(__file__).resolve().parent
+for _candidate in (
+    _script_dir.parent / "src",
+    _script_dir / "src",
+    _script_dir.parent,
+    _script_dir,
+):
+    if (_candidate / "depthwizard").is_dir() and str(_candidate) not in sys.path:
+        sys.path.insert(0, str(_candidate))
 
 try:
     from depthwizard.calibration import (

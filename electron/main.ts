@@ -63,6 +63,30 @@ function rejectUnauthorized(
 function getPythonPath(): string {
   const explicit = process.env.DEPTHWIZARD_PYTHON;
   if (explicit) return explicit;
+
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA || "";
+    if (localAppData) {
+      const pyBase = path.join(localAppData, "Programs", "Python");
+      if (fs.existsSync(pyBase)) {
+        try {
+          const entries = fs.readdirSync(pyBase);
+          // Prefer higher version numbers (e.g. Python312 > Python310)
+          for (const entry of entries.reverse()) {
+            const candidate = path.join(pyBase, entry, "python.exe");
+            if (fs.existsSync(candidate)) return candidate;
+          }
+        } catch {
+          /* noop */
+        }
+      }
+    }
+    const pyLauncher = path.join(
+      process.env.SystemRoot || "C:\\Windows",
+      "py.exe",
+    );
+    if (fs.existsSync(pyLauncher)) return pyLauncher;
+  }
   return "python";
 }
 
@@ -294,7 +318,7 @@ function registerIpcHandlers(): void {
     async (
       event,
       args: {
-        bytes: Uint8Array | Buffer;
+        bytes: Uint8Array | Buffer | Record<string, number> | number[];
         filename: string;
       },
     ) => {
@@ -303,20 +327,43 @@ function registerIpcHandlers(): void {
       }
       try {
         const MAX_STAGE_SIZE = 500 * 1024 * 1024; // 500 MB maximum payload limit
-        const byteCount = Buffer.isBuffer(args.bytes)
-          ? args.bytes.length
-          : (args.bytes as Uint8Array)?.length ?? 0;
+
+        // Robust buffer construction:
+        // Context bridge structured clone may convert Uint8Array to a plain
+        // object with numeric string keys {"0":1,"1":2,...} on some Electron
+        // builds. We normalise to a Buffer regardless of what arrives.
+        let buffer: Buffer;
+        if (Buffer.isBuffer(args.bytes)) {
+          buffer = args.bytes;
+        } else if (args.bytes instanceof Uint8Array) {
+          buffer = Buffer.from(args.bytes);
+        } else if (Array.isArray(args.bytes)) {
+          buffer = Buffer.from(args.bytes as number[]);
+        } else if (args.bytes && typeof args.bytes === "object") {
+          // Plain object with numeric keys — reconstruct as array
+          const obj = args.bytes as Record<string, number>;
+          const keys = Object.keys(obj).filter((k) => /^\d+$/.test(k));
+          const len = keys.length;
+          buffer = Buffer.allocUnsafe(len);
+          for (let i = 0; i < len; i++) {
+            buffer[i] = obj[String(i)] ?? 0;
+          }
+        } else {
+          return { error: "bytes field is missing or has an unexpected type" };
+        }
+
+        const byteCount = buffer.length;
         if (byteCount > MAX_STAGE_SIZE) {
           return { error: "Staged payload exceeds maximum limit of 500 MB." };
+        }
+        if (byteCount === 0) {
+          return { error: "bytes field is empty — file may not have been read correctly" };
         }
         const base = path.basename(args.filename || "input");
         const trimmed = base.slice(-128) || "input";
         const osTmp = app.getPath("temp");
         const tempDir = fs.mkdtempSync(path.join(osTmp, "depthwiz-"));
         const targetPath = path.join(tempDir, trimmed);
-        const buffer = Buffer.isBuffer(args.bytes)
-          ? args.bytes
-          : Buffer.from(args.bytes);
         fs.writeFileSync(targetPath, buffer);
         stagedDirs.add(tempDir);
         return { path: targetPath };
@@ -327,6 +374,27 @@ function registerIpcHandlers(): void {
       }
     },
   );
+
+  ipcMain.handle("show-backend-setup", (event) => {
+    if (rejectUnauthorized(event, "show-backend-setup")) return;
+    const setupBat = path.join(process.resourcesPath, "scripts", "setup_backend.bat");
+    const setupExists = fs.existsSync(setupBat);
+    const setupNote = setupExists
+      ? `\n\nA setup script is included:\n  ${setupBat}\n\nDouble-click it to install automatically.`
+      : "";
+    void require("electron").dialog.showMessageBox({
+      type: "info",
+      title: "DepthWizard — Backend Setup Required",
+      message: "Python backend dependencies are not installed.",
+      detail:
+        `DepthWizard requires Python 3.11+ with these packages:\n` +
+        `  • pydantic\n  • Pillow\n  • rasterio\n  • numpy\n\n` +
+        `Install Python from https://python.org then run:\n` +
+        `  pip install pydantic Pillow rasterio numpy` +
+        setupNote,
+      buttons: ["OK"],
+    });
+  });
 
   ipcMain.handle(
     "cleanup-staged-input",
@@ -607,7 +675,7 @@ function createWindow(): void {
     minHeight: 640,
     title: "DepthWizard",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, fs.existsSync(path.join(__dirname, "preload.cjs")) ? "preload.cjs" : "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       // sandbox: false is required because the preload script uses CommonJS

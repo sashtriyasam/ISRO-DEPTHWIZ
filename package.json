@@ -4,11 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "description": "DepthWizard - Single-View Height Estimation and 3D Flythrough",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:electron": "tsc -b && vite build && tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -b && vite build && tsc -p tsconfig.electron.json && node -e \"const fs = require('fs'); fs.copyFileSync('electron/main.js', 'electron/main.cjs'); fs.copyFileSync('electron/preload.js', 'electron/preload.cjs');\"",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -44,6 +44,20 @@ from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
+# Dynamic sys.path resolution for depthwizard package
+# ---------------------------------------------------------------------------
+
+_script_dir = Path(__file__).resolve().parent
+for _candidate in (
+    _script_dir.parent / "src",
+    _script_dir / "src",
+    _script_dir.parent,
+    _script_dir,
+):
+    if (_candidate / "depthwizard").is_dir() and str(_candidate) not in sys.path:
+        sys.path.insert(0, str(_candidate))
+
+# ---------------------------------------------------------------------------
 # Import the ACTUAL depthwizard backend — no fallback, no duplicate formulas.
 # Serialization uses the canonical depthwizard.integration layer, never a
 # bridge-owned copy of the wire shape.

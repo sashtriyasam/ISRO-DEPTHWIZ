@@ -11,6 +11,7 @@ const ALLOWED_CHANNELS = new Set([
   "execute-service",
   "stage-input-bytes",
   "cleanup-staged-input",
+  "show-backend-setup",
 ]);
 
 function safeInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -35,6 +36,7 @@ contextBridge.exposeInMainWorld("depthwizard", {
     safeInvoke("stage-input-bytes", args),
   cleanupStagedInput: (args: { stagedPath: string }) =>
     safeInvoke("cleanup-staged-input", args),
+  showBackendSetup: () => safeInvoke("show-backend-setup"),
   // Push-model: main process sends stage updates during execute-service
   onStageUpdate: (callback: (stage: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, stage: string) =>
