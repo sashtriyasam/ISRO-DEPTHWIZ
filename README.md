@@ -1,6 +1,6 @@
-# DepthWizard — ISRO SIH 26175 Official Solution
+# DepthWizard — ISRO SIH 26175 Release Candidate
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0--sih--26175-blue.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175)
+[![Release](https://img.shields.io/badge/Release-v0.1.0--rc1-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
 [![Python](https://img.shields.io/badge/Python-3.12_|_549_Tests_Passed-success.svg)](#python-scientific-engine)
 [![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_627_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
@@ -24,18 +24,19 @@
 
 ## 📊 ISRO Problem Statement 26175 Matrix & Verification
 
-| Requirement | Implementation Component | Status & Evidence |
+| Requirement | Implementation Component | Status & Verification Evidence |
 | :--- | :--- | :--- |
 | **1. Single-View Optical RGB Input** | `InputInspection` ([src/depthwizard/ingestion/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/ingestion)) | **PASS** — Accepts PNG, JPG, and GeoTIFF. Validates checksums & georeferencing. |
 | **2. Non-Georeferenced Relative DSM (rDSM)** | `RelativeSurfaceGrid` ([src/depthwizard/rdsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/rdsm)) | **PASS** — Relative height model (`units=None`, `LOCAL` frame). Zero fabricated CRS or metres. |
 | **3. Georeferenced Metric DSM (DSM)** | `ScientificHeightProduct` ([src/depthwizard/dsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm)) | **PASS** — Calibrated metric DSM in metres ($m$), preserving original CRS and affine bounds. |
-| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Unified `DepthBackend` protocol with synthetic fallback. |
+| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Canonical `DepthBackend` protocol (DA-V2 Small shipped product model; M17 research candidate). |
 | **5. Scale Calibration Module** | `ScaleOffsetCalibrator` ([src/depthwizard/calibration/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/calibration)) | **PASS** — Calibrates depth via DEM (SRTM 30m) or GCP reference controls. |
 | **6. Optical Texture Projection** | `TextureProjection` ([src/depthwizard/texture/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/texture)) | **PASS** — Binds optical RGB texture to 3D terrain mesh UVs. |
-| **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Production bundle builds clean (`npm run build:electron`). |
+| **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 627 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — NSIS Installer (`DepthWizard-Setup-0.1.0.exe`, 115 MB) & offline mode (`HF_HUB_OFFLINE=1`). |
+| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **RELEASE CANDIDATE** — NSIS Installer build (`DepthWizard-Setup-0.1.0.exe`); physical witness & code signing in progress. |
+
 
 ---
 
@@ -66,9 +67,10 @@
 
 ## 🚀 Download & Installation
 
-### Option 1: Standalone Windows Installer (Recommended for Evaluation)
-Download the standalone executable directly from the GitHub Release:
-- **Download Executable**: [DepthWizard-Setup-0.1.0.exe (115 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175)
+### Option 1: Standalone Windows Installer (Release Candidate)
+Download the standalone executable directly from the GitHub Release Candidate tag:
+- **Download Executable**: [DepthWizard-Setup-0.1.0.exe (150 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-rc1)
+
 
 ### Option 2: Build from Source
 
