@@ -148,6 +148,38 @@ export function createLayerMesh(
     return { mesh, geometry, material };
   }
 
+  if (mode === "textured") {
+    let map: THREE.Texture | null = null;
+    if (artifact.texture) {
+      const td = artifact.texture;
+      if (td.image instanceof HTMLImageElement) {
+        map = new THREE.Texture(td.image);
+        map.needsUpdate = true;
+      } else {
+        // ImageData path
+        const imgData = td.image as ImageData;
+        map = new THREE.DataTexture(
+          new Uint8Array(imgData.data.buffer),
+          td.width,
+          td.height,
+          THREE.RGBAFormat
+        );
+        map.needsUpdate = true;
+      }
+    }
+    const material = new THREE.MeshStandardMaterial({
+      map: map ?? undefined,
+      vertexColors: map == null && elevation != null,
+      color: map != null ? 0xffffff : (elevation != null ? 0xffffff : 0x4a7a4a),
+      roughness: 0.85,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.userData.pickable = true;
+    return { mesh, geometry, material };
+  }
+
   const material = surfaceMaterial(layerId, elevation, false);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.userData.pickable = true;

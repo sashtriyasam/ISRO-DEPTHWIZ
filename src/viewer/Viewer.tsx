@@ -116,7 +116,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     interactionModeRef: "inspect",
     verticalScaleRef: 1,
     cameraModeRef: "orbit",
-    renderingModeRef: "shaded",
+    renderingModeRef: "textured",
     lastBoundsRef: null,
     trajectoryControllerRef: null,
     previewGroupRef: null,
@@ -411,8 +411,11 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     const threeScene = new THREE.Scene();
     state.threeScene = threeScene;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     threeScene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(1, 2, 1);
+    threeScene.add(dirLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(5, 8, 5);

@@ -10,21 +10,23 @@ export type LayerId =
 
 export type LayerVisualizationType = "mesh-color" | "mesh-displacement" | "texture" | "line-overlay";
 
-export type RenderingMode = "shaded" | "wireframe" | "shaded-wireframe";
+export type RenderingMode = "textured" | "shaded" | "wireframe" | "shaded-wireframe";
 
 export const RENDERING_MODES: readonly RenderingMode[] = [
+  "textured",
   "shaded",
   "wireframe",
   "shaded-wireframe",
 ];
 
-export const DEFAULT_RENDERING_MODE: RenderingMode = "shaded";
+export const DEFAULT_RENDERING_MODE: RenderingMode = "textured";
 
 export function isRenderingMode(value: string): value is RenderingMode {
   return (RENDERING_MODES as readonly string[]).includes(value);
 }
 
 export const RENDERING_MODE_LABELS: Record<RenderingMode, string> = {
+  textured: "Photorealistic (Textured Mesh)",
   shaded: "Shaded",
   wireframe: "Wireframe",
   "shaded-wireframe": "Shaded + Wireframe",
