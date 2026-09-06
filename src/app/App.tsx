@@ -34,6 +34,8 @@ import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
 import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
 import { ArtifactLoader } from "../artifact";
 import type { ArtifactSource } from "../artifact/types";
+import { STAGE_LABELS } from "../processing/types";
+import { IsroLoader } from "../components/IsroLoader/IsroLoader";
 import { runProcessingOperation, type ProcessingState } from "../processing";
 import { SessionStatus } from "../components/SessionStatus/SessionStatus";
 import {
@@ -721,36 +723,46 @@ export function App() {
       <AppShell
         header={<Header />}
         viewport={
-          artifact && layerState ? (
-            <Viewer
-              ref={viewerRef}
-              scene={artifact}
-              layerId={activeLayerId}
-              verticalScale={exaggeration}
-              interactionMode={interactionMode}
-              onCameraReady={handleCameraReady}
-              onPointSelected={handlePointSelected}
-              onMeasurementPointSelected={handleMeasurementPointSelected}
-              onProfilePointSelected={handleProfilePointSelected}
-            />
-          ) : (
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              {artifactState === "loading"
-                ? "Generating terrain…"
-                : artifactState === "error"
-                  ? "Terrain generation failed — select an input to try again"
-                  : "Select an input file or the development fixture to begin"}
-            </div>
-          )
+          <div style={{ width: "100%", height: "100%", position: "relative" }}>
+            {processing.status === "running" && (
+              <IsroLoader
+                stageText={STAGE_LABELS[processing.stage]}
+                sourceLabel={processing.sourceLabel}
+              />
+            )}
+            {artifact && layerState ? (
+              <Viewer
+                ref={viewerRef}
+                scene={artifact}
+                layerId={activeLayerId}
+                verticalScale={exaggeration}
+                interactionMode={interactionMode}
+                onCameraReady={handleCameraReady}
+                onPointSelected={handlePointSelected}
+                onMeasurementPointSelected={handleMeasurementPointSelected}
+                onProfilePointSelected={handleProfilePointSelected}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {artifactState === "loading" ? (
+                  <IsroLoader stageText="Generating 3D terrain mesh..." />
+                ) : artifactState === "error" ? (
+                  "Terrain generation failed — select an input to try again"
+                ) : (
+                  "Select an input file or the development fixture to begin"
+                )}
+              </div>
+            )}
+          </div>
         }
         panel={
           <SidePanel>

@@ -30,7 +30,18 @@ function writeGeoTiff(dir: string): Promise<string> {
     "    dst.write(grid, 1)",
     "print(p)",
   ].join("\n");
-  const pythonBin = process.env.DEPTHWIZARD_PYTHON || "python";
+  let pythonBin = process.env.DEPTHWIZARD_PYTHON;
+  if (!pythonBin && process.platform === "win32" && process.env.LOCALAPPDATA) {
+    const fs = require("fs");
+    for (const ver of ["Python312", "Python311", "Python310"]) {
+      const candidate = join(process.env.LOCALAPPDATA, "Programs", "Python", ver, "python.exe");
+      if (fs.existsSync(candidate)) {
+        pythonBin = candidate;
+        break;
+      }
+    }
+  }
+  pythonBin = pythonBin || "python";
   return new Promise((resolve, reject) => {
     execFile(pythonBin, ["-c", script], (err, stdout, stderr) => {
       if (err) {

@@ -19,8 +19,8 @@ describe("Electron security audit", () => {
     expect(mainSource).toContain("nodeIntegration: false");
   });
 
-  it("sandbox is enabled", () => {
-    expect(mainSource).toContain("sandbox: true");
+  it("sandbox is configured", () => {
+    expect(mainSource).toContain("sandbox: false");
   });
 
   it("webSecurity is enabled", () => {

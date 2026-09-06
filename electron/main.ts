@@ -10,6 +10,12 @@ import * as path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
 
+// Windows: prevent GPU sandbox crash in dev mode
+if (process.platform === "win32") {
+  app.commandLine.appendSwitch("no-sandbox");
+  app.commandLine.appendSwitch("disable-gpu-sandbox");
+}
+
 let mainWindow: BrowserWindow | null = null;
 let serviceProcess: ChildProcess | null = null;
 let serviceStdout = "";
@@ -59,8 +65,25 @@ function rejectUnauthorized(
 
 function getPythonPath(): string {
   const explicit = process.env.DEPTHWIZARD_PYTHON;
-  if (explicit) return explicit;
-  return "python";
+  if (explicit && fs.existsSync(explicit)) return explicit;
+
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      const candidates = [
+        path.join(localAppData, "Programs", "Python", "Python312", "python.exe"),
+        path.join(localAppData, "Programs", "Python", "Python311", "python.exe"),
+        path.join(localAppData, "Programs", "Python", "Python310", "python.exe"),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return explicit || "python";
 }
 
 function getScriptsDir(): string {
@@ -356,7 +379,14 @@ function registerIpcHandlers(): void {
       }
 
       const python = getPythonPath();
-      const script = path.join(getScriptsDir(), SERVICE_SCRIPT);
+      const isBridgeArgs =
+        typeof args.payload === "object" &&
+        args.payload !== null &&
+        "bridgeArgs" in args.payload &&
+        Array.isArray((args.payload as { bridgeArgs: unknown }).bridgeArgs);
+
+      const scriptName = isBridgeArgs ? "backend_bridge.py" : SERVICE_SCRIPT;
+      const script = path.join(getScriptsDir(), scriptName);
 
       if (!fs.existsSync(script)) {
         return { error: `Service script not found: ${script}` };
@@ -389,8 +419,15 @@ function registerIpcHandlers(): void {
         }, timeoutMs);
 
         try {
-          proc = spawn(python, [script], {
-            stdio: ["pipe", "pipe", "pipe"],
+          const spawnArgs = isBridgeArgs
+            ? [script, ...((args.payload as { bridgeArgs: string[] }).bridgeArgs)]
+            : [script];
+          const stdioMode: ("pipe" | "ignore")[] = isBridgeArgs
+            ? ["ignore", "pipe", "pipe"]
+            : ["pipe", "pipe", "pipe"];
+
+          proc = spawn(python, spawnArgs, {
+            stdio: stdioMode as ("pipe" | "ignore")[],
             env: { ...process.env },
             windowsHide: true,
           });
@@ -445,18 +482,71 @@ function registerIpcHandlers(): void {
           });
         });
 
-        try {
-          proc.stdin?.write(JSON.stringify(args.payload));
-          proc.stdin?.end();
-        } catch (err) {
-          clearTimeout(timer);
-          settle(() => {
-            resolve({
-              error: `Failed to write to service: ${err instanceof Error ? err.message : String(err)}`,
+        if (!isBridgeArgs) {
+          try {
+            proc.stdin?.write(JSON.stringify(args.payload));
+            proc.stdin?.end();
+          } catch (err) {
+            clearTimeout(timer);
+            settle(() => {
+              resolve({
+                error: `Failed to write to service: ${err instanceof Error ? err.message : String(err)}`,
+              });
             });
-          });
+          }
         }
       });
+    },
+  );
+
+  ipcMain.handle(
+    "stage-input-bytes",
+    async (
+      event,
+      args: {
+        bytes: Uint8Array | Buffer;
+        filename: string;
+      },
+    ) => {
+      if (rejectUnauthorized(event, "stage-input-bytes")) {
+        return { error: "unauthorized" };
+      }
+      try {
+        const base = path.basename(args.filename || "input");
+        const trimmed = base.slice(-128) || "input";
+        const tempDir = fs.mkdtempSync(path.join(app.getPath("temp"), "depthwiz-"));
+        const targetPath = path.join(tempDir, trimmed);
+        const buffer = Buffer.isBuffer(args.bytes)
+          ? args.bytes
+          : Buffer.from(args.bytes);
+        fs.writeFileSync(targetPath, buffer);
+        return { path: targetPath };
+      } catch (err) {
+        return {
+          error: `Failed to stage file: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "cleanup-staged-input",
+    async (event, args: { stagedPath: string }) => {
+      if (rejectUnauthorized(event, "cleanup-staged-input")) {
+        return { cleaned: false };
+      }
+      try {
+        if (args.stagedPath && typeof args.stagedPath === "string") {
+          const dir = path.dirname(args.stagedPath);
+          if (path.basename(dir).startsWith("depthwiz-")) {
+            fs.rmSync(dir, { recursive: true, force: true });
+            return { cleaned: true };
+          }
+        }
+      } catch {
+        /* noop */
+      }
+      return { cleaned: false };
     },
   );
 }
@@ -474,7 +564,7 @@ function createWindow(): void {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
       experimentalFeatures: false,
@@ -507,14 +597,21 @@ function createWindow(): void {
   });
 
   // CSP via session
+  // Dev mode: allow Vite HMR inline scripts and eval; production: strict.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const scriptSrc = isDevMode()
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-" + "eval'"
+      : "script-src 'self'";
+    const connectSrc = isDevMode()
+      ? "connect-src 'self' ws://localhost:1420"
+      : "connect-src 'self'";
     const csp = [
       "default-src 'self'",
-      "script-src 'self'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      connectSrc,
       "media-src 'none'",
       "object-src 'none'",
       "frame-src 'none'",
@@ -538,6 +635,11 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  // Auto-open DevTools in dev mode to surface renderer errors
+  if (isDevMode()) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
 
   mainWindow.webContents.on("render-process-gone", () => {
     console.error("[depthwizard] Renderer process crashed");

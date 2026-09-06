@@ -7,7 +7,18 @@ import { join, resolve } from "path";
 const REPO_ROOT = resolve(__dirname, "..", "..");
 const SCRIPTS_DIR = join(REPO_ROOT, "scripts");
 
-const PYTHON_BIN = process.env.DEPTHWIZARD_PYTHON || "python";
+function getPythonBin(): string {
+  if (process.env.DEPTHWIZARD_PYTHON) return process.env.DEPTHWIZARD_PYTHON;
+  if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+    for (const ver of ["Python312", "Python311", "Python310"]) {
+      const p = join(process.env.LOCALAPPDATA, "Programs", "Python", ver, "python.exe");
+      if (existsSync(p)) return p;
+    }
+  }
+  return "python";
+}
+
+const PYTHON_BIN = getPythonBin();
 
 function runPython(args: string[], input?: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {

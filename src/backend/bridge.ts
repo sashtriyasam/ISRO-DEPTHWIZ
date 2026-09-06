@@ -169,6 +169,29 @@ export class OperationCancelledError extends Error {
   }
 }
 
+function resolvePythonExecutable(explicit?: string): string {
+  if (explicit) return explicit;
+  if (typeof process !== "undefined" && process.env?.DEPTHWIZARD_PYTHON) {
+    return process.env.DEPTHWIZARD_PYTHON;
+  }
+  if (typeof process !== "undefined" && process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      try {
+        const fs = require("fs");
+        const path = require("path");
+        for (const ver of ["Python312", "Python311", "Python310"]) {
+          const candidate = path.join(localAppData, "Programs", "Python", ver, "python.exe");
+          if (fs.existsSync(candidate)) return candidate;
+        }
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  return "python";
+}
+
 export class BackendBridge {
   private pythonPath: string;
   private bridgeScript: string;
@@ -178,12 +201,7 @@ export class BackendBridge {
   private mode: "metric" | "relative";
 
   constructor(options: BackendBridgeOptions = {}) {
-    this.pythonPath =
-      options.pythonPath ??
-      (typeof process !== "undefined"
-        ? process.env.DEPTHWIZARD_PYTHON
-        : undefined) ??
-      "python";
+    this.pythonPath = resolvePythonExecutable(options.pythonPath);
     this.bridgeScript = options.bridgeScript ?? "scripts/backend_bridge.py";
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
     this.host = detectHost(options.host);
@@ -503,6 +521,22 @@ export class BackendBridge {
     bytes: Uint8Array,
     filename: string,
   ): Promise<StagedInput> {
+    if (typeof window !== "undefined" && window.depthwizard?.stageInputBytes) {
+      const res = await window.depthwizard.stageInputBytes({ bytes, filename });
+      if ("error" in res) {
+        throw new Error((res as { error: string }).error);
+      }
+      const stagedPath = (res as { path: string }).path;
+      return {
+        path: stagedPath,
+        cleanup: async () => {
+          if (window.depthwizard?.cleanupStagedInput) {
+            await window.depthwizard.cleanupStagedInput({ stagedPath });
+          }
+        },
+      };
+    }
+
     if (!this.host.localFilesystem) {
       throw new Error(
         "File staging requires a host filesystem; browser-only contexts cannot stage input files",
@@ -608,6 +642,20 @@ export class BackendBridge {
     args: string[],
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
+    if (typeof window !== "undefined" && window.depthwizard) {
+      if (hooks.signal?.aborted) {
+        throw new OperationCancelledError();
+      }
+      const res = await window.depthwizard.executeService({
+        payload: { bridgeArgs: args },
+        timeoutMs: this.timeoutMs,
+      });
+      if (typeof res === "object" && res !== null && "error" in res) {
+        throw new Error((res as { error: string }).error);
+      }
+      return res;
+    }
+
     const { spawn } = await import("child_process");
 
     return new Promise((resolve, reject) => {

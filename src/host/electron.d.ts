@@ -27,6 +27,13 @@ export interface DepthWizardElectron {
     payload: unknown;
     timeoutMs?: number;
   }): Promise<unknown>;
+  stageInputBytes(args: {
+    bytes: Uint8Array;
+    filename: string;
+  }): Promise<{ path: string } | { error: string }>;
+  cleanupStagedInput(args: {
+    stagedPath: string;
+  }): Promise<{ cleaned: boolean }>;
 }
 
 declare global {

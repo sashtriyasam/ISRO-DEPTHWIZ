@@ -1,0 +1,239 @@
+.isro-loader-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.92) 0%, rgba(9, 11, 16, 0.98) 100%);
+  backdrop-filter: blur(12px);
+  z-index: 1000;
+  font-family: var(--font-family);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  user-select: none;
+  animation: isroFadeIn 0.3s ease-out;
+}
+
+@keyframes isroFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Background Radar Grid Overlay */
+.isro-radar-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at center, rgba(0, 242, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to right, rgba(0, 242, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 242, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px, 40px 40px, 40px 40px;
+  background-position: center center;
+  pointer-events: none;
+}
+
+.isro-radar-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, rgba(0, 242, 255, 0.4), transparent);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.6);
+  animation: isroScan 3s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes isroScan {
+  0% { top: -10%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 110%; opacity: 0; }
+}
+
+/* Central Orbit Assembly */
+.isro-orbit-wrapper {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.isro-outer-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(0, 242, 255, 0.35);
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.15);
+  animation: isroSpinClockwise 12s linear infinite;
+}
+
+.isro-middle-ring {
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #00f2ff;
+  border-right-color: rgba(0, 242, 255, 0.4);
+  animation: isroSpinCounterClockwise 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.isro-inner-ring {
+  position: absolute;
+  inset: 36px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-bottom-color: #fbbf24;
+  border-left-color: rgba(251, 191, 36, 0.4);
+  animation: isroSpinClockwise 4s linear infinite;
+}
+
+@keyframes isroSpinClockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes isroSpinCounterClockwise {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.isro-core-beacon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 242, 255, 0.9) 0%, rgba(15, 23, 42, 0.8) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 30px rgba(0, 242, 255, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.8);
+  animation: isroPulse 2s ease-in-out infinite alternate;
+  z-index: 2;
+}
+
+@keyframes isroPulse {
+  0% {
+    transform: scale(0.92);
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.4);
+  }
+  100% {
+    transform: scale(1.08);
+    box-shadow: 0 0 35px rgba(0, 242, 255, 0.9), 0 0 60px rgba(0, 242, 255, 0.4);
+  }
+}
+
+.isro-satellite-icon {
+  width: 26px;
+  height: 26px;
+  color: #ffffff;
+  filter: drop-shadow(0 0 6px rgba(0, 242, 255, 0.9));
+}
+
+/* Telemetry Card Info */
+.isro-hud-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(0, 242, 255, 0.25);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-xl);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 242, 255, 0.1);
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+
+.isro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #00f2ff;
+  background: rgba(0, 242, 255, 0.1);
+  border: 1px solid rgba(0, 242, 255, 0.3);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.isro-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00f2ff;
+  box-shadow: 0 0 8px #00f2ff;
+  animation: isroDotBlink 1s infinite alternate;
+}
+
+@keyframes isroDotBlink {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+.isro-stage-title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.isro-telemetry-text {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+}
+
+/* Shimmering Progress Bar */
+.isro-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(0, 242, 255, 0.2);
+  margin-top: 4px;
+}
+
+.isro-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0077ff, #00f2ff, #fbbf24);
+  border-radius: 3px;
+  position: relative;
+  animation: isroBarGlow 2s ease-in-out infinite alternate;
+  transition: width 0.3s ease-out;
+}
+
+@keyframes isroBarGlow {
+  0% { filter: brightness(0.9); }
+  100% { filter: brightness(1.3) drop-shadow(0 0 8px rgba(0, 242, 255, 0.8)); }
+}
+
+.isro-progress-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  animation: isroShimmer 1.8s infinite;
+}
+
+@keyframes isroShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

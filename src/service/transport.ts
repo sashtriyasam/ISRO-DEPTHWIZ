@@ -19,6 +19,29 @@ export interface ServiceTransport {
 
 const SERVICE_TIMEOUT_MS = 120_000;
 
+function resolvePythonExecutable(explicit?: string): string {
+  if (explicit) return explicit;
+  if (typeof process !== "undefined" && process.env?.DEPTHWIZARD_PYTHON) {
+    return process.env.DEPTHWIZARD_PYTHON;
+  }
+  if (typeof process !== "undefined" && process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      try {
+        const fs = require("fs");
+        const path = require("path");
+        for (const ver of ["Python312", "Python311", "Python310"]) {
+          const candidate = path.join(localAppData, "Programs", "Python", ver, "python.exe");
+          if (fs.existsSync(candidate)) return candidate;
+        }
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  return "python";
+}
+
 export class SubprocessServiceTransport implements ServiceTransport {
   private pythonPath: string;
   private serviceScript: string;
@@ -26,12 +49,7 @@ export class SubprocessServiceTransport implements ServiceTransport {
   private host: HostCapabilities;
 
   constructor(options: ServiceTransportOptions = {}) {
-    this.pythonPath =
-      options.pythonPath ??
-      (typeof process !== "undefined"
-        ? process.env.DEPTHWIZARD_PYTHON
-        : undefined) ??
-      "python";
+    this.pythonPath = resolvePythonExecutable(options.pythonPath);
     this.serviceScript = options.serviceScript ?? "scripts/depthwiz_service.py";
     this.timeoutMs = options.timeoutMs ?? SERVICE_TIMEOUT_MS;
     this.host = detectHost(options.host);
@@ -45,6 +63,20 @@ export class SubprocessServiceTransport implements ServiceTransport {
     payload: unknown,
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
+    if (typeof window !== "undefined" && window.depthwizard) {
+      if (hooks.signal?.aborted) {
+        throw new OperationCancelledError();
+      }
+      const res = await window.depthwizard.executeService({
+        payload,
+        timeoutMs: this.timeoutMs,
+      });
+      if (typeof res === "object" && res !== null && "error" in res) {
+        throw new Error((res as { error: string }).error);
+      }
+      return res;
+    }
+
     if (!this.host.processSpawning) {
       throw new Error(
         "Service transport requires a desktop host with process spawning",

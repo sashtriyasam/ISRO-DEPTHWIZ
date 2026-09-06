@@ -2,7 +2,6 @@
   "name": "depthwizard",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "description": "DepthWizard - Single-View Height Estimation and 3D Flythrough",
   "main": "electron/main.js",
   "scripts": {

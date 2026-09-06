@@ -9,6 +9,8 @@ const ALLOWED_CHANNELS = new Set([
   "launch-service",
   "terminate-service",
   "execute-service",
+  "stage-input-bytes",
+  "cleanup-staged-input",
 ]);
 
 function safeInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -29,4 +31,8 @@ contextBridge.exposeInMainWorld("depthwizard", {
   terminateService: () => safeInvoke("terminate-service"),
   executeService: (args: { payload: unknown; timeoutMs?: number }) =>
     safeInvoke("execute-service", args),
+  stageInputBytes: (args: { bytes: Uint8Array; filename: string }) =>
+    safeInvoke("stage-input-bytes", args),
+  cleanupStagedInput: (args: { stagedPath: string }) =>
+    safeInvoke("cleanup-staged-input", args),
 });
