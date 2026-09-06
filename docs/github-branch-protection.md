@@ -4,10 +4,10 @@
 **Branch:** main
 **Date:** 2026-09-06
 
-## Current Status
+## Current Status (verified live 2026-09-06 via API)
 
-**Branch Protection:** ⚠️ NOT CONFIGURED
-**GitHub Actions CI:** ⚠️ NOT CONFIGURED (created in this session)
+**Branch Protection:** ✅ CONFIGURED on `main`
+**GitHub Actions CI:** ✅ Present (`.github/workflows/ci.yml`)
 
 ## Required Branch Protection Rules
 
@@ -56,28 +56,30 @@ A `.github/CODEOWNERS` file exists with:
 /docs/ @sashtriyasam
 ```
 
-### Manual Configuration Steps
+### Verified Live Configuration (2026-09-06, via API)
 
-Since GitHub App permissions may not allow automated configuration, apply manually:
+| Setting                               | Actual value         | Matches recommendation?                                                                 |
+| ------------------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
+| Require a pull request before merging | ✅ Enabled           | Yes                                                                                     |
+| Required approving reviews            | 0 (none required)    | Deviates (recommended 1) — correct for solo repo: GitHub authors cannot approve own PRs |
+| Dismiss stale approvals               | ❌ Disabled          | Deviates — moot with 0 required reviews                                                 |
+| Require code-owner review             | ❌ Disabled          | Deviates — moot solo; CODEOWNERS file still present as documentation                    |
+| Require status checks                 | ✅ All 6 CI contexts | Yes (superset: includes `Required CI Checks`)                                           |
+| Strict (branches up to date)          | ❌ Disabled          | Deviates — merges allowed without rebase; acceptable                                    |
+| Enforce admins                        | ✅ Enabled           | Yes                                                                                     |
+| Linear history                        | ❌ Disabled          | Deviates — correct: repo merges with `--no-ff` (PR #1–#4)                               |
+| Force pushes                          | ❌ Disabled          | Yes                                                                                     |
+| Deletions                             | ❌ Disabled          | Yes                                                                                     |
+| Conversation resolution               | ✅ Required          | Yes                                                                                     |
+| Signatures / lock branch              | ❌ Disabled          | Yes (unsigned test builds)                                                              |
+
+### Manual Configuration Steps (for reference / re-application)
 
 1. Go to: `https://github.com/sashtriyasam/ISRO-DEPTHWIZ/settings/branches`
-2. Click "Add branch protection rule"
-3. Branch name pattern: `main`
-4. Check all required settings above
-5. Search for and add the 5 required status checks by exact name
-6. Click "Create" or "Save changes"
-
-### Verification
-
-After configuration, test by:
-
-1. Creating a test branch with a failing change
-2. Opening a PR — should show status checks
-3. Verify merge is blocked until all checks pass
-4. Verify force push is rejected
-5. Verify branch deletion is rejected
+2. Edit the `main` rule to match the table above
+3. Search for and require the 6 CI contexts by exact name
 
 ---
 
-**Status:** DOCUMENTED — Manual configuration required through GitHub UI
+**Status:** CONFIGURED and VERIFIED live via API
 **Authority:** Shivam (final merge authority per AGENTS.md)

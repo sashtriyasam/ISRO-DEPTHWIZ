@@ -292,17 +292,17 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 
 ## 11. GitHub Hygiene
 
-| Item              | Status        | Notes                                                                            |
-| ----------------- | ------------- | -------------------------------------------------------------------------------- |
-| Open PRs          | 0             | PR #1, #2 merged                                                                 |
-| Merged PRs        | 2             | PR #1 (S17/S18), PR #2 (Aryan host/installer)                                    |
-| Open Issues       | 0             | None                                                                             |
-| Labels            | Defined       | P0/P1/P2/INFO, area/_, type/_, owner/*                                           |
-| CI                | ✅ CREATED    | `.github/workflows/ci.yml` (Python, Frontend, Electron, contracts, hygiene)      |
-| Branch Protection | 📋 DOCUMENTED | `docs/github-branch-protection.md` — manual configuration required via GitHub UI |
-| CODEOWNERS        | ✅ PRESENT    | Shivam (all), Aryan (src/, electron/), Shravan (tests/, docs/)                   |
-| Release Tags      | 0             | None created yet                                                                 |
-| Release Artifacts | ✅            | Installer + portable build generated                                             |
+| Item              | Status      | Notes                                                                                                                       |
+| ----------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Open PRs          | 0           | PR #1, #2 merged                                                                                                            |
+| Merged PRs        | 4           | PR #1 (S17/S18), PR #2 (Aryan host/installer), PR #3 (M17 docs), PR #4 (release control)                                    |
+| Open Issues       | 0           | None                                                                                                                        |
+| Labels            | Defined     | P0/P1/P2/INFO, area/_, type/_, owner/*                                                                                      |
+| CI                | ✅ GREEN    | `.github/workflows/ci.yml`; run `34023556087` success (all 6 jobs)                                                          |
+| Branch Protection | ✅ VERIFIED | Live via API 2026-09-06: 6 checks required, admins enforced, no force/delete; details in `docs/github-branch-protection.md` |
+| CODEOWNERS        | ✅ PRESENT  | Shivam (all), Aryan (src/, electron/), Shravan (tests/, docs/)                                                              |
+| Release Tags      | 0           | None created yet                                                                                                            |
+| Release Artifacts | ✅          | Installer + portable build generated                                                                                        |
 
 ---
 
@@ -347,7 +347,7 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 | G15A — Solar-shadow sub-gate     | **NOT REQUIRED**         | Absent from official PS 26175 text (portal-verified 2026-09-06); correctly unimplemented                                                                    | Shivam       | No                 |
 | G15B — Neural-rendering sub-gate | **SATISFIED AS WRITTEN** | Official PS names raster engines ("Unity, Three.js, or Babylon.js"); Three.js present                                                                       | Aryan/Shivam | No                 |
 | G16 — Documentation              | **PARTIAL**              | Core docs accurate; this branch updates README, aryan-runtime-integration, native-runtime-packaging, gate matrix                                            | Shivam       | No                 |
-| G17 — Repository/GitHub hygiene  | **PARTIAL**              | Branch hygiene OK; CI workflow + CODEOWNERS created this branch; branch protection documented (manual UI config)                                            | Shivam       | No                 |
+| G17 — Repository/GitHub hygiene  | **PASS**                 | Branch hygiene OK; CI green (run `34023556087`); branch protection VERIFIED live; CODEOWNERS present; PR #1–#4 merged; no tags (prepared only)              | Shivam       | No                 |
 
 ---
 
@@ -412,7 +412,7 @@ git diff origin/main...HEAD -- src/depthwizard/contracts/ src/depthwizard/calibr
 | **Physical Windows acceptance** | Aryan        | Run `npm run electron:build:win` on clean Windows VM → install → launch → verify runtime resolution → service capabilities → real DA-V2 (with checkpoint) → calibration → metric DSM → mesh → renderer |
 | **Freeze final ML candidate**   | Shravan      | Consolidate M14/M17 → deliver frozen checkpoint + SHA256 + upstream revision + evaluation evidence                                                                                                     |
 | **Code signing**                | Shivam/Aryan | Obtain certificate for production distribution                                                                                                                                                         |
-| **CI/Branch protection**        | Shivam       | CI workflow + CODEOWNERS in this branch; apply branch protection via GitHub UI per `docs/github-branch-protection.md`                                                                                  |
+| **CI/Branch protection**        | Shivam       | CI green + CODEOWNERS in this branch; branch protection VERIFIED live 2026-09-06                                                                                                                       |
 | **Final release tag**           | Shivam       | After all gates PASS: `git tag v0.1.0-sih-26175-rc1` (Shivam explicit authorization only)                                                                                                              |
 
 ---

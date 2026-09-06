@@ -65,6 +65,7 @@ Per §4.4 above; calibration and downstream stages consume only the protocol sur
 - Provisioning: one more verified asset (same machinery, new identity).
 - Installer: unchanged (checkpoint stays external).
 - Offline: unchanged (local checkpoint after provisioning).
+- `pyproject` optional dependencies: **no change** — M17 needs exactly the existing `dav2` extra (torch, torchvision, opencv); no new third-party packages.
 
 ## 9. Regression Tests Required
 

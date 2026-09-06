@@ -17,10 +17,10 @@
 
 ### Open PRs / Issues
 
-| Item        | Count                |
-| ----------- | -------------------- |
-| Open PRs    | 0 (PR #1, #2 merged) |
-| Open Issues | 0                    |
+| Item        | Count                                    |
+| ----------- | ---------------------------------------- |
+| Open PRs    | 1 (this control branch; PR #1–#4 merged) |
+| Open Issues | 0                                        |
 
 ### Tags / Releases
 
@@ -58,13 +58,13 @@
 
 ## Branch Protection
 
-| Item                    | Status            | Notes                                                                      |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------- |
-| Branch Protection Rules | 📋 **DOCUMENTED** | `docs/github-branch-protection.md` — manual GitHub UI config required      |
-| Required Status Checks  | 📋 DOCUMENTED     | `python`, `frontend`, `electron-config`, `scientific-contracts`, `hygiene` |
-| CODEOWNERS              | ✅ Present        | Shivam (all), Aryan (src/, electron/), Shravan (tests/, docs/)             |
-| Force Push Protection   | 📋 REQUIRED       | Documented in branch protection doc                                        |
-| Linear History          | 📋 REQUIRED       | Documented                                                                 |
+| Item                    | Status                      | Notes                                                                                              |
+| ----------------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| Branch Protection Rules | ✅ VERIFIED live 2026-09-06 | 6 checks required, admins enforced, no force/delete; details in `docs/github-branch-protection.md` |
+| Required Status Checks  | ✅ All 6 CI jobs            | `python`, `frontend`, `electron-config`, `scientific-contracts`, `hygiene`, `required-status`      |
+| CODEOWNERS              | ✅ Present                  | Shivam (all), Aryan (src/, electron/), Shravan (tests/, docs/)                                     |
+| Force Push Protection   | ✅ Enforced                 | Verified live via API                                                                              |
+| Linear History          | ❌ Disabled                 | Correct: repo merges with `--no-ff` (PR #1–#4)                                                     |
 
 ---
 
@@ -166,7 +166,7 @@ Canonical matrix: `docs/final-release-gate.md` (G1–G19). Summary:
 | G15 PS compliance (+G15A/G15B)                           | **PARTIAL** (solar/neural NOT REQUIRED per portal 2026-09-06; city-scale scope PARTIAL) | **Yes** (scope)    |
 | G16 Scientific evidence                                  | **PARTIAL** (honest caveats)                                                            | **Yes**            |
 | G18 Documentation                                        | **PARTIAL** (this branch updates stale docs)                                            | —                  |
-| G19 Governance                                           | **PARTIAL** (CI + CODEOWNERS created; BP manual)                                        | —                  |
+| G19 Governance                                           | **PASS** (CI green; BP verified live; CODEOWNERS present; PR #1–#4 merged)              | —                  |
 
 **Current Decision:** **RELEASE CANDIDATE — PHYSICAL WITNESS REQUIRED** (with scientific-candidate requirement noted)
 
@@ -212,7 +212,7 @@ Canonical matrix: `docs/final-release-gate.md` (G1–G19). Summary:
 > **Complete release control plane:**
 >
 > 1. **CI:** ✅ Created (`.github/workflows/ci.yml`)
-> 2. **Branch Protection:** 📋 Documented (`docs/github-branch-protection.md`) — apply via GitHub UI
+> 2. **Branch Protection:** ✅ Verified live 2026-09-06 (details in `docs/github-branch-protection.md`)
 > 3. **Code Signing:** 📋 Documented (`docs/windows-code-signing.md`) — obtain EV certificate
 > 4. **Physical Acceptance:** Coordinate Aryan's witness
 > 5. **Final Tag:** After all gates PASS → `git tag v0.1.0-sih-26175-rc1` (explicit authorization only)

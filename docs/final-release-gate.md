@@ -57,7 +57,7 @@
 | **G16** Scientific evidence              | **PARTIAL**              | GAMUS 32-tile pooled MAE 4.40 m / RMSE 5.86 m / R² 0.23 recorded honestly (research signal, not SIH validation); GeoNRW M17 probe Pearson 0.37 (research branch); SIH-wide accuracy unproven                                                                                                                                                           | Shravan/Shivam | **Yes**            |
 | **G17** Reproducibility                  | **PASS**                 | Pinned upstream `a561b849…`, checkpoint SHA256 verification, deterministic data dirs, deterministic installer config                                                                                                                                                                                                                                   | Shivam/Aryan   | No                 |
 | **G18** Documentation                    | **PARTIAL**              | Core docs accurate; closure docs added (`m17-product-promotion`, `sih-authoritative-requirement-audit`, `ps-*-closure`, `sih-compliance-matrix`); `final-release-status.md` synced to G1–G19                                                                                                                                                           | Shivam         | No                 |
-| **G19** GitHub/repository governance     | **PARTIAL**              | CI workflow present (`.github/workflows/ci.yml`, contract job enforced); `.github/CODEOWNERS` present; branch protection documented-manual; PR #3 merged; control PR pending; no tags; API unverifiable (401)                                                                                                                                          | Shivam         | No                 |
+| **G19** GitHub/repository governance     | **PASS**                 | CI green (run `34023556087`, all 6 jobs); branch protection VERIFIED live (6 checks required, admins enforced, no force/delete); `.github/CODEOWNERS` present; PR #1–#4 merged; no tags (prepared only)                                                                                                                                                | Shivam         | No                 |
 
 ---
 
@@ -115,7 +115,7 @@
 
 1. Aryan: Physical Windows acceptance on clean VM + display + checkpoint
 2. Shravan: Final ML candidate evidence freeze + product-path promotion proposal
-3. Shivam: Code signing decision + branch-protection activation (CI + CODEOWNERS already in this branch)
+3. Shivam: Code signing decision (branch protection verified live 2026-09-06; CI + CODEOWNERS in this branch)
 
 ---
 
