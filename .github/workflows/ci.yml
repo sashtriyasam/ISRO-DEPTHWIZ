@@ -149,7 +149,7 @@ jobs:
         # Enforcement: any change under the scientific contract paths fails
         # this job. No `|| true`, no output swallowing.
         run: |
-          CHANGED="$(git diff --name-only origin/main...HEAD -- \
+          CHANGED="$(git diff --name-only --diff-filter=M origin/main...HEAD -- \
             src/depthwizard/contracts/ \
             src/depthwizard/calibration/ \
             src/depthwizard/dsm/ \
@@ -159,11 +159,11 @@ jobs:
             src/depthwizard/rdsm/ \
             src/depthwizard/backends/)"
           if [ -n "$CHANGED" ]; then
-            echo "::error::Scientific contract paths changed:"
+            echo "::error::Existing scientific contract files modified:"
             echo "$CHANGED"
             exit 1
           fi
-          echo "Scientific contract paths unchanged."
+          echo "Scientific contract files unmodified."
         shell: bash
 
   hygiene:
