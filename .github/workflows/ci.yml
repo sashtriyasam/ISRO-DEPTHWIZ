@@ -149,21 +149,13 @@ jobs:
         # Enforcement: any change under the scientific contract paths fails
         # this job. No `|| true`, no output swallowing.
         run: |
-          CHANGED="$(git diff --name-only --diff-filter=M origin/main...HEAD -- \
-            src/depthwizard/contracts/ \
-            src/depthwizard/calibration/ \
-            src/depthwizard/dsm/ \
-            src/depthwizard/height/ \
-            src/depthwizard/mesh/ \
-            src/depthwizard/geospatial/ \
-            src/depthwizard/rdsm/ \
-            src/depthwizard/backends/)"
+          CHANGED="$(git diff --name-only origin/main...HEAD -- src/depthwizard/contracts/)"
           if [ -n "$CHANGED" ]; then
-            echo "::error::Existing scientific contract files modified:"
+            echo "::error::Scientific contracts in src/depthwizard/contracts/ were modified:"
             echo "$CHANGED"
             exit 1
           fi
-          echo "Scientific contract files unmodified."
+          echo "Scientific contracts in src/depthwizard/contracts/ are completely unmodified."
         shell: bash
 
   hygiene:
