@@ -29,13 +29,13 @@
 | **1. Single-View Optical RGB Input** | `InputInspection` ([src/depthwizard/ingestion/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/ingestion)) | **PASS** — Accepts PNG, JPG, and GeoTIFF. Validates checksums & georeferencing. |
 | **2. Non-Georeferenced Relative DSM (rDSM)** | `RelativeSurfaceGrid` ([src/depthwizard/rdsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/rdsm)) | **PASS** — Relative height model (`units=None`, `LOCAL` frame). Zero fabricated CRS or metres. |
 | **3. Georeferenced Metric DSM (DSM)** | `ScientificHeightProduct` ([src/depthwizard/dsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm)) | **PASS** — Calibrated metric DSM in metres ($m$), preserving original CRS and affine bounds. |
-| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Unified `DepthBackend` protocol (DA-V2 Small & M17 research candidate). |
+| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Canonical `DepthBackend` protocol (DA-V2 Small shipped product model; M17 research candidate). |
 | **5. Scale Calibration Module** | `ScaleOffsetCalibrator` ([src/depthwizard/calibration/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/calibration)) | **PASS** — Calibrates depth via DEM (SRTM 30m) or GCP reference controls. |
 | **6. Optical Texture Projection** | `TextureProjection` ([src/depthwizard/texture/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/texture)) | **PASS** — Binds optical RGB texture to 3D terrain mesh UVs. |
 | **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 627 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **RELEASE CANDIDATE** — NSIS Installer build (`DepthWizard Setup 1.0.0.exe`); physical witness & code signing in progress. |
+| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **RELEASE CANDIDATE** — NSIS Installer build (`DepthWizard-Setup-0.1.0.exe`); physical witness & code signing in progress. |
 
 
 ---
@@ -69,7 +69,8 @@
 
 ### Option 1: Standalone Windows Installer (Release Candidate)
 Download the standalone executable directly from the GitHub Release Candidate tag:
-- **Download Executable**: [DepthWizard Setup 1.0.0.exe (150 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.0.0)
+- **Download Executable**: [DepthWizard-Setup-0.1.0.exe (150 MB)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-rc1)
+
 
 ### Option 2: Build from Source
 
