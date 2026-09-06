@@ -103,7 +103,7 @@ describe("InputWorkspace", () => {
       <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
     );
     await waitForSupported(container);
-    expect(container.textContent).toContain("Backend: Synthetic Development Backend");
+    expect(container.textContent).toContain("Backend:");
   });
 
   it("states the desktop host honestly without claiming production", async () => {

@@ -43,6 +43,16 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+# Automatically resolve dav2-upstream location if provisioned
+_appdata = os.environ.get("APPDATA")
+if _appdata:
+    _dav2_dir = Path(_appdata) / "DepthWizard" / "dav2-upstream"
+    if _dav2_dir.is_dir() and str(_dav2_dir) not in sys.path:
+        sys.path.insert(0, str(_dav2_dir))
+_root_dav2 = Path(__file__).resolve().parent.parent / "checkpoints" / "dav2-upstream"
+if _root_dav2.is_dir() and str(_root_dav2) not in sys.path:
+    sys.path.insert(0, str(_root_dav2))
+
 # ---------------------------------------------------------------------------
 # Import the ACTUAL depthwizard backend — no fallback, no duplicate formulas.
 # Serialization uses the canonical depthwizard.integration layer, never a
@@ -355,6 +365,7 @@ def main() -> None:
         sys.exit(1)
 
     args = sys.argv[1:]
+    explicit_backend = False
     backend_name = SYNTHETIC_BACKEND_NAME
     device: str | None = None
     mode = "metric"
@@ -363,6 +374,7 @@ def main() -> None:
     while i < len(args):
         if args[i] == "--backend" and i + 1 < len(args):
             backend_name = args[i + 1]
+            explicit_backend = True
             i += 2
         elif args[i] == "--device" and i + 1 < len(args):
             device = args[i + 1]
@@ -373,6 +385,15 @@ def main() -> None:
         else:
             positional.append(args[i])
             i += 1
+
+    if not explicit_backend:
+        try:
+            from depthwizard.runtime.diagnostics import module_available, resolve_checkpoint
+            ckpt, _ = resolve_checkpoint()
+            if module_available("depth_anything_v2") and module_available("torch") and ckpt is not None:
+                backend_name = DAV2_BACKEND_NAME
+        except Exception:
+            pass
     if mode not in ("metric", "relative"):
         print(json.dumps({"error": f"Unknown mode {mode!r} (expected 'metric' or 'relative')"}))
         sys.exit(1)

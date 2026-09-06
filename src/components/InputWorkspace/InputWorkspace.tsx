@@ -97,10 +97,12 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
   const backendIdentity =
     capabilities === null
       ? null
-      : capabilities.available_backends.length === 1 &&
-          capabilities.available_backends[0] === SYNTHETIC_BACKEND_ID
-        ? "Synthetic Development Backend"
-        : `Backends: ${capabilities.available_backends.join(", ") || "none reported"}`;
+      : capabilities.available_backends.includes("depth-anything-v2-small")
+        ? "✨ Active AI Model: Depth Anything V2 Small (Monocular Depth Backbone)"
+        : capabilities.available_backends.length === 1 &&
+            capabilities.available_backends[0] === SYNTHETIC_BACKEND_ID
+          ? "Synthetic Development Backend (Install PyTorch/DA-V2 for AI inference)"
+          : `Backends: ${capabilities.available_backends.join(", ") || "none reported"}`;
 
   const loadCapabilities = useCallback(async () => {
     setCapabilitiesError(null);

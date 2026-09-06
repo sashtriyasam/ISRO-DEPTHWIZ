@@ -51,14 +51,23 @@ export function describeBackendSource(
   };
 }
 
+export const SUPPORTED_BACKEND_IDS = new Set([
+  SYNTHETIC_BACKEND_ID,
+  "depth-anything-v2-small",
+  "m17-geonrw-struct",
+]);
+
 export function isBackendRegistered(
   capabilities: ServiceCapabilitiesWire | null,
-  backendId: string = SYNTHETIC_BACKEND_ID
+  backendId?: string
 ): boolean {
   if (!capabilities) {
     return false;
   }
-  return capabilities.available_backends.includes(backendId);
+  if (backendId !== undefined) {
+    return capabilities.available_backends.includes(backendId);
+  }
+  return capabilities.available_backends.some((b) => SUPPORTED_BACKEND_IDS.has(b));
 }
 
 export async function probeBackendAvailability(
@@ -72,7 +81,7 @@ export async function probeBackendAvailability(
         capabilities,
         availability: {
           available: false,
-          reason: `Backend "${SYNTHETIC_BACKEND_ID}" is not registered by the service.`,
+          reason: "Backend is not registered by the service.",
           action: "Check the backend installation; synthetic output will not be substituted.",
         },
       };

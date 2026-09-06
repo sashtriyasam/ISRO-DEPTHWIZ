@@ -35,6 +35,17 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Automatically resolve dav2-upstream location if provisioned
+import os
+_appdata = os.environ.get("APPDATA")
+if _appdata:
+    _dav2_dir = Path(_appdata) / "DepthWizard" / "dav2-upstream"
+    if _dav2_dir.is_dir() and str(_dav2_dir) not in sys.path:
+        sys.path.insert(0, str(_dav2_dir))
+_root_dav2 = Path(__file__).resolve().parent.parent / "checkpoints" / "dav2-upstream"
+if _root_dav2.is_dir() and str(_root_dav2) not in sys.path:
+    sys.path.insert(0, str(_root_dav2))
+
 try:
     from depthwizard.calibration import (
         CalibrationResult,
@@ -76,20 +87,14 @@ def _m17_checkpoint_present() -> bool:
 def build_backends() -> dict[str, Any]:
     """Assemble the service backend registry.
 
-    The deterministic synthetic backend is always present. The real
-    ``depth-anything-v2-small`` backend is registered only when its
-    runtime (upstream source + torch) is import-discoverable AND an
-    external checkpoint resolves via the canonical
-    ``depthwizard.runtime`` order (explicit ``DW_DAV2_CKPT`` → packaged
-    data dir → repo-dev ``checkpoints/``). Discovery uses ``find_spec``
-    (no heavy imports, no model loading). Unknown or unavailable
-    backends are rejected loudly by ``LocalService`` — never silently
-    replaced with synthetic.
+    Real AI backends (e.g. ``depth-anything-v2-small``) are prioritized
+    first when discoverable. The deterministic synthetic backend is
+    retained as a development/test fallback.
     """
     from depthwizard.backends.synthetic import SyntheticDepthBackend
     from depthwizard.runtime.diagnostics import module_available, resolve_checkpoint
 
-    backends: dict[str, Any] = {"synthetic-depth": SyntheticDepthBackend()}
+    backends: dict[str, Any] = {}
     checkpoint, _location = resolve_checkpoint()
     if (
         module_available("depth_anything_v2")
@@ -103,6 +108,8 @@ def build_backends() -> dict[str, Any]:
         from depthwizard.backends.m17 import M17DepthBackend
 
         backends["m17-geonrw-struct"] = M17DepthBackend()
+
+    backends["synthetic-depth"] = SyntheticDepthBackend()
     return backends
 
 
