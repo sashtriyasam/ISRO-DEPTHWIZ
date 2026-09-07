@@ -77,8 +77,12 @@ describe("ApplicationBackendSource", () => {
       });
       const sections = describeArtifact(artifact, "dsm");
       const provenance = sections.find((s) => s.id === "provenance")!;
+      // Backend-agnostic: whichever backend the environment resolves
+      // (synthetic-only CI vs dav2-capable dev machines with third_party
+      // weights), its identity must reach the provenance section.
+      const modelName = artifact.metadata.backend!.model_name!;
       expect(
-        provenance.rows.some((r) => r.value.includes("synthetic-depth")),
+        provenance.rows.some((r) => r.value.includes(modelName)),
       ).toBe(true);
       const after = JSON.stringify({
         grid: Array.from(artifact.elevation!.grid),

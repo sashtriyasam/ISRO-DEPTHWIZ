@@ -91,13 +91,42 @@ def _repo_dev_checkpoint() -> Path | None:
     return None
 
 
+def sibling_checkpoint(package_dir: Path | str) -> Path | None:
+    """Checkpoint in ``checkpoints/`` next to a package tree (pure helper).
+
+    Given the directory containing an installed ``depthwizard`` package
+    (``.../depthwizard``), look for ``.../checkpoints/<file>``. This covers
+    the packaged layout (``resources/src/depthwizard`` →
+    ``resources/checkpoints``) and coincides with the repo-dev location in
+    a developer checkout. Returns the path only when it is a file.
+    """
+    candidate = Path(package_dir) / ".." / ".." / "checkpoints" / CHECKPOINT_FILE
+    try:
+        resolved = candidate.resolve()
+    except Exception:
+        return None
+    return resolved if resolved.is_file() else None
+
+
+def _packaged_checkpoint() -> Path | None:
+    """Bundled checkpoint next to the imported ``depthwizard`` package."""
+    try:
+        import depthwizard
+
+        package_dir = Path(getattr(depthwizard, "__file__", "")).resolve().parent
+        return sibling_checkpoint(package_dir)
+    except Exception:
+        return None
+
+
 def resolve_checkpoint(explicit: str | Path | None = None) -> tuple[Path | None, str]:
     """Locate the DA-V2 checkpoint file without importing torch.
 
     Order: explicit argument → ``DW_DAV2_CKPT`` → packaged data dir →
-    repo-dev ``checkpoints/`` → ``cwd/checkpoints/``. Returns the first
-    existing file (or ``None``) plus a location label describing where
-    it came from (``explicit``/``env``/``data-dir``/``repo-dev``/``cwd``
+    bundled ``checkpoints/`` next to the imported package → repo-dev
+    ``checkpoints/`` → ``cwd/checkpoints/``. Returns the first existing
+    file (or ``None``) plus a location label describing where it came from
+    (``explicit``/``env``/``data-dir``/``bundled``/``repo-dev``/``cwd``
     /``absent``).
     """
     if explicit is not None:
@@ -110,6 +139,9 @@ def resolve_checkpoint(explicit: str | Path | None = None) -> tuple[Path | None,
     data_candidate = default_data_dir() / DATA_CHECKPOINT_REL
     if data_candidate.is_file():
         return data_candidate, "data-dir"
+    bundled_candidate = _packaged_checkpoint()
+    if bundled_candidate is not None and bundled_candidate.is_file():
+        return bundled_candidate, "bundled"
     repo_candidate = _repo_dev_checkpoint()
     if repo_candidate is not None and repo_candidate.is_file():
         return repo_candidate, "repo-dev"

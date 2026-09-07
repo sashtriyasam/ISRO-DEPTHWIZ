@@ -25,6 +25,23 @@ async function waitForSupported(container: HTMLElement) {
   await waitFor(() => expect(container.textContent).toContain("Supported:"), SLOW);
 }
 
+// Hermetic synthetic-only service client: the ambient dev environment may
+// genuinely offer a real model (torch + weights + third_party present),
+// which correctly changes auto-selection. Synthetic-path tests must not
+// depend on that ambient state.
+function syntheticOnlyClient(): LocalServiceClient {
+  return {
+    capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+      contract_version: "1",
+      supported_input_formats: [".png"],
+      supported_target_semantics: ["absolute_elevation_dsm"],
+      available_backends: ["synthetic-depth"],
+      mesh_supported: true,
+      geotiff_supported: false,
+    }),
+  } as unknown as LocalServiceClient;
+}
+
 describe("InputWorkspace", () => {
   it("loads capabilities and advertises real backend formats", async () => {
     const { container } = render(
@@ -82,7 +99,12 @@ describe("InputWorkspace", () => {
   it("generates a file source on demand, not on selection", async () => {
     const onGenerate = vi.fn();
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={syntheticOnlyClient()}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />
     );
     await waitForSupported(container);
     await openFile(container, pngFile());
@@ -100,7 +122,12 @@ describe("InputWorkspace", () => {
 
   it("shows a backend selector defaulting to the synthetic backend", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={syntheticOnlyClient()}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />
     );
     await waitForSupported(container);
     expect(container.textContent).toContain("Backend: Synthetic Development Backend");
@@ -176,7 +203,12 @@ describe("InputWorkspace", () => {
 
   it("explains synthetic-only operation with provisioning guidance", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={syntheticOnlyClient()}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />
     );
     await waitForSupported(container);
     expect(container.textContent).toContain("Only the synthetic demo backend is available");

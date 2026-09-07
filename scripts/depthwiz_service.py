@@ -43,6 +43,18 @@ for _candidate in (
     if (_candidate / "depthwizard").is_dir() and str(_candidate) not in sys.path:
         sys.path.insert(0, str(_candidate))
 
+# Upstream DA-V2 source (never vendored into the tracked tree: third_party/
+# is git-ignored and populated at installer build time from the pinned
+# upstream revision, LICENSE included). Layouts: <resources>/third_party
+# (packaged app, this script at <resources>/scripts/) or <root>/third_party
+# (developer checkout, this script at <root>/scripts/).
+for _tp_candidate in (
+    _script_dir.parent / "third_party" / "Depth-Anything-V2",
+    _script_dir / "third_party" / "Depth-Anything-V2",
+):
+    if (_tp_candidate / "depth_anything_v2").is_dir() and str(_tp_candidate) not in sys.path:
+        sys.path.insert(0, str(_tp_candidate))
+
 try:
     from depthwizard.calibration import (
         CalibrationResult,

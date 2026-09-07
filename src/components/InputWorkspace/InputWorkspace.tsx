@@ -379,10 +379,11 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       {capabilities !== null && !hasRealBackend(capabilities) && (
         <div style={mutedStyle}>
           Only the synthetic demo backend is available, so results use a fixed test
-          pattern and ignore image content. For real inference: install Python 3.10+,
-          torch, the depth-anything-v2 package and depthwizard[dav2], then place
-          depth_anything_v2_vits.pth in the app checkpoints folder (or set
-          DW_DAV2_CKPT) and reopen this workspace.
+          pattern and ignore image content. For real inference, run the bundled
+          setup_backend.bat once (installs the CPU depth-inference stack and verifies
+          it), or manually: install Python 3.10+, torch, the depth-anything-v2
+          package and depthwizard[dav2], then place depth_anything_v2_vits.pth in
+          the app checkpoints folder (or set DW_DAV2_CKPT) and reopen this workspace.
         </div>
       )}
 

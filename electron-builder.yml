@@ -22,8 +22,17 @@ extraResources:
       - "backend_bridge.py"
       - "setup_backend.bat"
       - "requirements.txt"
+      - "runtime_check.py"
   - from: src/depthwizard/
     to: src/depthwizard/
+  # Pinned upstream DA-V2 source (Apache-2.0, LICENSE included) and the
+  # SHA-verified checkpoint. Both live in git-ignored locations populated
+  # before packaging (see docs/final-ml-candidate.md provenance); the
+  # service discovers them at runtime without any tracked-tree vendoring.
+  - from: third_party/Depth-Anything-V2
+    to: third_party/Depth-Anything-V2
+  - from: checkpoints/depth_anything_v2_vits.pth
+    to: checkpoints/depth_anything_v2_vits.pth
 
 win:
   target:

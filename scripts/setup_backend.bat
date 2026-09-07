@@ -59,6 +59,26 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
+echo Installing real depth-inference packages (CPU PyTorch stack)...
+echo This download is large (~200 MB) and may take several minutes.
+echo.
+"%PYTHON_EXE%" -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision opencv-python
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo WARNING: ML package installation failed. The app will still run,
+    echo but only the synthetic demo backend will be available (flat test
+    echo pattern). Re-run this script later with network access, or see the
+    echo in-app backend guidance. Continuing with core setup...
+    echo.
+) else (
+    echo.
+    echo ML packages installed. Verifying real-backend readiness...
+    echo.
+    "%PYTHON_EXE%" "%~dp0runtime_check.py" --require-dav2
+)
+
+echo.
 echo ========================================================
 echo  Setup complete! DepthWizard backend is ready.
 echo ========================================================
