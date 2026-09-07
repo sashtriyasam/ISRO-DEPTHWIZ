@@ -219,7 +219,7 @@ _USAGE = (
     "Usage: backend_bridge.py [--backend <name>] [--device <device>] [--mode metric|relative] "
     "<input_path> | --synthetic <w> <h> "
     "| --terrain <w> <h> | --terrain-file <path> [target] "
-    "| --inspect <path> | --capabilities "
+    "| --inspect <path> | --capabilities | --diagnostics "
     "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>]"
 )
 
@@ -501,6 +501,9 @@ def main() -> None:
             print(json.dumps(run_inspect(Path(positional[1]))))
         elif positional[0] == "--capabilities":
             print(json.dumps(run_capabilities()))
+        elif positional[0] == "--diagnostics":
+            from depthwizard.runtime.diagnostics import availability_report
+            print(json.dumps(availability_report()))
         elif positional[0] == "--synthetic":
             width = int(positional[1]) if len(positional) > 1 else 8
             height = int(positional[2]) if len(positional) > 2 else 8
