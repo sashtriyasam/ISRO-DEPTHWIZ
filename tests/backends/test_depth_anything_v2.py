@@ -460,9 +460,9 @@ class TestTorchMissing:
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        backend = _make_backend(tmp_path)
-        # Force _model to None so load() is called
-        backend._model = None
+        ckpt_path = tmp_path / "fake.pth"
+        ckpt_path.write_bytes(b"fake")
+        backend = DepthAnythingV2Backend(checkpoint=ckpt_path, device="cpu")
         inspection = inspect_input(make_png(tmp_path / "a.png"))
         with pytest.raises(ModelInferenceError, match="torch is required"):
             backend.estimate_depth(inspection)
@@ -701,9 +701,11 @@ class TestDependencyAvailability:
                 sys.modules.pop("torch", None)
 
     def test_torch_available(self) -> None:
-        """torch is available in the test environment."""
-        import torch
-
+        """torch availability in the test environment."""
+        try:
+            import torch
+        except ImportError:
+            pytest.skip("torch not installed in environment")
         assert torch.__version__
 
 

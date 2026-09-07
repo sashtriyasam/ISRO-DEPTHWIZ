@@ -221,8 +221,9 @@ class DepthAnythingV2Backend:
         """Load checkpoint into memory (idempotent). Raises if missing/unusable."""
         if self._model is not None:
             return
-        torch = self._require_torch()
-        self._check_device(torch)
+        if self._factory is not None:
+            self._model = self._factory(dict(ENCODER_CONFIG))
+            return
         if not self._checkpoint.is_file():
             raise ModelInferenceError(
                 f"Depth Anything V2 Small checkpoint not found: {self._checkpoint}. "
@@ -230,10 +231,9 @@ class DepthAnythingV2Backend:
                 f"(sha256 {CHECKPOINT_SHA256}). Set DW_DAV2_CKPT or place the file under "
                 "checkpoints/ (git-ignored). Weights are never committed."
             )
+        torch = self._require_torch()
+        self._check_device(torch)
         torch.manual_seed(self._seed)
-        if self._factory is not None:
-            self._model = self._factory(dict(ENCODER_CONFIG))
-            return
         model_cls = self._import_model_class()
         model = model_cls(**ENCODER_CONFIG)
         state = torch.load(str(self._checkpoint), map_location="cpu")
@@ -281,12 +281,10 @@ class DepthAnythingV2Backend:
         # Model-specific preprocessing: RGB -> BGR for cv2 convention
         try:
             import cv2
-        except Exception as e:
-            raise ModelInferenceError(
-                f"opencv-python (cv2) is required for BGR conversion: {e}"
-            ) from e
 
-        bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+            bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+        except ImportError:
+            bgr = image_rgb[:, :, ::-1]
 
         # Inference
         t0 = time.perf_counter()

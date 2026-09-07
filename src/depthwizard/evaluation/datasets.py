@@ -56,7 +56,7 @@ class LoadedSample(BaseModel):
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    sample: EvaluationSample
+    sample: Any = Field(description="Sample metadata model (EvaluationSample or BenchmarkSample).")
     image_rgb: Any = Field(description="HWC uint8 RGB array.")
     reference: ReferenceInfo
 

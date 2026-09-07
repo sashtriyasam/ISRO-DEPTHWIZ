@@ -167,8 +167,6 @@ class M17DepthBackend:
         """Load checkpoint into memory (idempotent). Raises if missing/unusable."""
         if self._model is not None:
             return
-        torch = self._require_torch()
-        self._check_device(torch)
         if not self._checkpoint.is_file():
             raise ModelInferenceError(
                 f"M17 checkpoint not found: {self._checkpoint}. "
@@ -176,15 +174,13 @@ class M17DepthBackend:
                 f"Set {CHECKPOINT_ENV} or place the file under "
                 "checkpoints/ (git-ignored). Weights are never committed."
             )
-        torch.manual_seed(self._seed)
         if self._factory is not None:
             self._model = self._factory()
             return
         raise ModelInferenceError(
             "M17 head implementation is not available in this checkout. "
             "The M17 23k Pearson-adapted head is research code outside the "
-            "canonical tree; provide it via model_factory (tests) or a "
-            "future sanctioned adapter. No synthetic substitution performed."
+            "open production repository. Inject a factory to test."
         )
 
     def estimate_depth(self, inspection: InputInspection) -> DepthResult:

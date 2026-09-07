@@ -31,9 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from depthwizard.backends.depth_anything_v2 import _load_image_rgb
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
-from depthwizard.backends.depth_anything_v2 import _load_image_rgb
 from depthwizard.contracts.provenance import ProductProvenance
-from depthwizard.backends.depth_anything_v2 import _load_image_rgb
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError, ModelInferenceError
 from depthwizard.ingestion.models import InputInspection
@@ -224,19 +222,19 @@ class DepthAnythingV2LargeBackend:
         """Load checkpoint into memory (idempotent). Raises if missing/unusable."""
         if self._model is not None:
             return
-        torch = self._require_torch()
-        self._check_device(torch)
+        if self._factory is not None:
+            self._model = self._factory(dict(ENCODER_CONFIG))
+            return
         if not self._checkpoint.is_file():
             raise ModelInferenceError(
-                f"Depth Anything V2 Small checkpoint not found: {self._checkpoint}. "
+                f"Depth Anything V2 Large checkpoint not found: {self._checkpoint}. "
                 f"Expected HF '{CHECKPOINT_HF_ID}' file '{CHECKPOINT_FILE}' "
                 f"(sha256 {CHECKPOINT_SHA256}). Set DW_DAV2_LARGE_CKPT or place the file under "
                 "checkpoints/ (git-ignored). Weights are never committed."
             )
+        torch = self._require_torch()
+        self._check_device(torch)
         torch.manual_seed(self._seed)
-        if self._factory is not None:
-            self._model = self._factory(dict(ENCODER_CONFIG))
-            return
         model_cls = self._import_model_class()
         model = model_cls(**ENCODER_CONFIG)
         state = torch.load(str(self._checkpoint), map_location="cpu")
@@ -284,12 +282,10 @@ class DepthAnythingV2LargeBackend:
         # Model-specific preprocessing: RGB -> BGR for cv2 convention
         try:
             import cv2
-        except Exception as e:
-            raise ModelInferenceError(
-                f"opencv-python (cv2) is required for BGR conversion: {e}"
-            ) from e
 
-        bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+            bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+        except ImportError:
+            bgr = image_rgb[:, :, ::-1]
 
         # Inference
         t0 = time.perf_counter()
