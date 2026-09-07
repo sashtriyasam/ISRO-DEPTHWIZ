@@ -206,6 +206,13 @@ class DepthAnythingV2Backend:
                 raise ModelInferenceError(f'device="mps" unavailable: {e}') from e
 
     def _import_model_class(self) -> Any:
+        import sys
+
+        for parent_dir in (Path(__file__).resolve().parents[2], Path.cwd()):
+            for sub in ("third_party", "deps", ".deps"):
+                cand = parent_dir / sub / "Depth-Anything-V2"
+                if cand.is_dir() and str(cand) not in sys.path:
+                    sys.path.insert(0, str(cand))
         try:
             from depth_anything_v2.dpt import DepthAnythingV2
         except Exception as e:

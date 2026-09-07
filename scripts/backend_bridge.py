@@ -51,10 +51,12 @@ _script_dir = Path(__file__).resolve().parent
 for _candidate in (
     _script_dir.parent / "src",
     _script_dir / "src",
+    _script_dir.parent / "third_party" / "Depth-Anything-V2",
+    _script_dir.parent / "deps" / "Depth-Anything-V2",
     _script_dir.parent,
     _script_dir,
 ):
-    if (_candidate / "depthwizard").is_dir() and str(_candidate) not in sys.path:
+    if _candidate.is_dir() and str(_candidate) not in sys.path:
         sys.path.insert(0, str(_candidate))
 
 # ---------------------------------------------------------------------------
@@ -421,6 +423,7 @@ def main() -> None:
 
     args = sys.argv[1:]
     backend_name = SYNTHETIC_BACKEND_NAME
+    backend_specified = False
     device: str | None = None
     mode = "metric"
     sun_elevation: float | None = None
@@ -432,6 +435,7 @@ def main() -> None:
     while i < len(args):
         if args[i] == "--backend" and i + 1 < len(args):
             backend_name = args[i + 1]
+            backend_specified = True
             i += 2
         elif args[i] == "--device" and i + 1 < len(args):
             device = args[i + 1]
@@ -480,6 +484,10 @@ def main() -> None:
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
             target_value = positional[2] if len(positional) > 2 else None
+            if not backend_specified:
+                from depthwizard.runtime.diagnostics import availability_report
+                if bool(availability_report().get("dav2_ready")):
+                    backend_name = DAV2_BACKEND_NAME
             if mode == "relative":
                 runner = run_relative_on_path(
                     input_path,
