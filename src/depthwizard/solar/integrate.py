@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import numpy as np
@@ -59,7 +59,7 @@ def load_image_rgb(inspection: InputInspection) -> np.ndarray:
                 bands = ds.count
                 if bands >= 3:
                     data = ds.read((1, 2, 3))
-                    return np.transpose(data, (1, 2, 0)).astype(np.uint8)
+                    return np.transpose(data, (1, 2, 0)).astype(np.uint8)  # type: ignore[no-any-return]
                 elif bands == 1:
                     gray = ds.read(1)
                     return np.stack([gray, gray, gray], axis=-1).astype(np.uint8)
@@ -88,7 +88,7 @@ class SolarIntegrationResult:
     no numpy, etc.).
     """
 
-    constraints: tuple  # tuple[ShadowHeightConstraint, ...]
+    constraints: tuple[Any, ...]
     skipped_count: int
     detected_count: int
     refused_reason: str | None = None
@@ -136,9 +136,7 @@ def solar_observations_from_image(
         angles or GSD are available and no constraints can be produced.
     """
     if not isinstance(inspection, InputInspection):
-        raise TypeError(
-            f"inspection must be an InputInspection, got {type(inspection).__name__}"
-        )
+        raise TypeError(f"inspection must be an InputInspection, got {type(inspection).__name__}")
 
     # --- resolve sun angles ---
     try:
@@ -156,8 +154,8 @@ def solar_observations_from_image(
         )
 
     # --- resolve GSD ---
-    gsd: float | None = gsd_override if gsd_override is not None else gsd_from_inspection(
-        inspection
+    gsd: float | None = (
+        gsd_override if gsd_override is not None else gsd_from_inspection(inspection)
     )
     if gsd is None or not (math.isfinite(gsd) and gsd > 0.0):
         return SolarIntegrationResult(
@@ -182,7 +180,12 @@ def solar_observations_from_image(
             refused_reason="numpy is required for shadow detection but is not installed.",
         )
 
-    regions: list[ShadowRegion] = detect_shadows(rgb_array, min_area_px=min_area_px)
+    from typing import cast
+
+    regions: list[ShadowRegion] = detect_shadows(
+        cast(np.ndarray, rgb_array),
+        min_area_px=min_area_px
+    )
 
     source_id = inspection.handle.display_name
     source_checksum = inspection.handle.sha256

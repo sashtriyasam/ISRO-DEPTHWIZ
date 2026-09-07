@@ -22,11 +22,11 @@ from depthwizard.contracts.artifacts import DepthBackend
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError
 from depthwizard.evaluation.alignment import check_pixel_compatibility
-from depthwizard.evaluation.datasets import EvaluationSample, LoadedSample
+from depthwizard.evaluation.datasets import EvaluationSample, LoadedSample, TerrainStratifiedDataset
 from depthwizard.evaluation.metrics import (
+    PooledAccumulator,
     compute_metrics,
     pool_metric_summaries,
-    PooledAccumulator,
     valid_evaluation_mask,
 )
 from depthwizard.evaluation.protocols import (
@@ -35,6 +35,7 @@ from depthwizard.evaluation.protocols import (
     fit_controls,
 )
 from depthwizard.evaluation.results import EvaluationResult, EvaluationRun
+from depthwizard.pipeline.protocols import CalibrationProvider
 from depthwizard.version import __version__
 
 
@@ -341,9 +342,6 @@ def select_samples(
         selected = selected[:max_samples]
     return list(selected)
 
-from depthwizard.evaluation.datasets import BenchmarkSample, TerrainClass, TerrainStratifiedDataset
-from depthwizard.pipeline.protocols import CalibrationProvider
-
 
 def run_stratified_evaluation(
     dataset: TerrainStratifiedDataset,
@@ -363,7 +361,9 @@ def run_stratified_evaluation(
     terrain_classes = sorted({dataset[i].terrain_class for i in range(len(dataset))})
     results: dict[str, dict[str, float]] = {}
     for terrain_class in terrain_classes:
-        class_samples = [dataset[i] for i in range(len(dataset)) if dataset[i].terrain_class is terrain_class]
+        class_samples = [
+            dataset[i] for i in range(len(dataset)) if dataset[i].terrain_class is terrain_class
+        ]
         class_samples.sort(key=lambda sample: sample.sample_id)
         if max_samples is not None:
             if max_samples < 1:
@@ -374,7 +374,9 @@ def run_stratified_evaluation(
         for sample in class_samples:
             try:
                 loaded = dataset.load_sample(sample)
-                semantics = target_semantics if target_semantics is not None else loaded.reference.semantics
+                semantics = (
+                    target_semantics if target_semantics is not None else loaded.reference.semantics
+                )
                 sample_stride = stride
                 if sample.height < 16 or sample.width < 16:
                     sample_stride = max(1, min(sample.height, sample.width) // 2)

@@ -211,6 +211,7 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
         provenance=grid.provenance,
     )
 
+
 def build_lod_meshes(grid: DSMGrid, levels: tuple[int, ...]) -> tuple[TerrainMesh, ...]:
     """Build LOD meshes by simple slicing subsampling of the DSM grid.
 
@@ -234,9 +235,7 @@ def build_lod_meshes(grid: DSMGrid, levels: tuple[int, ...]) -> tuple[TerrainMes
     for lv in levels:
         if lv == 1:
             mesh = build_terrain_mesh(grid)
-            meshes.append(
-                mesh.model_copy(update={"decimated": False, "lod_level": 1})
-            )
+            meshes.append(mesh.model_copy(update={"decimated": False, "lod_level": 1}))
         else:
             sub_array = grid.array[::lv, ::lv]
             sub_mask = grid.valid_mask[::lv, ::lv]
@@ -251,7 +250,5 @@ def build_lod_meshes(grid: DSMGrid, levels: tuple[int, ...]) -> tuple[TerrainMes
                 }
             )
             mesh = build_terrain_mesh(sub_grid)
-            meshes.append(
-                mesh.model_copy(update={"decimated": True, "lod_level": lv})
-            )
+            meshes.append(mesh.model_copy(update={"decimated": True, "lod_level": lv}))
     return tuple(meshes)

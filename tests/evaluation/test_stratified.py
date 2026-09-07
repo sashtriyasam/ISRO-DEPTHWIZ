@@ -13,7 +13,6 @@ from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import (
     DepthScale,
     ElevationSemantics,
-    GeoreferencingLevel,
 )
 from depthwizard.contracts.spatial import SpatialContext, SpatialKind
 from depthwizard.evaluation.datasets import (
@@ -23,9 +22,8 @@ from depthwizard.evaluation.datasets import (
     TerrainClass,
     TerrainStratifiedDataset,
 )
-from depthwizard.evaluation.metrics import PooledAccumulator
-from depthwizard.evaluation.runner import run_stratified_evaluation
 from depthwizard.evaluation.results import StratifiedEvaluationResult
+from depthwizard.evaluation.runner import run_stratified_evaluation
 from depthwizard.ingestion.models import InputInspection
 from depthwizard.version import __version__
 
@@ -99,9 +97,7 @@ def test_terrain_class_enum_values() -> None:
     assert TerrainClass.FORESTED == "forested"
     assert TerrainClass.SPARSE == "sparse"
     assert TerrainClass.WATER == "water"
-    assert set(TerrainClass._value2member_map_) == {
-        "urban", "hilly", "forested", "sparse", "water"
-    }
+    assert set(TerrainClass._value2member_map_) == {"urban", "hilly", "forested", "sparse", "water"}
 
 
 def test_benchmark_sample_validation() -> None:
@@ -158,9 +154,15 @@ def test_stratified_dataset_from_manifest(tmp_path: Path) -> None:
 
 def test_stratified_dataset_filter_by_terrain() -> None:
     samples = [
-        BenchmarkSample(sample_id="u1", input_path="u1.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
-        BenchmarkSample(sample_id="h1", input_path="h1.png", terrain_class=TerrainClass.HILLY, width=4, height=4),
-        BenchmarkSample(sample_id="u2", input_path="u2.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
+        BenchmarkSample(
+            sample_id="u1", input_path="u1.png", terrain_class=TerrainClass.URBAN, width=4, height=4
+        ),
+        BenchmarkSample(
+            sample_id="h1", input_path="h1.png", terrain_class=TerrainClass.HILLY, width=4, height=4
+        ),
+        BenchmarkSample(
+            sample_id="u2", input_path="u2.png", terrain_class=TerrainClass.URBAN, width=4, height=4
+        ),
     ]
     dataset = TerrainStratifiedDataset(samples, _synthetic_loader)
     urban = dataset.filter_by_terrain(TerrainClass.URBAN)
@@ -171,9 +173,30 @@ def test_stratified_dataset_filter_by_terrain() -> None:
 
 def test_stratified_dataset_filter_by_city() -> None:
     samples = [
-        BenchmarkSample(sample_id="m1", input_path="m1.png", terrain_class=TerrainClass.URBAN, city="Metropolis", width=4, height=4),
-        BenchmarkSample(sample_id="h1", input_path="h1.png", terrain_class=TerrainClass.HILLY, city="Highland", width=4, height=4),
-        BenchmarkSample(sample_id="m2", input_path="m2.png", terrain_class=TerrainClass.URBAN, city="Metropolis", width=4, height=4),
+        BenchmarkSample(
+            sample_id="m1",
+            input_path="m1.png",
+            terrain_class=TerrainClass.URBAN,
+            city="Metropolis",
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="h1",
+            input_path="h1.png",
+            terrain_class=TerrainClass.HILLY,
+            city="Highland",
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="m2",
+            input_path="m2.png",
+            terrain_class=TerrainClass.URBAN,
+            city="Metropolis",
+            width=4,
+            height=4,
+        ),
     ]
     dataset = TerrainStratifiedDataset(samples, _synthetic_loader)
     metro = dataset.filter_by_city("Metropolis")
@@ -183,9 +206,27 @@ def test_stratified_dataset_filter_by_city() -> None:
 
 def test_run_stratified_evaluation_returns_per_class_metrics() -> None:
     samples = [
-        BenchmarkSample(sample_id="urban-001", input_path="u1.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
-        BenchmarkSample(sample_id="hilly-001", input_path="h1.png", terrain_class=TerrainClass.HILLY, width=4, height=4),
-        BenchmarkSample(sample_id="forested-001", input_path="f1.png", terrain_class=TerrainClass.FORESTED, width=4, height=4),
+        BenchmarkSample(
+            sample_id="urban-001",
+            input_path="u1.png",
+            terrain_class=TerrainClass.URBAN,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="hilly-001",
+            input_path="h1.png",
+            terrain_class=TerrainClass.HILLY,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="forested-001",
+            input_path="f1.png",
+            terrain_class=TerrainClass.FORESTED,
+            width=4,
+            height=4,
+        ),
     ]
     dataset = TerrainStratifiedDataset(samples, _synthetic_loader)
     results = run_stratified_evaluation(dataset, StratifiedSmokeBackend())
@@ -200,12 +241,48 @@ def test_run_stratified_evaluation_returns_per_class_metrics() -> None:
 
 def test_run_stratified_evaluation_max_samples() -> None:
     samples = [
-        BenchmarkSample(sample_id="urban-001", input_path="u1.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
-        BenchmarkSample(sample_id="urban-002", input_path="u2.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
-        BenchmarkSample(sample_id="hilly-001", input_path="h1.png", terrain_class=TerrainClass.HILLY, width=4, height=4),
-        BenchmarkSample(sample_id="hilly-002", input_path="h2.png", terrain_class=TerrainClass.HILLY, width=4, height=4),
-        BenchmarkSample(sample_id="forested-001", input_path="f1.png", terrain_class=TerrainClass.FORESTED, width=4, height=4),
-        BenchmarkSample(sample_id="forested-002", input_path="f2.png", terrain_class=TerrainClass.FORESTED, width=4, height=4),
+        BenchmarkSample(
+            sample_id="urban-001",
+            input_path="u1.png",
+            terrain_class=TerrainClass.URBAN,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="urban-002",
+            input_path="u2.png",
+            terrain_class=TerrainClass.URBAN,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="hilly-001",
+            input_path="h1.png",
+            terrain_class=TerrainClass.HILLY,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="hilly-002",
+            input_path="h2.png",
+            terrain_class=TerrainClass.HILLY,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="forested-001",
+            input_path="f1.png",
+            terrain_class=TerrainClass.FORESTED,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="forested-002",
+            input_path="f2.png",
+            terrain_class=TerrainClass.FORESTED,
+            width=4,
+            height=4,
+        ),
     ]
     dataset = TerrainStratifiedDataset(samples, _synthetic_loader)
     results = run_stratified_evaluation(dataset, StratifiedSmokeBackend(), max_samples=1)
@@ -215,8 +292,20 @@ def test_run_stratified_evaluation_max_samples() -> None:
 
 def test_run_stratified_evaluation_deterministic_selection() -> None:
     samples = [
-        BenchmarkSample(sample_id="b-urban", input_path="b.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
-        BenchmarkSample(sample_id="a-urban", input_path="a.png", terrain_class=TerrainClass.URBAN, width=4, height=4),
+        BenchmarkSample(
+            sample_id="b-urban",
+            input_path="b.png",
+            terrain_class=TerrainClass.URBAN,
+            width=4,
+            height=4,
+        ),
+        BenchmarkSample(
+            sample_id="a-urban",
+            input_path="a.png",
+            terrain_class=TerrainClass.URBAN,
+            width=4,
+            height=4,
+        ),
     ]
     dataset = TerrainStratifiedDataset(samples, _synthetic_loader)
     results = run_stratified_evaluation(dataset, StratifiedSmokeBackend(), max_samples=1)

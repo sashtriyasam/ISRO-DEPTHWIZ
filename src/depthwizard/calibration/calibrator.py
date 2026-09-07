@@ -1,4 +1,4 @@
-﻿"""Affine scale+offset calibration (ordinary least squares, stdlib only).
+"""Affine scale+offset calibration (ordinary least squares, stdlib only).
 
 Fits ``reference = scale * predicted + offset`` with closed-form OLS
 using ``math.fsum`` compensated summation: deterministic, transparent
@@ -156,7 +156,11 @@ class HuberScaleOffsetCalibrator:
         offset = ols.offset
         residuals = [y - (scale * x + offset) for x, y in pairs]
         abs_res = sorted(abs(r) for r in residuals)
-        median_abs = abs_res[count // 2] if count % 2 == 1 else (abs_res[count // 2 - 1] + abs_res[count // 2]) / 2.0
+        median_abs = (
+            abs_res[count // 2]
+            if count % 2 == 1
+            else (abs_res[count // 2 - 1] + abs_res[count // 2]) / 2.0
+        )
         mad = max(median_abs, 1e-12)
         delta = 1.345 * mad
         for _ in range(10):
@@ -165,12 +169,14 @@ class HuberScaleOffsetCalibrator:
             sum_w = math.fsum(weights)
             if sum_w <= 0:
                 break
-            x_bar = math.fsum(w * x for w, x in zip(weights, xs)) / sum_w
-            y_bar = math.fsum(w * y for w, y in zip(weights, ys)) / sum_w
-            s_xx = math.fsum(w * (x - x_bar) ** 2 for w, x in zip(weights, xs))
+            x_bar = math.fsum(w * x for w, x in zip(weights, xs, strict=False)) / sum_w
+            y_bar = math.fsum(w * y for w, y in zip(weights, ys, strict=False)) / sum_w
+            s_xx = math.fsum(w * (x - x_bar) ** 2 for w, x in zip(weights, xs, strict=False))
             if s_xx <= 0:
                 break
-            s_xy = math.fsum(w * (x - x_bar) * (y - y_bar) for w, (x, y) in zip(weights, pairs))
+            s_xy = math.fsum(
+                w * (x - x_bar) * (y - y_bar) for w, (x, y) in zip(weights, pairs, strict=False)
+            )
             new_scale = s_xy / s_xx
             new_offset = y_bar - new_scale * x_bar
             if abs(new_scale - scale) < 1e-12 and abs(new_offset - offset) < 1e-12:
@@ -232,7 +238,7 @@ class PiecewiseLinearCalibrator:
                 raise CalibrationError(
                     f"non-finite reference value at sample index {index}: {reference!r}"
                 )
-        xs = [x for x, _ in pairs]
+        [x for x, _ in pairs]
         ys = [y for _, y in pairs]
         sorted_pairs = sorted(pairs, key=lambda p: p[0])
         sorted_xs = [p[0] for p in sorted_pairs]
@@ -252,7 +258,10 @@ class PiecewiseLinearCalibrator:
                     interval_ys.append(y)
             if len(interval_xs) < 2:
                 interval_xs = [x0, x1]
-                interval_ys = [sorted_ys[knot_indices[i]], sorted_ys[min(knot_indices[i + 1], n - 1)]]
+                interval_ys = [
+                    sorted_ys[knot_indices[i]],
+                    sorted_ys[min(knot_indices[i + 1], n - 1)],
+                ]
             m = len(interval_xs)
             x_bar = math.fsum(interval_xs) / m
             y_bar = math.fsum(interval_ys) / m
@@ -261,7 +270,10 @@ class PiecewiseLinearCalibrator:
                 scale = 1.0
                 offset = y_bar - x_bar
             else:
-                s_xy = math.fsum((x - x_bar) * (y - y_bar) for x, y in zip(interval_xs, interval_ys))
+                s_xy = math.fsum(
+                    (x - x_bar) * (y - y_bar)
+                    for x, y in zip(interval_xs, interval_ys, strict=False)
+                )
                 scale = s_xy / s_xx
                 offset = y_bar - scale * x_bar
             piecewise.append((x0, scale, offset))

@@ -1,4 +1,4 @@
-﻿"""HuberScaleOffsetCalibrator: robust affine with Huber reweighting."""
+"""HuberScaleOffsetCalibrator: robust affine with Huber reweighting."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from depthwizard.calibration import (
 )
 from depthwizard.contracts.semantics import ElevationSemantics
 from depthwizard.errors import CalibrationError
-
 
 NOISY_PREDICTED = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0)
 NOISE = (0.10, -0.20, 0.15, -0.05, 0.20, -0.10)
@@ -55,7 +54,7 @@ def test_huber_downweights_outlier():
         reference_values=(5.1, 6.6, 8.1, 9.6, 11.1, 12.6, 18.0),
     )
     huber = HuberScaleOffsetCalibrator().calibrate(samples)
-    ols = ScaleOffsetCalibrator().calibrate(samples)
+    ScaleOffsetCalibrator().calibrate(samples)
     assert huber.valid_samples == 7
     assert math.isfinite(huber.scale)
     assert math.isfinite(huber.offset)

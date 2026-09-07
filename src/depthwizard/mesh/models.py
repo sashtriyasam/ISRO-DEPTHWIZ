@@ -164,4 +164,3 @@ class TerrainMesh(BaseModel):
             if self.spatial.kind is SpatialKind.PRESENT:
                 raise ValueError("NON_GEOREFERENCED mesh must not carry PRESENT details")
         return self
-

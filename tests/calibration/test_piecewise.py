@@ -1,4 +1,4 @@
-﻿"""PiecewiseLinearCalibrator: local affine per knot interval."""
+"""PiecewiseLinearCalibrator: local affine per knot interval."""
 
 from __future__ import annotations
 
@@ -62,6 +62,7 @@ def test_piecewise_predicts_inside_intervals():
     samples = _samples()
     result = PiecewiseLinearCalibrator().calibrate(samples)
     from depthwizard.calibration import apply_calibration
+
     preds = apply_calibration(
         (0.0, 3.5, 7.0),
         result,

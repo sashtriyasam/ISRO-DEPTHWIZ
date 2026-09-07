@@ -170,9 +170,9 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
 
     mosaic_valid = accum_count > 0
     mosaic_array = np.full((mosaic_h, mosaic_w), NODATA, dtype=np.float32)
-    mosaic_array[mosaic_valid] = (
-        accum_sum[mosaic_valid] / accum_count[mosaic_valid]
-    ).astype(np.float32)
+    mosaic_array[mosaic_valid] = (accum_sum[mosaic_valid] / accum_count[mosaic_valid]).astype(
+        np.float32
+    )
 
     overlap_count = int((accum_count > 1).sum())
     invalid_count = int((~mosaic_valid).sum())

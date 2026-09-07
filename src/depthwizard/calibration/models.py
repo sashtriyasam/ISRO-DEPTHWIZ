@@ -1,4 +1,4 @@
-﻿"""Calibration sample/result contracts (immutable, tuple-based).
+"""Calibration sample/result contracts (immutable, tuple-based).
 
 ``CalibrationSamples`` carries already-paired scalar samples: relative
 predictions plus known metric references. ``CalibrationResult`` records
@@ -8,7 +8,6 @@ rasters, opens images, or knows about the desktop application.
 
 from __future__ import annotations
 
-import math
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -84,7 +83,9 @@ class CalibrationSamples(BaseModel):
                 f"valid_mask length ({len(self.valid_mask)}) must match "
                 f"sample count ({len(self.predicted_values)})"
             )
-        if self.sample_weights is not None and len(self.sample_weights) != len(self.predicted_values):
+        if self.sample_weights is not None and len(self.sample_weights) != len(
+            self.predicted_values
+        ):
             raise ValueError(
                 f"sample_weights length ({len(self.sample_weights)}) must match "
                 f"sample count ({len(self.predicted_values)})"

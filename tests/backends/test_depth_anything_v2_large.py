@@ -656,9 +656,7 @@ class TestMetadataConstants:
         assert UPSTREAM_REVISION == "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 
     def test_checkpoint_sha256(self) -> None:
-        assert (
-            CHECKPOINT_SHA256 == "PLACEHOLDER_SHA256_VITL"
-        )
+        assert CHECKPOINT_SHA256 == "PLACEHOLDER_SHA256_VITL"
 
     def test_encoder_config(self) -> None:
         assert ENCODER_CONFIG["encoder"] == "vitl"
@@ -671,7 +669,9 @@ class TestMetadataConstants:
     def test_provenance_distinction(self) -> None:
         """Repository revision (40 hex) and checkpoint SHA-256 (256 hex) are distinct."""
         assert len(UPSTREAM_REVISION) == 40, "UPSTREAM_REVISION is a git commit hash"
-        assert len(CHECKPOINT_SHA256) == 64 or CHECKPOINT_SHA256.startswith("PLACEHOLDER"), "CHECKPOINT_SHA256 must be 64 hex chars or a placeholder"
+        assert len(CHECKPOINT_SHA256) == 64 or CHECKPOINT_SHA256.startswith("PLACEHOLDER"), (
+            "CHECKPOINT_SHA256 must be 64 hex chars or a placeholder"
+        )
         assert UPSTREAM_REVISION != CHECKPOINT_SHA256, "These must be different values"
 
 
@@ -691,7 +691,9 @@ class TestDependencyAvailability:
         real = sys.modules.get("torch")
         sys.modules["torch"] = None  # type: ignore[assignment]
         try:
-            importlib.reload(importlib.import_module("depthwizard.backends.depth_anything_v2_large"))
+            importlib.reload(
+                importlib.import_module("depthwizard.backends.depth_anything_v2_large")
+            )
         except Exception:
             pass
         finally:

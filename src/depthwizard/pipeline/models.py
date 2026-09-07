@@ -8,6 +8,7 @@ data. Static typing is enforced by mypy; instances are immutable.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from depthwizard.calibration.models import CalibrationResult
 from depthwizard.contracts.artifacts import DepthBackend, DepthResult
@@ -99,7 +100,7 @@ class PipelineResult:
     target_semantics: ElevationSemantics | None = None
     mesh_requested: bool = False
     geotiff_path: str | None = None
-    solar_constraints: tuple = field(default_factory=tuple)  # tuple[ShadowHeightConstraint, ...]
+    solar_constraints: tuple[Any, ...] = field(default_factory=tuple)
     solar_refused_reason: str | None = None
     engine_version: str = __version__
 

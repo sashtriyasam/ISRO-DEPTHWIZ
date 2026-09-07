@@ -38,7 +38,7 @@ from depthwizard.ingestion.models import InputInspection
 from depthwizard.version import __version__
 
 if TYPE_CHECKING:
-    import numpy as np
+    pass
 
 MODEL_NAME = "DepthAnythingV2-Large"
 MODEL_VERSION = "2.0.0"
@@ -81,54 +81,6 @@ def _default_checkpoint_path() -> Path:
     except Exception:
         pass
     return Path.cwd() / "checkpoints" / CHECKPOINT_FILE
-
-
-def _load_image_rgb(inspection: InputInspection) -> np.ndarray:
-    """Load image pixels as HWC uint8 RGB from the inspected input.
-
-    Uses Pillow for PNG/JPEG, rasterio for TIFF.  Returns a numpy array
-    without storing it on the inspection object.  Model-specific
-    preprocessing (BGR conversion, normalization) belongs to the model
-    adapter, not here.
-    """
-    import numpy as np
-
-    path = Path(inspection.handle.source_path)
-    fmt = inspection.detected_format
-
-    if fmt.value in ("png", "jpeg"):
-        from PIL import Image
-
-        with Image.open(path) as img:
-            img.load()
-            if img.mode != "RGB":
-                rgb_img = img.convert("RGB")
-                return np.array(rgb_img, dtype=np.uint8)
-            return np.array(img, dtype=np.uint8)
-
-    if fmt.value == "tiff":
-        import rasterio
-
-        with rasterio.open(path) as ds:
-            bands = ds.count
-            if bands == 3:
-                data = ds.read((1, 2, 3))  # (3, H, W)
-            elif bands >= 3:
-                data = ds.read((1, 2, 3))  # take first 3 bands
-            elif bands == 1:
-                gray = ds.read(1)  # (H, W)
-                return np.stack([gray, gray, gray], axis=-1).astype(np.uint8)
-            else:
-                raise InvalidInputError(
-                    f"TIFF with {bands} bands cannot be interpreted as RGB: "
-                    f"{inspection.handle.display_name}"
-                )
-            # rasterio returns (bands, H, W) — transpose to (H, W, bands)
-            return np.transpose(data, (1, 2, 0)).astype(np.uint8)  # type: ignore[no-any-return]
-
-    raise InvalidInputError(
-        f"Unsupported format for DA-V2 inference: {fmt.value} ({inspection.handle.display_name})"
-    )
 
 
 class DepthAnythingV2LargeBackend:

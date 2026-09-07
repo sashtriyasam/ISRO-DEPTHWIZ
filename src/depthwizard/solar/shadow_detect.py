@@ -95,7 +95,7 @@ def _luminance(rgb: np.ndarray) -> np.ndarray:
     r = rgb[:, :, 0].astype(np.float32)
     g = rgb[:, :, 1].astype(np.float32)
     b = rgb[:, :, 2].astype(np.float32)
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b  # type: ignore[no-any-return]
 
 
 def _otsu_threshold(lum: np.ndarray) -> float:
@@ -262,9 +262,7 @@ def detect_shadows(
     if not isinstance(rgb, np.ndarray):
         raise TypeError(f"rgb must be a numpy ndarray, got {type(rgb).__name__}")
     if rgb.ndim != 3 or rgb.shape[2] < 3:
-        raise ValueError(
-            f"rgb must be HxWx3 (or HxWxN with N≥3), got shape {rgb.shape}"
-        )
+        raise ValueError(f"rgb must be HxWx3 (or HxWxN with N≥3), got shape {rgb.shape}")
     if rgb.dtype != np.uint8:
         rgb = np.clip(rgb, 0, 255).astype(np.uint8)
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 from abc import ABC, abstractmethod
+from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -177,10 +179,6 @@ class GamusDataset(EvaluationDataset):
         return LoadedSample(sample=sample, image_rgb=np.ascontiguousarray(rgb), reference=reference)
 
 
-from enum import Enum
-from typing import Callable
-
-
 class TerrainClass(str, Enum):
     """Terrain type for stratified benchmarking."""
 
@@ -198,7 +196,9 @@ class BenchmarkSample(BaseModel):
 
     sample_id: str = Field(min_length=1)
     input_path: str = Field(min_length=1, description="Manifest-relative input path.")
-    reference_path: str | None = Field(default=None, description="Manifest-relative reference path.")
+    reference_path: str | None = Field(
+        default=None, description="Manifest-relative reference path."
+    )
     terrain_class: TerrainClass
     city: str | None = None
     crs: str | None = None
@@ -230,12 +230,12 @@ class TerrainStratifiedDataset:
     def __getitem__(self, index: int) -> BenchmarkSample:
         return self._samples[index]
 
-    def filter_by_terrain(self, terrain_class: TerrainClass) -> "TerrainStratifiedDataset":
+    def filter_by_terrain(self, terrain_class: TerrainClass) -> TerrainStratifiedDataset:
         """Return a dataset restricted to one terrain class."""
         filtered = [sample for sample in self._samples if sample.terrain_class is terrain_class]
         return TerrainStratifiedDataset(filtered, self._loader)
 
-    def filter_by_city(self, city: str) -> "TerrainStratifiedDataset":
+    def filter_by_city(self, city: str) -> TerrainStratifiedDataset:
         """Return a dataset restricted to one city label."""
         filtered = [sample for sample in self._samples if sample.city == city]
         return TerrainStratifiedDataset(filtered, self._loader)
@@ -245,9 +245,12 @@ class TerrainStratifiedDataset:
         return self._loader(sample)
 
     @classmethod
-    def from_manifest_path(cls, path: Path, loader: Callable[[BenchmarkSample], LoadedSample]) -> "TerrainStratifiedDataset":
+    def from_manifest_path(
+        cls, path: Path, loader: Callable[[BenchmarkSample], LoadedSample]
+    ) -> TerrainStratifiedDataset:
         """Load samples from a JSON manifest file."""
         import json
+
         text = Path(path).read_text(encoding="utf-8")
         raw = json.loads(text)
         if not isinstance(raw, list):

@@ -9,7 +9,6 @@ from __future__ import annotations
 import math
 
 from depthwizard.contracts.spatial import AffineTransform, SpatialDetails
-from depthwizard.errors import GeospatialProcessingError
 
 
 def resolve_local_utm_crs(lon: float, lat: float) -> str:
@@ -85,9 +84,7 @@ def projected_metric_details(details: SpatialDetails) -> SpatialDetails:
     proj_c = t.c * m_per_deg_lon
     proj_f = t.f * m_per_deg_lat
 
-    proj_transform = AffineTransform(
-        a=proj_a, b=t.b, c=proj_c, d=t.d, e=proj_e, f=proj_f
-    )
+    proj_transform = AffineTransform(a=proj_a, b=t.b, c=proj_c, d=t.d, e=proj_e, f=proj_f)
 
     b = details.bounds
     proj_bounds = b.__class__(

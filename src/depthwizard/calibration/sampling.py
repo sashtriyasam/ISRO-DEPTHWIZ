@@ -9,6 +9,7 @@ order-preserving.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Protocol
 
 import numpy as np
@@ -72,7 +73,9 @@ class SemanticWeighter:
         class_weights: dict[str, float] | None = None,
         default_weight: float = 1.0,
     ) -> None:
-        self.class_weights = class_weights if class_weights is not None else dict(DEFAULT_CLASS_WEIGHTS)
+        self.class_weights = (
+            class_weights if class_weights is not None else dict(DEFAULT_CLASS_WEIGHTS)
+        )
         self.default_weight = default_weight
 
     def weight(
@@ -134,7 +137,9 @@ class TerrainClassWeighter:
             bins = np.zeros(1, dtype=np.int64)
         else:
             quantiles = np.quantile(
-                np.asarray(tuple(self._bin_counts.keys()), dtype=np.float64) if self._bin_counts else np.array([0.0]),
+                np.asarray(tuple(self._bin_counts.keys()), dtype=np.float64)
+                if self._bin_counts
+                else np.array([0.0]),
                 np.linspace(0.0, 1.0, self.elevation_bins + 1),
             )
             bins = np.digitize(arr, quantiles[1:-1], right=False)
@@ -163,7 +168,7 @@ def stratified_sample_selection(
         weighter = UniformWeighter()
     predicted = samples.predicted_values
     reference = samples.reference_values
-    rows = [0] * samples.total_samples
+    [0] * samples.total_samples
     cols = list(range(samples.total_samples))
     weights = [
         weighter.weight(p, r, row, col)

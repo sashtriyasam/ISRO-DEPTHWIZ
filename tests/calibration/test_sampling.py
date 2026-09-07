@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import numpy as np
-import pytest
 
-from depthwizard.calibration import CalibrationSamples, ScaleOffsetCalibrator
+from depthwizard.calibration import CalibrationSamples
 from depthwizard.calibration.sampling import (
-    DEFAULT_CLASS_WEIGHTS,
     SemanticWeighter,
     TerrainClassWeighter,
     UniformWeighter,
@@ -76,7 +73,9 @@ def test_terrain_class_weighter_sparse_upweighted() -> None:
 
 
 def test_stratified_selection_reduces_count() -> None:
-    samples = _base(predicted_values=(0.0, 1.0, 2.0, 3.0), reference_values=(10.0, 11.0, 12.0, 13.0))
+    samples = _base(
+        predicted_values=(0.0, 1.0, 2.0, 3.0), reference_values=(10.0, 11.0, 12.0, 13.0)
+    )
     selected = stratified_sample_selection(samples, max_samples=2)
     assert selected.total_samples == 2
 

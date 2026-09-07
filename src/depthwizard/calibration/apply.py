@@ -1,4 +1,4 @@
-﻿"""Pure application of a fitted calibration (no I/O, no mutation)."""
+"""Pure application of a fitted calibration (no I/O, no mutation)."""
 
 from __future__ import annotations
 

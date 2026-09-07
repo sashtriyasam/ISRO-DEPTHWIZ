@@ -8,10 +8,9 @@ no logging framework: deterministic state history plus structured
 failure data is the observability.
 """
 
-from __future__ import annotations
-
 import math
 from pathlib import Path
+from typing import Any
 
 from depthwizard.calibration.models import CalibrationResult
 from depthwizard.contracts.artifacts import METRIC_UNIT, DepthResult
@@ -127,7 +126,7 @@ class _Engine:
         self._dsm: DSMGrid | None = None
         self._mesh: TerrainMesh | None = None
         self._export: ExportResult | None = None
-        self._solar_constraints: tuple = ()
+        self._solar_constraints: tuple[Any, ...] = ()
         self._solar_refused_reason: str | None = None
 
     def _enter(self, state: PipelineState) -> None:

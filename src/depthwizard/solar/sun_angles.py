@@ -72,9 +72,7 @@ class SunAngles(BaseModel):
                 f"got {self.elevation_deg}"
             )
         if not (0.0 <= self.azimuth_deg < 360.0):
-            raise ValueError(
-                f"sun azimuth must lie in [0, 360) degrees; got {self.azimuth_deg}"
-            )
+            raise ValueError(f"sun azimuth must lie in [0, 360) degrees; got {self.azimuth_deg}")
         return self
 
 
@@ -123,9 +121,7 @@ def resolve_sun_angles(
         Caller-supplied solar azimuth in degrees [0, 360).
     """
     if not isinstance(inspection, InputInspection):
-        raise TypeError(
-            f"inspection must be an InputInspection, got {type(inspection).__name__}"
-        )
+        raise TypeError(f"inspection must be an InputInspection, got {type(inspection).__name__}")
 
     # --- explicit caller supply ---
     both_explicit = sun_elevation_deg is not None and sun_azimuth_deg is not None
