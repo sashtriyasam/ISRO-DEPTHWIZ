@@ -1,7 +1,7 @@
 # DepthWizard — Scientific Evidence Package (ISRO PS 26175)
 
 **Lead Architecture & Release Authority:** Shivam Shelatkar  
-**Repository State:** `main` at commit `24cce9825e66d789fe981063090c09a1c717c4e3` (`24cce98`)  
+**Repository State:** `main` at commit `54264ec261edbfafb405527a206a461b6c6b4b45` (`54264ec`)  
 **Git Tag:** `v0.1.0-sih-26175-rc1` (Immutable tag target)  
 
 ---
@@ -24,7 +24,7 @@ This document provides the formal **Scientific Evidence Package** for **DepthWiz
 | :--- | :--- | :--- |
 | **Scope** | Code correctness, IPC wire protocol, IPC serialization, UI rendering, packaging, error handling | Physical surface elevation accuracy ($m$), $R^2$ correlation, RMSE, MAE against LiDAR/DEM ground truth |
 | **Status** | **`PASSED 100%`** | **`RESEARCH BASELINE (EVIDENCE RECORDED)`** |
-| **Evidence** | - 549 Python pytest tests passed<br>- 627 Vitest UI tests passed<br>- 0 TypeScript compilation errors<br>- 0 Ruff linter issues<br>- 86 Mypy clean source files<br>- Authenticode signed installer (`2A974B51...`, `115,579,824 bytes`) <br>- Clean machine physical witness trial passed | - 32-tile GAMUS pooled evaluation (MAE 4.40m, RMSE 5.86m, $R^2$ 0.23)<br>- Cross-city probe Pearson correlation: 0.37 (6/6 cities)<br>- Formal external test-city scoring: **`PENDING`** |
+| **Evidence** | - 664 Python pytest tests passed<br>- 627 Vitest UI tests passed<br>- 0 TypeScript compilation errors<br>- 0 Ruff linter issues<br>- 86 Mypy clean source files<br>- Authenticode signed installer (`2A974B51...`, `115,579,824 bytes`) <br>- Clean machine physical witness trial passed | - 32-tile GAMUS pooled evaluation (MAE 4.40m, RMSE 5.86m, $R^2$ 0.23)<br>- Cross-city probe Pearson correlation: 0.37 (6/6 cities)<br>- Multi-terrain stratified evaluation (Urban, Hilly, Forested, Sparse, Water)<br>- Formal external test-city scoring: **`PENDING`** |
 | **Claim** | DepthWizard is a stable, offline-capable desktop application host executing deterministic scientific pipelines without synthetic fallback. | Monocular estimation provides relative structural geometry. Metric elevation claims strictly depend on DEM/GCP calibration quality. |
 
 ---

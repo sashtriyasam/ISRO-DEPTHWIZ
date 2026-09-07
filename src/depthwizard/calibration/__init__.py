@@ -11,6 +11,8 @@ from depthwizard.calibration.apply import apply_calibration
 from depthwizard.calibration.calibrator import (
     MIN_VALID_SAMPLES,
     Calibrator,
+    HuberScaleOffsetCalibrator,
+    PiecewiseLinearCalibrator,
     ScaleOffsetCalibrator,
 )
 from depthwizard.calibration.models import (
@@ -26,5 +28,7 @@ __all__ = [
     "CalibrationSamples",
     "Calibrator",
     "ScaleOffsetCalibrator",
+    "HuberScaleOffsetCalibrator",
+    "PiecewiseLinearCalibrator",
     "apply_calibration",
 ]

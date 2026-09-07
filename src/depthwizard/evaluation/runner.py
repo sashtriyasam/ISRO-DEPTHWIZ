@@ -22,8 +22,9 @@ from depthwizard.contracts.artifacts import DepthBackend
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError
 from depthwizard.evaluation.alignment import check_pixel_compatibility
-from depthwizard.evaluation.datasets import EvaluationSample, LoadedSample
+from depthwizard.evaluation.datasets import EvaluationSample, LoadedSample, TerrainStratifiedDataset
 from depthwizard.evaluation.metrics import (
+    PooledAccumulator,
     compute_metrics,
     pool_metric_summaries,
     valid_evaluation_mask,
@@ -34,6 +35,7 @@ from depthwizard.evaluation.protocols import (
     fit_controls,
 )
 from depthwizard.evaluation.results import EvaluationResult, EvaluationRun
+from depthwizard.pipeline.protocols import CalibrationProvider
 from depthwizard.version import __version__
 
 
@@ -125,12 +127,19 @@ def run_sample(
         predicted, reference_values, np.asarray(reference.valid_mask, dtype=bool)
     )
     control_mask, evaluation_mask = control_stride_split((height, width), base_valid, stride)
+    dataset_name = getattr(sample, "dataset_name", "stratified-benchmark")
+    split_name = getattr(sample, "split", "evaluation")
+    ref_checksum = getattr(sample, "reference_checksum", None)
+    city_name = getattr(sample, "city", None)
+    if city_name is None and hasattr(sample, "source") and isinstance(sample.source, dict):
+        city_name = sample.source.get("city")
+
     timer_start = time.perf_counter()
     calibration = fit_controls(
         predicted,
         reference_values,
         control_mask,
-        reference_id=f"{sample.dataset_name}-eval-ref",
+        reference_id=f"{dataset_name}-eval-ref",
         target=target,
         source_checksum=depth.provenance.input_checksum,
     )
@@ -167,10 +176,10 @@ def run_sample(
     )
     result = EvaluationResult(
         sample_id=sample.sample_id,
-        dataset_name=sample.dataset_name,
+        dataset_name=dataset_name,
         dataset_release=dataset_release,
         manifest_checksum=manifest_checksum,
-        split=sample.split,
+        split=split_name,
         model_name=depth.model_name,
         model_version=depth.model_version,
         checkpoint_id=depth.checkpoint_id,
@@ -178,7 +187,7 @@ def run_sample(
         upstream_revision=None,
         input_checksum=depth.provenance.input_checksum,
         reference_id=calibration.reference_id,
-        reference_checksum=sample.reference_checksum,
+        reference_checksum=ref_checksum,
         reference_units=reference.units,
         reference_semantics=reference.semantics.value,
         calibration_method=calibration.method.value,
@@ -192,7 +201,7 @@ def run_sample(
         alignment=alignment,
         units="meters",
         product_semantics=target.value,
-        city=sample.source.get("city"),
+        city=city_name,
         timings={
             "inference_seconds": round(sample_timings["inference_seconds"], 4),
             "calibration_seconds": round(sample_timings["calibration_seconds"], 4),
@@ -332,3 +341,61 @@ def select_samples(
     if max_samples is not None:
         selected = selected[:max_samples]
     return list(selected)
+
+
+def run_stratified_evaluation(
+    dataset: TerrainStratifiedDataset,
+    backend: DepthBackend,
+    calibration_provider: CalibrationProvider | None = None,
+    target_semantics: ElevationSemantics | None = None,
+    max_samples: int | None = None,
+    stride: int = 8,
+) -> dict[str, dict[str, float]]:
+    """Run evaluation per terrain class and return pooled metrics.
+
+    Groups samples by terrain_class, applies deterministic max_samples
+    selection (first N after sorting by sample_id), runs the canonical
+    pipeline per sample, and accumulates pixelwise errors with
+    PooledAccumulator.
+    """
+    terrain_classes = sorted({dataset[i].terrain_class for i in range(len(dataset))})
+    results: dict[str, dict[str, float]] = {}
+    for terrain_class in terrain_classes:
+        class_samples = [
+            dataset[i] for i in range(len(dataset)) if dataset[i].terrain_class is terrain_class
+        ]
+        class_samples.sort(key=lambda sample: sample.sample_id)
+        if max_samples is not None:
+            if max_samples < 1:
+                raise ValueError(f"max_samples must be >= 1, got {max_samples}")
+            class_samples = class_samples[:max_samples]
+        accumulator = PooledAccumulator()
+        valid_count = 0
+        for sample in class_samples:
+            try:
+                loaded = dataset.load_sample(sample)
+                semantics = (
+                    target_semantics if target_semantics is not None else loaded.reference.semantics
+                )
+                sample_stride = stride
+                if sample.height < 16 or sample.width < 16:
+                    sample_stride = max(1, min(sample.height, sample.width) // 2)
+                result, calibrated, reference = run_sample(
+                    loaded, backend, semantics, sample_stride
+                )
+                accumulator.add(calibrated - reference, reference)
+                valid_count += 1
+            except Exception:
+                continue
+        if valid_count > 0:
+            summary = accumulator.summary()
+            summary["count"] = float(valid_count)
+            results[terrain_class.value] = summary
+        else:
+            results[terrain_class.value] = {
+                "mae": float("nan"),
+                "rmse": float("nan"),
+                "r_squared": float("nan"),
+                "count": 0.0,
+            }
+    return results

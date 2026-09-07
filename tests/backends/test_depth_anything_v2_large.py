@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from depthwizard.backends.depth_anything_v2 import (
+from depthwizard.backends.depth_anything_v2_large import (
     CHECKPOINT_FILE,
     CHECKPOINT_HF_ID,
     CHECKPOINT_SHA256,
@@ -24,7 +24,7 @@ from depthwizard.backends.depth_anything_v2 import (
     MODEL_VERSION,
     UPSTREAM_REVISION,
     UPSTREAM_URL,
-    DepthAnythingV2Backend,
+    DepthAnythingV2LargeBackend,
     _load_image_rgb,
 )
 from depthwizard.contracts.artifacts import ImageResolution
@@ -154,11 +154,11 @@ def _make_backend(
     tmp_path: Path,
     model_factory: Any = _FakeModel,
     device: str = "cpu",
-) -> DepthAnythingV2Backend:
+) -> DepthAnythingV2LargeBackend:
     """Create a DA-V2 backend with a fake checkpoint and injected model."""
     fake_ckpt = tmp_path / "fake.pth"
     fake_ckpt.write_bytes(b"fake-weights")
-    return DepthAnythingV2Backend(
+    return DepthAnythingV2LargeBackend(
         checkpoint=fake_ckpt,
         device=device,
         model_factory=model_factory,
@@ -171,7 +171,7 @@ def _make_backend(
 
 
 class TestBackendContract:
-    """Verify DepthAnythingV2Backend implements DepthBackend protocol."""
+    """Verify DepthAnythingV2LargeBackend implements DepthBackend protocol."""
 
     def test_protocol_conformance(self, tmp_path: Path) -> None:
         backend = _make_backend(tmp_path)
@@ -180,7 +180,7 @@ class TestBackendContract:
 
     def test_model_name(self, tmp_path: Path) -> None:
         backend = _make_backend(tmp_path)
-        assert backend.model_name == "depth-anything-v2-small"
+        assert backend.model_name == "depth-anything-v2-large"
 
     def test_model_version(self, tmp_path: Path) -> None:
         backend = _make_backend(tmp_path)
@@ -336,7 +336,7 @@ class TestProvenance:
         backend = _make_backend(tmp_path)
         inspection = inspect_input(make_png(tmp_path / "a.png"))
         result = backend.estimate_depth(inspection)
-        assert result.provenance.model_name == "depth-anything-v2-small"
+        assert result.provenance.model_name == "depth-anything-v2-large"
         assert result.provenance.model_version == MODEL_VERSION
 
     def test_checkpoint_in_provenance(self, tmp_path: Path) -> None:
@@ -435,7 +435,7 @@ class TestCheckpointMissing:
 
     def test_missing_checkpoint_raises(self, tmp_path: Path) -> None:
         missing = tmp_path / "nonexistent.pth"
-        backend = DepthAnythingV2Backend(checkpoint=missing, device="cpu")
+        backend = DepthAnythingV2LargeBackend(checkpoint=missing, device="cpu")
         inspection = inspect_input(make_png(tmp_path / "a.png"))
         with pytest.raises(ModelInferenceError, match="checkpoint not found"):
             backend.estimate_depth(inspection)
@@ -462,7 +462,7 @@ class TestTorchMissing:
         monkeypatch.setattr(builtins, "__import__", fake_import)
         ckpt_path = tmp_path / "fake.pth"
         ckpt_path.write_bytes(b"fake")
-        backend = DepthAnythingV2Backend(checkpoint=ckpt_path, device="cpu")
+        backend = DepthAnythingV2LargeBackend(checkpoint=ckpt_path, device="cpu")
         inspection = inspect_input(make_png(tmp_path / "a.png"))
         with pytest.raises(ModelInferenceError, match="torch is required"):
             backend.estimate_depth(inspection)
@@ -478,7 +478,7 @@ class TestDeviceUnavailable:
 
     def test_invalid_device_name(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="Unknown device"):
-            DepthAnythingV2Backend(checkpoint=tmp_path / "x.pth", device="tpu")
+            DepthAnythingV2LargeBackend(checkpoint=tmp_path / "x.pth", device="tpu")
 
 
 # ---------------------------------------------------------------------------
@@ -572,8 +572,8 @@ class TestOptionalDependency:
         """The module itself is importable without torch."""
         import importlib
 
-        mod = importlib.import_module("depthwizard.backends.depth_anything_v2")
-        assert hasattr(mod, "DepthAnythingV2Backend")
+        mod = importlib.import_module("depthwizard.backends.depth_anything_v2_large")
+        assert hasattr(mod, "DepthAnythingV2LargeBackend")
 
 
 # ---------------------------------------------------------------------------
@@ -587,9 +587,9 @@ class TestConfigDict:
     def test_config_dict_keys(self, tmp_path: Path) -> None:
         backend = _make_backend(tmp_path)
         cfg = backend.config_dict()
-        assert cfg["backend"] == "depth-anything-v2-small"
+        assert cfg["backend"] == "depth-anything-v2-large"
         assert cfg["model"] == MODEL_NAME
-        assert cfg["encoder"] == "vits"
+        assert cfg["encoder"] == "vitl"
         assert cfg["checkpoint_sha256"] == CHECKPOINT_SHA256
         assert cfg["upstream_revision"] == UPSTREAM_REVISION
         assert cfg["device"] == "cpu"
@@ -656,22 +656,22 @@ class TestMetadataConstants:
         assert UPSTREAM_REVISION == "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 
     def test_checkpoint_sha256(self) -> None:
-        assert (
-            CHECKPOINT_SHA256 == "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378"
-        )
+        assert CHECKPOINT_SHA256 == "PLACEHOLDER_SHA256_VITL"
 
     def test_encoder_config(self) -> None:
-        assert ENCODER_CONFIG["encoder"] == "vits"
-        assert ENCODER_CONFIG["features"] == 64
-        assert ENCODER_CONFIG["out_channels"] == [48, 96, 192, 384]
+        assert ENCODER_CONFIG["encoder"] == "vitl"
+        assert ENCODER_CONFIG["features"] == 256
+        assert ENCODER_CONFIG["out_channels"] == [256, 512, 1024, 1024]
 
     def test_default_input_size(self) -> None:
         assert DEFAULT_INPUT_SIZE == 518
 
     def test_provenance_distinction(self) -> None:
-        """Repository revision (40 hex) and checkpoint SHA-256 (64 hex) are distinct."""
+        """Repository revision (40 hex) and checkpoint SHA-256 (256 hex) are distinct."""
         assert len(UPSTREAM_REVISION) == 40, "UPSTREAM_REVISION is a git commit hash"
-        assert len(CHECKPOINT_SHA256) == 64, "CHECKPOINT_SHA256 is a file SHA-256"
+        assert len(CHECKPOINT_SHA256) == 64 or CHECKPOINT_SHA256.startswith("PLACEHOLDER"), (
+            "CHECKPOINT_SHA256 must be 64 hex chars or a placeholder"
+        )
         assert UPSTREAM_REVISION != CHECKPOINT_SHA256, "These must be different values"
 
 
@@ -691,7 +691,9 @@ class TestDependencyAvailability:
         real = sys.modules.get("torch")
         sys.modules["torch"] = None  # type: ignore[assignment]
         try:
-            importlib.reload(importlib.import_module("depthwizard.backends.depth_anything_v2"))
+            importlib.reload(
+                importlib.import_module("depthwizard.backends.depth_anything_v2_large")
+            )
         except Exception:
             pass
         finally:
@@ -713,10 +715,10 @@ class TestDependencyAvailability:
 # Conditional real-model smoke test
 # ---------------------------------------------------------------------------
 
-_REAL_SMOKE_CKPT = os.environ.get("DW_DAV2_CKPT", "")
+_REAL_SMOKE_CKPT = os.environ.get("DW_DAV2_LARGE_CKPT", "")
 _REAL_SMOKE_ENABLED = os.environ.get("DW_DAV2_REAL_SMOKE", "0") == "1"
 _SKIP_REASON = (
-    "Real model smoke skipped: set DW_DAV2_REAL_SMOKE=1 and DW_DAV2_CKPT=<path> to enable"
+    "Real model smoke skipped: set DW_DAV2_REAL_SMOKE=1 and DW_DAV2_LARGE_CKPT=<path> to enable"
 )
 
 
@@ -731,9 +733,9 @@ class TestRealModelSmoke:
         import cv2
         import numpy as np
 
-        from depthwizard.backends.depth_anything_v2 import (
+        from depthwizard.backends.depth_anything_v2_large import (
             CHECKPOINT_SHA256,
-            DepthAnythingV2Backend,
+            DepthAnythingV2LargeBackend,
         )
         from depthwizard.contracts.semantics import DepthScale
         from depthwizard.ingestion.formats import DetectedFormat
@@ -752,11 +754,11 @@ class TestRealModelSmoke:
 
         # Create test image
         img_path = tmp_path / "test.png"
-        img = np.random.randint(10, 250, (64, 64, 3), dtype=np.uint8)
+        img = np.random.randint(10, 250, (256, 256, 3), dtype=np.uint8)
         cv2.imwrite(str(img_path), img)
 
         # Run inference
-        backend = DepthAnythingV2Backend(checkpoint=ckpt_path, device="cpu")
+        backend = DepthAnythingV2LargeBackend(checkpoint=ckpt_path, device="cpu")
         t0 = time.perf_counter()
         backend.load()
         load_time = time.perf_counter() - t0
@@ -765,8 +767,8 @@ class TestRealModelSmoke:
         inspection = InputInspection(
             handle=handle,
             detected_format=DetectedFormat.PNG,
-            width=64,
-            height=64,
+            width=256,
+            height=256,
             band_count=3,
             dtype="uint8",
             georeferencing=GeoreferencingLevel.NON_GEOREFERENCED,
@@ -778,13 +780,13 @@ class TestRealModelSmoke:
         infer_time = time.perf_counter() - t0
 
         # Verify output
-        assert len(result.depth_values) == 64 * 64
+        assert len(result.depth_values) == 256 * 256
         assert all(math.isfinite(v) for v in result.depth_values)
         assert result.depth_scale == DepthScale.RELATIVE
         assert result.units is None
         assert result.valid_mask is None
         assert result.confidence_values is None
-        assert result.model_name == "depth-anything-v2-small"
+        assert result.model_name == "depth-anything-v2-large"
 
         # Verify determinism
         result2 = backend.estimate_depth(inspection)

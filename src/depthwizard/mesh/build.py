@@ -210,3 +210,45 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
         calibration_valid_samples=grid.calibration_valid_samples,
         provenance=grid.provenance,
     )
+
+
+def build_lod_meshes(grid: DSMGrid, levels: tuple[int, ...]) -> tuple[TerrainMesh, ...]:
+    """Build LOD meshes by simple slicing subsampling of the DSM grid.
+
+    For each level in `levels`:
+    - level == 1 returns the original mesh.
+    - level > 1 subsamples `grid.array` and `grid.valid_mask` by
+      `[::level, ::level]`, creates a new `DSMGrid` preserving source
+      metadata, and calls `build_terrain_mesh`.
+
+    Returns meshes in the same order as `levels` with `decimated` and
+    `lod_level` set appropriately.
+    """
+    if not isinstance(grid, DSMGrid):
+        raise TypeError(f"build_lod_meshes requires a DSMGrid; got {type(grid).__name__}")
+    if not levels:
+        raise ValueError("levels must be a non-empty tuple of positive integers")
+    for lv in levels:
+        if not isinstance(lv, int) or lv < 1:
+            raise ValueError(f"LOD levels must be positive integers; got {lv!r}")
+    meshes: list[TerrainMesh] = []
+    for lv in levels:
+        if lv == 1:
+            mesh = build_terrain_mesh(grid)
+            meshes.append(mesh.model_copy(update={"decimated": False, "lod_level": 1}))
+        else:
+            sub_array = grid.array[::lv, ::lv]
+            sub_mask = grid.valid_mask[::lv, ::lv]
+            sub_grid = grid.model_copy(
+                update={
+                    "array": sub_array,
+                    "valid_mask": sub_mask,
+                    "width": sub_array.shape[1],
+                    "height": sub_array.shape[0],
+                    "invalid_count": int((~sub_mask).sum()),
+                    "calibration_valid_samples": int(sub_mask.sum()),
+                }
+            )
+            mesh = build_terrain_mesh(sub_grid)
+            meshes.append(mesh.model_copy(update={"decimated": True, "lod_level": lv}))
+    return tuple(meshes)

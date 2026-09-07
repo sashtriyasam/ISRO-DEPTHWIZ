@@ -8,6 +8,7 @@ data. Static typing is enforced by mypy; instances are immutable.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from depthwizard.calibration.models import CalibrationResult
 from depthwizard.contracts.artifacts import DepthBackend, DepthResult
@@ -28,6 +29,22 @@ from depthwizard.version import __version__
 
 
 @dataclass(frozen=True)
+class SolarConfig:
+    """Optional solar-shadow analysis configuration for a pipeline run.
+
+    When ``sun_elevation_deg`` and ``sun_azimuth_deg`` are both ``None``
+    the pipeline will attempt to resolve them from image metadata.
+    When both are supplied they override any metadata angles.
+    Supplying only one raises ``InvalidInputError`` at run time.
+    """
+
+    sun_elevation_deg: float | None = None
+    sun_azimuth_deg: float | None = None
+    min_shadow_area_px: int = 20
+    gsd_override: float | None = None
+
+
+@dataclass(frozen=True)
 class PipelineRequest:
     """Everything a run needs (small explicit configuration)."""
 
@@ -40,6 +57,7 @@ class PipelineRequest:
     geotiff_path: str | None = None
     export_options: ExportOptions | None = None
     cancellation: CancellationToken | None = None
+    solar_config: SolarConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +100,8 @@ class PipelineResult:
     target_semantics: ElevationSemantics | None = None
     mesh_requested: bool = False
     geotiff_path: str | None = None
+    solar_constraints: tuple[Any, ...] = field(default_factory=tuple)
+    solar_refused_reason: str | None = None
     engine_version: str = __version__
 
     @property

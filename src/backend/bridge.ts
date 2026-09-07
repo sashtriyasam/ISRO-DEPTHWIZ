@@ -61,7 +61,7 @@ export interface BridgeResult {
   warnings: string[];
 }
 
-const BRIDGE_TIMEOUT_MS = 30_000;
+const BRIDGE_TIMEOUT_MS = 120_000;
 
 function validateTransportShape(data: unknown): BackendDepthResult {
   if (typeof data !== "object" || data === null) {
