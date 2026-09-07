@@ -5,6 +5,7 @@ import {
   EXAGGERATION_LABELS,
   isValidExaggeration,
   applyHeightExaggeration,
+  suggestExaggeration,
 } from "./types";
 
 describe("ExaggerationLevel type", () => {
@@ -102,5 +103,36 @@ describe("applyHeightExaggeration", () => {
   it("returns a new array", () => {
     const result = applyHeightExaggeration(sourceVertices, 2);
     expect(result).not.toBe(sourceVertices);
+  });
+});
+
+describe("suggestExaggeration", () => {
+  it("keeps strong relief at 1x", () => {
+    // 30 m relief over a 256-wide tile is already visible.
+    expect(suggestExaggeration(new Float32Array([0, 30]), 256, 256)).toBe(1);
+  });
+
+  it("raises low relief to visibility (2.5 m over 256 px -> 10x)", () => {
+    expect(suggestExaggeration(new Float32Array([10, 12.5]), 256, 256)).toBe(10);
+  });
+
+  it("snaps to the smallest level reaching the visibility ratio", () => {
+    // 12.8 m over 256 px needs exactly 2x for a 10% relief ratio.
+    expect(suggestExaggeration(new Float32Array([0, 12.8]), 256, 256)).toBe(2);
+  });
+
+  it("caps at 10x for extreme aspect ratios", () => {
+    expect(suggestExaggeration(new Float32Array([13.9, 18.0]), 872, 662)).toBe(10);
+  });
+
+  it("returns 1x for flat, empty, or invalid grids", () => {
+    expect(suggestExaggeration(new Float32Array([5, 5, 5]), 64, 64)).toBe(1);
+    expect(suggestExaggeration(new Float32Array([]), 64, 64)).toBe(1);
+    expect(suggestExaggeration(new Float32Array([NaN, NaN]), 64, 64)).toBe(1);
+    expect(suggestExaggeration(new Float32Array([1, 2]), 0, 0)).toBe(1);
+  });
+
+  it("ignores nodata NaNs when measuring relief", () => {
+    expect(suggestExaggeration(new Float32Array([NaN, 0, 30, NaN]), 256, 256)).toBe(1);
   });
 });

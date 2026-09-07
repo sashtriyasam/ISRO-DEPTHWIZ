@@ -45,7 +45,7 @@ import {
   resetSession,
 } from "../session/session";
 import { createLayerState, setActiveLayer } from "../layers";
-import { DEFAULT_EXAGGERATION } from "../display";
+import { DEFAULT_EXAGGERATION, suggestExaggeration } from "../display";
 import { calculateMeasurement } from "../measurement/calculator";
 import { generateProfile } from "../profile/sampler";
 import {
@@ -76,6 +76,26 @@ export function App() {
   );
   const [exaggeration, setExaggeration] =
     useState<ExaggerationLevel>(DEFAULT_EXAGGERATION);
+  // Auto-fit the display-only exaggeration when a new artifact loads so
+  // low-relief results are visible immediately. Manual changes afterwards
+  // are preserved until the next artifact (scientific data untouched).
+  const autoFitArtifactRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!artifact?.elevation) {
+      autoFitArtifactRef.current = null;
+      return;
+    }
+    if (autoFitArtifactRef.current !== artifact.id) {
+      autoFitArtifactRef.current = artifact.id;
+      setExaggeration(
+        suggestExaggeration(
+          artifact.elevation.grid,
+          artifact.elevation.width,
+          artifact.elevation.height,
+        ),
+      );
+    }
+  }, [artifact]);
   const [inspectionState, setInspectionState] = useState<InspectionState>({
     status: "empty",
   });
