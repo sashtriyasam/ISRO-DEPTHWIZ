@@ -182,6 +182,8 @@ def solar_observations_from_image(
 
     from typing import cast
 
+    import numpy as np
+
     regions: list[ShadowRegion] = detect_shadows(
         cast(np.ndarray, rgb_array),
         min_area_px=min_area_px
