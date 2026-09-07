@@ -2,14 +2,14 @@
 
 [![Release](https://img.shields.io/badge/Release-v0.1.0--sih--26175--rc1-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
-[![Python](https://img.shields.io/badge/Python-3.12_|_549_Tests_Passed-success.svg)](#python-scientific-engine)
+[![Python](https://img.shields.io/badge/Python-3.12_|_664_Tests_Passed-success.svg)](#python-scientific-engine)
 [![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_627_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
 
 > **Single-View Height Estimation and 3D Flythrough**  
 > **Problem Statement ID:** 26175  
 > **Organization:** Indian Space Research Organisation (ISRO), Department of Space / SAC  
 > **Theme:** Disaster Management / Urban Planning / Reconnaissance  
-> **Canonical Main Commit SHA:** `24cce9825e66d789fe981063090c09a1c717c4e3` (`24cce98`)  
+> **Canonical Main Commit SHA:** `54264ec261edbfafb405527a206a461b6c6b4b45` (`54264ec`)  
 
 ---
 
@@ -82,7 +82,7 @@ Download the signed standalone installer directly from the GitHub Release Candid
 
 ### Python Core Engine
 ```bash
-# Execute all 553 Python tests (549 passed, 4 skipped opt-in heavy models)
+# Execute all 671 Python tests (664 passed, 7 skipped opt-in heavy models)
 python -m pytest tests/
 
 # Code quality & typing checks
