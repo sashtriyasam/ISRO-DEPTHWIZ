@@ -175,3 +175,82 @@ class GamusDataset(EvaluationDataset):
             valid_mask=np.ascontiguousarray(finite),
         )
         return LoadedSample(sample=sample, image_rgb=np.ascontiguousarray(rgb), reference=reference)
+
+
+from enum import Enum
+from typing import Callable
+
+
+class TerrainClass(str, Enum):
+    """Terrain type for stratified benchmarking."""
+
+    URBAN = "urban"
+    HILLY = "hilly"
+    FORESTED = "forested"
+    SPARSE = "sparse"
+    WATER = "water"
+
+
+class BenchmarkSample(BaseModel):
+    """One manifest-identified benchmark unit with terrain metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    sample_id: str = Field(min_length=1)
+    input_path: str = Field(min_length=1, description="Manifest-relative input path.")
+    reference_path: str | None = Field(default=None, description="Manifest-relative reference path.")
+    terrain_class: TerrainClass
+    city: str | None = None
+    crs: str | None = None
+    transform: tuple[float, ...] | None = None
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    gsd_m: float | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class TerrainStratifiedDataset:
+    """Manifest-driven dataset with terrain-class filtering.
+
+    Loads a JSON list of BenchmarkSample entries. Supports deterministic
+    filtering by terrain class and city label.
+    """
+
+    def __init__(
+        self,
+        samples: list[BenchmarkSample],
+        loader: Callable[[BenchmarkSample], LoadedSample],
+    ) -> None:
+        self._samples = sorted(samples, key=lambda sample: sample.sample_id)
+        self._loader = loader
+
+    def __len__(self) -> int:
+        return len(self._samples)
+
+    def __getitem__(self, index: int) -> BenchmarkSample:
+        return self._samples[index]
+
+    def filter_by_terrain(self, terrain_class: TerrainClass) -> "TerrainStratifiedDataset":
+        """Return a dataset restricted to one terrain class."""
+        filtered = [sample for sample in self._samples if sample.terrain_class is terrain_class]
+        return TerrainStratifiedDataset(filtered, self._loader)
+
+    def filter_by_city(self, city: str) -> "TerrainStratifiedDataset":
+        """Return a dataset restricted to one city label."""
+        filtered = [sample for sample in self._samples if sample.city == city]
+        return TerrainStratifiedDataset(filtered, self._loader)
+
+    def load_sample(self, sample: BenchmarkSample) -> LoadedSample:
+        """Materialize one sample image and reference arrays."""
+        return self._loader(sample)
+
+    @classmethod
+    def from_manifest_path(cls, path: Path, loader: Callable[[BenchmarkSample], LoadedSample]) -> "TerrainStratifiedDataset":
+        """Load samples from a JSON manifest file."""
+        import json
+        text = Path(path).read_text(encoding="utf-8")
+        raw = json.loads(text)
+        if not isinstance(raw, list):
+            raise ValueError(f"manifest must be a JSON list, got {type(raw).__name__}")
+        samples = [BenchmarkSample.model_validate(entry) for entry in raw]
+        return cls(samples, loader)

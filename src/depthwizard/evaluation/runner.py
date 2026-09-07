@@ -26,6 +26,7 @@ from depthwizard.evaluation.datasets import EvaluationSample, LoadedSample
 from depthwizard.evaluation.metrics import (
     compute_metrics,
     pool_metric_summaries,
+    PooledAccumulator,
     valid_evaluation_mask,
 )
 from depthwizard.evaluation.protocols import (
@@ -332,3 +333,56 @@ def select_samples(
     if max_samples is not None:
         selected = selected[:max_samples]
     return list(selected)
+
+from depthwizard.evaluation.datasets import BenchmarkSample, TerrainClass, TerrainStratifiedDataset
+from depthwizard.pipeline.protocols import CalibrationProvider
+
+
+def run_stratified_evaluation(
+    dataset: TerrainStratifiedDataset,
+    backend: DepthBackend,
+    calibration_provider: CalibrationProvider | None = None,
+    target_semantics: ElevationSemantics = ElevationSemantics.ABSOLUTE_ELEVATION_DSM,
+    max_samples: int | None = None,
+    stride: int = 8,
+) -> dict[str, dict[str, float]]:
+    """Run evaluation per terrain class and return pooled metrics.
+
+    Groups samples by terrain_class, applies deterministic max_samples
+    selection (first N after sorting by sample_id), runs the canonical
+    pipeline per sample, and accumulates pixelwise errors with
+    PooledAccumulator.
+    """
+    terrain_classes = sorted({dataset[i].terrain_class for i in range(len(dataset))})
+    results: dict[str, dict[str, float]] = {}
+    for terrain_class in terrain_classes:
+        class_samples = [dataset[i] for i in range(len(dataset)) if dataset[i].terrain_class is terrain_class]
+        class_samples.sort(key=lambda sample: sample.sample_id)
+        if max_samples is not None:
+            if max_samples < 1:
+                raise ValueError(f"max_samples must be >= 1, got {max_samples}")
+            class_samples = class_samples[:max_samples]
+        accumulator = PooledAccumulator()
+        valid_count = 0
+        for sample in class_samples:
+            try:
+                loaded = dataset.load_sample(sample)
+                result, calibrated, reference = run_sample(
+                    loaded, backend, target_semantics, stride
+                )
+                accumulator.add(calibrated - reference, reference)
+                valid_count += 1
+            except Exception:
+                continue
+        if valid_count > 0:
+            summary = accumulator.summary()
+            summary["count"] = float(valid_count)
+            results[terrain_class.value] = summary
+        else:
+            results[terrain_class.value] = {
+                "mae": float("nan"),
+                "rmse": float("nan"),
+                "r_squared": float("nan"),
+                "count": 0.0,
+            }
+    return results

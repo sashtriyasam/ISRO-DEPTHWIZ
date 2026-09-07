@@ -28,6 +28,22 @@ from depthwizard.version import __version__
 
 
 @dataclass(frozen=True)
+class SolarConfig:
+    """Optional solar-shadow analysis configuration for a pipeline run.
+
+    When ``sun_elevation_deg`` and ``sun_azimuth_deg`` are both ``None``
+    the pipeline will attempt to resolve them from image metadata.
+    When both are supplied they override any metadata angles.
+    Supplying only one raises ``InvalidInputError`` at run time.
+    """
+
+    sun_elevation_deg: float | None = None
+    sun_azimuth_deg: float | None = None
+    min_shadow_area_px: int = 20
+    gsd_override: float | None = None
+
+
+@dataclass(frozen=True)
 class PipelineRequest:
     """Everything a run needs (small explicit configuration)."""
 
@@ -40,6 +56,7 @@ class PipelineRequest:
     geotiff_path: str | None = None
     export_options: ExportOptions | None = None
     cancellation: CancellationToken | None = None
+    solar_config: SolarConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +99,8 @@ class PipelineResult:
     target_semantics: ElevationSemantics | None = None
     mesh_requested: bool = False
     geotiff_path: str | None = None
+    solar_constraints: tuple = field(default_factory=tuple)  # tuple[ShadowHeightConstraint, ...]
+    solar_refused_reason: str | None = None
     engine_version: str = __version__
 
     @property

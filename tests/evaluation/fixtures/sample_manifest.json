@@ -1,0 +1,80 @@
+﻿[
+  {
+    "sample_id": "urban-001",
+    "input_path": "urban/urban-001.png",
+    "reference_path": "urban/urban-001-ref.tif",
+    "terrain_class": "urban",
+    "city": "Metropolis",
+    "crs": "EPSG:32643",
+    "transform": [500000.0, 1.0, 0.0, 4640000.0, 0.0, -1.0],
+    "width": 4,
+    "height": 4,
+    "gsd_m": 0.5,
+    "metadata": {"source": "synthetic"}
+  },
+  {
+    "sample_id": "urban-002",
+    "input_path": "urban/urban-002.png",
+    "reference_path": "urban/urban-002-ref.tif",
+    "terrain_class": "urban",
+    "city": "Metropolis",
+    "crs": "EPSG:32643",
+    "transform": [500100.0, 1.0, 0.0, 4640100.0, 0.0, -1.0],
+    "width": 4,
+    "height": 4,
+    "gsd_m": 0.5,
+    "metadata": {"source": "synthetic"}
+  },
+  {
+    "sample_id": "hilly-001",
+    "input_path": "hilly/hilly-001.png",
+    "reference_path": "hilly/hilly-001-ref.tif",
+    "terrain_class": "hilly",
+    "city": "Highland",
+    "crs": "EPSG:32643",
+    "transform": [510000.0, 1.0, 0.0, 4650000.0, 0.0, -1.0],
+    "width": 4,
+    "height": 4,
+    "gsd_m": 1.0,
+    "metadata": {"source": "synthetic"}
+  },
+  {
+    "sample_id": "hilly-002",
+    "input_path": "hilly/hilly-002.png",
+    "reference_path": "hilly/hilly-002-ref.tif",
+    "terrain_class": "hilly",
+    "city": "Highland",
+    "crs": "EPSG:32643",
+    "transform": [510100.0, 1.0, 0.0, 4650100.0, 0.0, -1.0],
+    "width": 4,
+    "height": 4,
+    "gsd_m": 1.0,
+    "metadata": {"source": "synthetic"}
+  },
+  {
+    "sample_id": "forested-001",
+    "input_path": "forested/forested-001.png",
+    "reference_path": "forested/forested-001-ref.tif",
+    "terrain_class": "forested",
+    "city": "Woodland",
+    "crs": "EPSG:32643",
+    "transform": [520000.0, 1.0, 0.0, 4660000.0, 0.0, -1.0],
+    "width": 4,
+    "height": 4,
+    "gsd_m": 0.3,
+    "metadata": {"source": "synthetic"}
+  },
+  {
+    "sample_id": "forested-002",
+    "input_path": "forested/forested-002.png",
+    "reference_path": "forested/forested-002-ref.tif",
+    "terrain_class": "forested",
+    "city": "Woodland",
+    "crs": "EPSG:32643",
+    "transform": [520100.0, 1.0, 0.0, 4660100.0, 0.0, -1.0],
+    "width": 4,
+    "height": 4,
+    "gsd_m": 0.3,
+    "metadata": {"source": "synthetic"}
+  }
+]

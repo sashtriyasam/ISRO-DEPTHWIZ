@@ -1,4 +1,4 @@
-"""Independent deterministic calibration engine (affine scale + offset).
+﻿"""Independent deterministic calibration engine (affine scale + offset).
 
 Maps scale-ambiguous relative values onto a metric reference via
 ``reference = scale * predicted + offset``. No rasters, no models,
@@ -12,6 +12,8 @@ from depthwizard.calibration.calibrator import (
     MIN_VALID_SAMPLES,
     Calibrator,
     ScaleOffsetCalibrator,
+    HuberScaleOffsetCalibrator,
+    PiecewiseLinearCalibrator,
 )
 from depthwizard.calibration.models import (
     CalibrationMethod,
@@ -26,5 +28,7 @@ __all__ = [
     "CalibrationSamples",
     "Calibrator",
     "ScaleOffsetCalibrator",
+    "HuberScaleOffsetCalibrator",
+    "PiecewiseLinearCalibrator",
     "apply_calibration",
 ]

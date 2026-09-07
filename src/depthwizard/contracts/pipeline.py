@@ -13,6 +13,7 @@ class PipelineState(str, Enum):
     """Typed pipeline states for future orchestration."""
 
     INPUT_VALIDATED = "input_validated"
+    SOLAR_SHADOW_ANALYSIS = "solar_shadow_analysis"
     PREPROCESSING = "preprocessing"
     INFERENCE_RUNNING = "inference_running"
     CALIBRATING = "calibrating"

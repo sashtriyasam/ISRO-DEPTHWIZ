@@ -37,6 +37,14 @@ from depthwizard.version import __version__
 #: Explicit legal transitions. Terminal states have no outgoing edges.
 TRANSITIONS: dict[PipelineState, frozenset[PipelineState]] = {
     PipelineState.INPUT_VALIDATED: frozenset(
+        {
+            PipelineState.SOLAR_SHADOW_ANALYSIS,
+            PipelineState.PREPROCESSING,
+            PipelineState.FAILED,
+            PipelineState.CANCELLED,
+        }
+    ),
+    PipelineState.SOLAR_SHADOW_ANALYSIS: frozenset(
         {PipelineState.PREPROCESSING, PipelineState.FAILED, PipelineState.CANCELLED}
     ),
     PipelineState.PREPROCESSING: frozenset(
@@ -119,6 +127,8 @@ class _Engine:
         self._dsm: DSMGrid | None = None
         self._mesh: TerrainMesh | None = None
         self._export: ExportResult | None = None
+        self._solar_constraints: tuple = ()
+        self._solar_refused_reason: str | None = None
 
     def _enter(self, state: PipelineState) -> None:
         """Record a transition (bootstrap allows terminal states first).
@@ -175,6 +185,8 @@ class _Engine:
             target_semantics=request.target_semantics,
             mesh_requested=request.build_mesh,
             geotiff_path=request.geotiff_path,
+            solar_constraints=self._solar_constraints,
+            solar_refused_reason=self._solar_refused_reason,
             engine_version=__version__,
         )
 
@@ -200,6 +212,30 @@ class _Engine:
             return self._fail(PipelineState.INPUT_VALIDATED, exc)
         self._inspection = inspection
         self._enter(PipelineState.INPUT_VALIDATED)
+
+        if request.solar_config is not None:
+            if self._cancelled():
+                return self._finish(PipelineState.CANCELLED)
+            self._enter(PipelineState.SOLAR_SHADOW_ANALYSIS)
+            try:
+                from depthwizard.solar.integrate import (
+                    load_image_rgb,
+                    solar_observations_from_image,
+                )
+
+                rgb = load_image_rgb(inspection)
+                res = solar_observations_from_image(
+                    inspection,
+                    rgb,
+                    sun_elevation_deg=request.solar_config.sun_elevation_deg,
+                    sun_azimuth_deg=request.solar_config.sun_azimuth_deg,
+                    min_area_px=request.solar_config.min_shadow_area_px,
+                    gsd_override=request.solar_config.gsd_override,
+                )
+                self._solar_constraints = res.constraints
+                self._solar_refused_reason = res.refused_reason
+            except Exception as exc:
+                return self._fail(PipelineState.SOLAR_SHADOW_ANALYSIS, exc)
 
         if self._cancelled():
             return self._finish(PipelineState.CANCELLED)

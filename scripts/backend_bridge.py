@@ -219,7 +219,8 @@ _USAGE = (
     "Usage: backend_bridge.py [--backend <name>] [--device <device>] [--mode metric|relative] "
     "<input_path> | --synthetic <w> <h> "
     "| --terrain <w> <h> | --terrain-file <path> [target] "
-    "| --inspect <path> | --capabilities"
+    "| --inspect <path> | --capabilities "
+    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>]"
 )
 
 
@@ -362,6 +363,56 @@ def run_inspect(input_path: Path) -> dict[str, Any]:
         }
 
 
+def run_solar(
+    input_path: Path,
+    sun_elevation_deg: float | None = None,
+    sun_azimuth_deg: float | None = None,
+    min_area_px: int = 20,
+    gsd_override: float | None = None,
+) -> dict[str, Any]:
+    """Run solar-shadow analysis on an image."""
+    from depthwizard.solar.integrate import load_image_rgb, solar_observations_from_image
+
+    if not input_path.exists():
+        return {
+            "constraints": [],
+            "count": 0,
+            "refused_reason": f"Input file not found: {input_path.name}",
+        }
+    try:
+        inspection = inspect_input(input_path)
+        rgb = load_image_rgb(inspection)
+        res = solar_observations_from_image(
+            inspection,
+            rgb,
+            sun_elevation_deg=sun_elevation_deg,
+            sun_azimuth_deg=sun_azimuth_deg,
+            min_area_px=min_area_px,
+            gsd_override=gsd_override,
+        )
+        constraints = [
+            {
+                "height_m": float(c.height_m),
+                "quality": c.quality,
+                "assumptions": list(c.assumptions),
+                "method": c.method,
+                "source_input_id": c.source_input_id,
+            }
+            for c in res.constraints
+        ]
+        return {
+            "constraints": constraints,
+            "count": len(constraints),
+            "refused_reason": res.refused_reason,
+        }
+    except Exception as exc:
+        return {
+            "constraints": [],
+            "count": 0,
+            "refused_reason": f"Solar analysis failed: {exc}",
+        }
+
+
 def main() -> None:
     """Main entry point: invoke the actual backend and serialize the result."""
     if len(sys.argv) < 2:
@@ -372,6 +423,10 @@ def main() -> None:
     backend_name = SYNTHETIC_BACKEND_NAME
     device: str | None = None
     mode = "metric"
+    sun_elevation: float | None = None
+    sun_azimuth: float | None = None
+    min_area = 20
+    gsd: float | None = None
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -383,6 +438,18 @@ def main() -> None:
             i += 2
         elif args[i] == "--mode" and i + 1 < len(args):
             mode = args[i + 1]
+            i += 2
+        elif args[i] == "--sun-elevation" and i + 1 < len(args):
+            sun_elevation = float(args[i + 1])
+            i += 2
+        elif args[i] == "--sun-azimuth" and i + 1 < len(args):
+            sun_azimuth = float(args[i + 1])
+            i += 2
+        elif args[i] == "--min-area" and i + 1 < len(args):
+            min_area = int(args[i + 1])
+            i += 2
+        elif args[i] == "--gsd" and i + 1 < len(args):
+            gsd = float(args[i + 1])
             i += 2
         else:
             positional.append(args[i])
@@ -438,6 +505,23 @@ def main() -> None:
             width = int(positional[1]) if len(positional) > 1 else 8
             height = int(positional[2]) if len(positional) > 2 else 8
             print(json.dumps(run_depth_only(width, height, backend_name=backend_name)))
+        elif positional[0] == "--solar":
+            if len(positional) < 2:
+                print(json.dumps({"error": "Missing input path for --solar"}))
+                sys.exit(1)
+            solar_path = Path(positional[1])
+            print(
+                json.dumps(
+                    run_solar(
+                        solar_path,
+                        sun_elevation_deg=sun_elevation,
+                        sun_azimuth_deg=sun_azimuth,
+                        min_area_px=min_area,
+                        gsd_override=gsd,
+                    ),
+                    allow_nan=False,
+                )
+            )
         else:
             input_path = Path(positional[0])
             if not input_path.exists():

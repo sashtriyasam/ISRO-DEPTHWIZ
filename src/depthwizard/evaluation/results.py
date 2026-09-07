@@ -7,6 +7,8 @@ pixelwise errors explicitly rather than averaging per-image RMSE.
 
 from __future__ import annotations
 
+import pathlib
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from depthwizard.evaluation.alignment import AlignmentReport
@@ -118,3 +120,24 @@ class EvaluationRun(BaseModel):
     python_version: str | None = None
     engine_version: str | None = None
     repository_sha: str | None = None
+
+
+class StratifiedEvaluationResult(BaseModel):
+    """Cross-terrain stratified evaluation summary."""
+
+    model_config = ConfigDict(frozen=True)
+
+    overall: dict[str, float] = Field(description='Overall pooled metrics.')
+    by_terrain_class: dict[str, dict[str, float]] = Field(description='Per-terrain-class pooled metrics.')
+    total_samples: int = Field(ge=0, description='Total samples in the dataset.')
+    valid_samples: int = Field(ge=0, description='Samples that produced valid metrics.')
+    backend_name: str = Field(min_length=1)
+    backend_version: str | None = None
+    calibration_method: str | None = None
+    engine_version: str = Field(min_length=1)
+
+    def to_json_path(self, path: pathlib.Path) -> None:
+        """Write the result as JSON to the given path."""
+        pathlib.Path(path).write_text(
+            self.model_dump_json(indent=2), encoding="utf-8"
+        )
