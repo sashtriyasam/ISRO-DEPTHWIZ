@@ -183,7 +183,7 @@ export function createLayerMesh(
   const material = surfaceMaterial(layerId, elevation, false);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.userData.pickable = true;
-  if (mode === "shaded") {
+  if (mode === "textured" || mode === "shaded") {
     return { mesh, geometry, material };
   }
 
