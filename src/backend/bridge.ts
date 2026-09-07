@@ -219,7 +219,11 @@ export class BackendBridge {
   }
 
   private backendArgs(override?: string): string[] {
-    return ["--backend", override ?? this.backend];
+    const selected = override ?? this.backend;
+    if (!selected || selected === "synthetic-depth") {
+      return [];
+    }
+    return ["--backend", selected];
   }
 
   private modeArgs(override?: "metric" | "relative"): string[] {
