@@ -37,9 +37,10 @@ describe("layer mesh lifecycle", () => {
 });
 
 describe("rendering mode registry", () => {
-  it("declares shaded, wireframe, and combined modes with a shaded default", () => {
-    expect(RENDERING_MODES).toEqual(["shaded", "wireframe", "shaded-wireframe"]);
-    expect(DEFAULT_RENDERING_MODE).toBe("shaded");
+  it("declares textured, shaded, wireframe, and combined modes with a textured default", () => {
+    expect(RENDERING_MODES).toEqual(["textured", "shaded", "wireframe", "shaded-wireframe"]);
+    expect(DEFAULT_RENDERING_MODE).toBe("textured");
+    expect(isRenderingMode("textured")).toBe(true);
     expect(isRenderingMode("shaded")).toBe(true);
     expect(isRenderingMode("shaded-wireframe")).toBe(true);
     expect(isRenderingMode("raytraced")).toBe(false);
