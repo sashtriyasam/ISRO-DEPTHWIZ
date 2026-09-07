@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/
+*.exe
 .vite/
 *.tsbuildinfo
 .env
@@ -33,3 +34,6 @@ venv/
 *.pt
 *.pth
 *.safetensors
+third_party/
+deps/
+.deps/

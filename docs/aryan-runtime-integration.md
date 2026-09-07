@@ -1,19 +1,21 @@
 # Aryan Runtime Integration
 
-Generated: 2026-09-04 | Updated: 2026-09-05
+**Generated:** 2026-09-06 | **Updated:** 2026-09-06
 
-## Canonical Main State
+## Canonical Main State (as of 809801d)
 
-| Feature | Status |
-|---------|--------|
-| Python scientific engine | ✅ ON MAIN (`src/depthwizard/`) |
-| DA-V2 production backend | ✅ ON MAIN (`src/depthwizard/backends/depth_anything_v2.py`) |
-| DA-V2 runtime verification | ✅ ON MAIN (commit `6ed623e`) |
-| Aryan desktop integration | ✅ ON MAIN (merged via `feat/shivam-aryan-integration-readiness`) |
-| Runtime provisioning | ❌ NOT ON MAIN (branch `daf3482`) |
-| Runtime packaging | ❌ NOT ON MAIN (branch `31389f3`) |
-| `runtime_check.py` | ❌ NOT ON MAIN |
-| `src/depthwizard/runtime/` | ❌ NOT ON MAIN |
+| Feature                           | Status     | Location                                                                       |
+| --------------------------------- | ---------- | ------------------------------------------------------------------------------ |
+| Python scientific engine          | ✅ ON MAIN | `src/depthwizard/`                                                             |
+| DA-V2 production backend          | ✅ ON MAIN | `src/depthwizard/backends/depth_anything_v2.py`                                |
+| DA-V2 runtime verification (S16R) | ✅ ON MAIN | Commit `6ed623e` / `07bc635`                                                   |
+| Aryan desktop integration         | ✅ ON MAIN | Merged via `feat/shivam-aryan-integration-readiness`                           |
+| **Runtime provisioning (S18)**    | ✅ ON MAIN | `scripts/provision_runtime.py`, `src/depthwizard/runtime/provision.py` (PR #1) |
+| **Runtime packaging (S17)**       | ✅ ON MAIN | `scripts/runtime_check.py`, `src/depthwizard/runtime/diagnostics.py` (PR #1)   |
+| `runtime_check.py`                | ✅ ON MAIN | `scripts/runtime_check.py`                                                     |
+| `src/depthwizard/runtime/`        | ✅ ON MAIN | `diagnostics.py`, `provision.py`, `__init__.py`                                |
+| Native Electron host              | ✅ ON MAIN | `electron/main.ts`, `electron/preload.ts` (PR #2)                              |
+| Windows installer (NSIS)          | ✅ ON MAIN | `electron-builder.yml` (PR #2)                                                 |
 
 ## Canonical Runtime Contract
 
@@ -22,6 +24,7 @@ Generated: 2026-09-04 | Updated: 2026-09-05
 This application requires Python to be installed externally. No Python runtime is bundled.
 
 **Resolution priority:**
+
 1. `DEPTHWIZARD_PYTHON` env (explicit override)
 2. `python` on PATH (system Python)
 
@@ -41,10 +44,10 @@ scripts/depthwiz_service.py
 
 ### Backend Selection
 
-| Backend | Name | Availability |
-|---------|------|-------------|
-| Synthetic | `synthetic-depth` | Always available |
-| DA-V2 | `depth-anything-v2-small` | Requires `depth_anything_v2` + `torch` + checkpoint |
+| Backend   | Name                      | Availability                                        |
+| --------- | ------------------------- | --------------------------------------------------- |
+| Synthetic | `synthetic-depth`         | Always available                                    |
+| DA-V2     | `depth-anything-v2-small` | Requires `depth_anything_v2` + `torch` + checkpoint |
 
 **Policy:** Explicit DA-V2 request + unavailable → ERROR. Never silently fall back to synthetic.
 
@@ -65,13 +68,17 @@ The `available_backends` list advertises which backends are registered.
 
 ## Consumed Interface vs Canonical Implementation
 
-| Component | Owner | Aryan Consumes |
-|-----------|-------|---------------|
-| Python scientific engine | Shivam | Via service protocol |
-| DA-V2 backend | Shivam | Via service protocol |
-| Checkpoint verification | Shivam | Via service protocol |
-| Runtime provisioning | Shivam (branch only) | NOT on main |
-| `runtime_check.py` | Shivam (branch only) | NOT on main |
-| Runtime resolution | **Aryan (native host)** | Implements in `electron/main.ts` |
-| Service launch | **Aryan (native host)** | Spawns subprocess |
-| Service lifecycle | **Aryan (native host)** | Manages process |
+| Component                      | Owner                   | Aryan Consumes                   |
+| ------------------------------ | ----------------------- | -------------------------------- |
+| Python scientific engine       | Shivam                  | Via service protocol             |
+| DA-V2 backend                  | Shivam                  | Via service protocol             |
+| Checkpoint verification        | Shivam                  | Via service protocol             |
+| **Runtime provisioning (S18)** | **Shivam**              | ✅ **ON MAIN**                   |
+| **`runtime_check.py` (S17)**   | **Shivam**              | ✅ **ON MAIN**                   |
+| Runtime resolution             | **Aryan (native host)** | Implements in `electron/main.ts` |
+| Service launch                 | **Aryan (native host)** | Spawns subprocess                |
+| Service lifecycle              | **Aryan (native host)** | Manages process                  |
+
+---
+
+**Note:** This document was previously stale (claiming S17/S18 "NOT ON MAIN"). Updated to reflect actual main state at `809801d`.

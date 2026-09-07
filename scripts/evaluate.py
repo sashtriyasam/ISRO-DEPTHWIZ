@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical evaluation runner: manifest → inference → calibration → metrics.
+"""Canonical evaluation runner: manifest -> inference -> calibration -> metrics.
 
 Reads a dataset manifest (relative paths + checksums, no absolute
 developer paths), runs the canonical pipeline per sample with the

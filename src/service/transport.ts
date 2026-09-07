@@ -19,6 +19,29 @@ export interface ServiceTransport {
 
 const SERVICE_TIMEOUT_MS = 120_000;
 
+function defaultPythonExecutable(): string {
+  if (typeof process !== "undefined") {
+    if (process.env.DEPTHWIZARD_PYTHON) {
+      return process.env.DEPTHWIZARD_PYTHON;
+    }
+    if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+      const candidate = require("path").join(
+        process.env.LOCALAPPDATA,
+        "Programs",
+        "Python",
+        "Python312",
+        "python.exe"
+      );
+      try {
+        if (require("fs").existsSync(candidate)) return candidate;
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  return "python";
+}
+
 export class SubprocessServiceTransport implements ServiceTransport {
   private pythonPath: string;
   private serviceScript: string;
@@ -26,12 +49,8 @@ export class SubprocessServiceTransport implements ServiceTransport {
   private host: HostCapabilities;
 
   constructor(options: ServiceTransportOptions = {}) {
-    this.pythonPath =
-      options.pythonPath ??
-      (typeof process !== "undefined"
-        ? process.env.DEPTHWIZARD_PYTHON
-        : undefined) ??
-      "python";
+    this.pythonPath = options.pythonPath ?? defaultPythonExecutable();
+
     this.serviceScript = options.serviceScript ?? "scripts/depthwiz_service.py";
     this.timeoutMs = options.timeoutMs ?? SERVICE_TIMEOUT_MS;
     this.host = detectHost(options.host);
@@ -45,6 +64,15 @@ export class SubprocessServiceTransport implements ServiceTransport {
     payload: unknown,
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
+    if (typeof window !== "undefined" && window.depthwizard?.executeService) {
+      if (hooks.signal?.aborted) {
+        throw new OperationCancelledError();
+      }
+      return await window.depthwizard.executeService({
+        payload,
+        timeoutMs: this.timeoutMs,
+      });
+    }
     if (!this.host.processSpawning) {
       throw new Error(
         "Service transport requires a desktop host with process spawning",

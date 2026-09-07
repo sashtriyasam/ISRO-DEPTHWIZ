@@ -21,6 +21,8 @@ class CalibrationMethod(str, Enum):
     """Fitting methods actually implemented (no future-method placeholders)."""
 
     SCALE_OFFSET = "scale_offset"
+    SCALE_OFFSET_HUBER = "scale_offset_huber"
+    PIECEWISE_LINEAR = "piecewise_linear"
 
 
 _METRIC_TARGETS = frozenset(
@@ -63,6 +65,11 @@ class CalibrationSamples(BaseModel):
     )
     source_input_id: str | None = None
     source_checksum: str | None = None
+    sample_weights: tuple[float, ...] | None = Field(
+        default=None,
+        description="Per-sample weights for semantic-aware selection; "
+        "None means uniform weighting.",
+    )
 
     @model_validator(mode="after")
     def _check_structure(self) -> CalibrationSamples:
@@ -74,6 +81,13 @@ class CalibrationSamples(BaseModel):
         if self.valid_mask is not None and len(self.valid_mask) != len(self.predicted_values):
             raise ValueError(
                 f"valid_mask length ({len(self.valid_mask)}) must match "
+                f"sample count ({len(self.predicted_values)})"
+            )
+        if self.sample_weights is not None and len(self.sample_weights) != len(
+            self.predicted_values
+        ):
+            raise ValueError(
+                f"sample_weights length ({len(self.sample_weights)}) must match "
                 f"sample count ({len(self.predicted_values)})"
             )
         if self.reference_units != METRIC_UNIT:
@@ -111,7 +125,7 @@ class CalibrationResult(BaseModel):
     """Fitted affine mapping with residual evidence (no confidence claims).
 
     Residual metrics (RMSE/MAE/max/R²) are evidence of fit quality on
-    the calibration samples — not model confidence, not accuracy claims.
+    the calibration samples  not model confidence, not accuracy claims.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -135,6 +149,10 @@ class CalibrationResult(BaseModel):
     engine_version: str
     source_input_id: str | None = None
     source_checksum: str | None = None
+    piecewise_params: tuple[tuple[float, float, float], ...] | None = Field(
+        default=None,
+        description="For PIECEWISE_LINEAR: each tuple is (knot_x, scale, offset).",
+    )
 
     @property
     def engine(self) -> str:
@@ -149,12 +167,16 @@ class CalibrationResult(BaseModel):
         meaning, engine version and source linkage. ``generated_at``
         stays None so results remain deterministic.
         """
+        if self.method == CalibrationMethod.PIECEWISE_LINEAR and self.piecewise_params is not None:
+            calibration_params = tuple(v for triple in self.piecewise_params for v in triple)
+        else:
+            calibration_params = (self.scale, self.offset)
         return ProductProvenance(
             source_input_id=self.source_input_id,
             input_checksum=self.source_checksum,
             calibration_method=self.method.value,
             calibration_reference=self.reference_id,
-            calibration_params=(self.scale, self.offset),
+            calibration_params=calibration_params,
             software_version=self.engine_version,
             generated_at=None,
             units=self.reference_units,

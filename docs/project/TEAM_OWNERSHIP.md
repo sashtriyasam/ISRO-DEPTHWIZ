@@ -56,21 +56,9 @@ the product path (see `RESEARCH_VS_PRODUCT.md`).
 
 Primary tracks: `3d`, `desktop`.
 
-## Shared (all three)
+## Release Control & Governance (Single-Owner Handoff)
 
-- Integration contracts (`docs/project/INTEGRATION_CONTRACT.md`)
-- Runtime validation, release readiness
-- Cross-cutting documentation
-
-## Integration relationship
-
-```text
-Python scientific backend (Shivam)
-  ↔ canonical integration adapter — transparent pass-through (Shivam)
-  ↔ transport / service boundary (Shivam)
-  ↔ desktop frontend (Aryan)
-ML backend plugs in behind DepthBackend (Shravan)
-```
+All remaining execution, integration, verification, physical witness, code signing, and release authorization activities are centralized explicitly under **Shivam**. Historical contributions of teammates (Shravan, Aryan) are acknowledged, but no future tasks will be assigned to external owners.
 
 ## Rules
 
@@ -78,5 +66,6 @@ ML backend plugs in behind DepthBackend (Shravan)
 2. No silent semantic changes in the adapter (no recalibration,
    resampling, reprojection, remeshing, unit changes).
 3. No automatic merging of a teammate's branch; review before merge.
-4. Final merge authority: Shivam. Disputed semantics default to the
-   stricter (relative-only, no metric claim) interpretation.
+4. Final merge authority and release authority: Shivam.
+5. All remaining release tasks carry `Owner: Shivam`.
+

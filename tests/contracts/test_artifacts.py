@@ -67,6 +67,7 @@ def test_enums_are_stable() -> None:
     }
     assert {m.value for m in PipelineState} == {
         "input_validated",
+        "solar_shadow_analysis",
         "preprocessing",
         "inference_running",
         "calibrating",

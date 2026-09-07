@@ -61,7 +61,7 @@ export interface BridgeResult {
   warnings: string[];
 }
 
-const BRIDGE_TIMEOUT_MS = 30_000;
+const BRIDGE_TIMEOUT_MS = 120_000;
 
 function validateTransportShape(data: unknown): BackendDepthResult {
   if (typeof data !== "object" || data === null) {
@@ -169,6 +169,29 @@ export class OperationCancelledError extends Error {
   }
 }
 
+function defaultPythonExecutable(): string {
+  if (typeof process !== "undefined") {
+    if (process.env.DEPTHWIZARD_PYTHON) {
+      return process.env.DEPTHWIZARD_PYTHON;
+    }
+    if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+      const candidate = require("path").join(
+        process.env.LOCALAPPDATA,
+        "Programs",
+        "Python",
+        "Python312",
+        "python.exe"
+      );
+      try {
+        if (require("fs").existsSync(candidate)) return candidate;
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  return "python";
+}
+
 export class BackendBridge {
   private pythonPath: string;
   private bridgeScript: string;
@@ -178,12 +201,8 @@ export class BackendBridge {
   private mode: "metric" | "relative";
 
   constructor(options: BackendBridgeOptions = {}) {
-    this.pythonPath =
-      options.pythonPath ??
-      (typeof process !== "undefined"
-        ? process.env.DEPTHWIZARD_PYTHON
-        : undefined) ??
-      "python";
+    this.pythonPath = options.pythonPath ?? defaultPythonExecutable();
+
     this.bridgeScript = options.bridgeScript ?? "scripts/backend_bridge.py";
     this.timeoutMs = options.timeoutMs ?? BRIDGE_TIMEOUT_MS;
     this.host = detectHost(options.host);
@@ -200,7 +219,11 @@ export class BackendBridge {
   }
 
   private backendArgs(override?: string): string[] {
-    return ["--backend", override ?? this.backend];
+    const selected = override ?? this.backend;
+    if (!selected || selected === "synthetic-depth") {
+      return [];
+    }
+    return ["--backend", selected];
   }
 
   private modeArgs(override?: "metric" | "relative"): string[] {
@@ -503,6 +526,21 @@ export class BackendBridge {
     bytes: Uint8Array,
     filename: string,
   ): Promise<StagedInput> {
+    if (typeof window !== "undefined" && window.depthwizard?.stageInputBytes) {
+      const res = await window.depthwizard.stageInputBytes({ bytes, filename });
+      if ("error" in res) {
+        throw new Error(res.error);
+      }
+      const stagedPath = res.path;
+      return {
+        path: stagedPath,
+        cleanup: async () => {
+          if (window.depthwizard?.cleanupStagedInput) {
+            await window.depthwizard.cleanupStagedInput({ stagedPath });
+          }
+        },
+      };
+    }
     if (!this.host.localFilesystem) {
       throw new Error(
         "File staging requires a host filesystem; browser-only contexts cannot stage input files",
@@ -608,6 +646,31 @@ export class BackendBridge {
     args: string[],
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
+    if (typeof window !== "undefined" && window.depthwizard?.executeService) {
+      if (hooks.signal?.aborted) {
+        throw new OperationCancelledError();
+      }
+      const unsub = hooks.onStage
+        ? window.depthwizard.onStageUpdate?.((stage) => hooks.onStage?.(stage))
+        : undefined;
+      try {
+        const result = await window.depthwizard.executeService({
+          payload: { bridgeArgs: args },
+          timeoutMs: this.timeoutMs,
+        });
+        if (
+          typeof result === "object" &&
+          result !== null &&
+          "error" in result &&
+          typeof (result as { error: unknown }).error === "string"
+        ) {
+          throw new Error((result as { error: string }).error);
+        }
+        return result;
+      } finally {
+        unsub?.();
+      }
+    }
     const { spawn } = await import("child_process");
 
     return new Promise((resolve, reject) => {

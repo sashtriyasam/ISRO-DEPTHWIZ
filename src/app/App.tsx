@@ -35,7 +35,9 @@ import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
 import { ArtifactLoader } from "../artifact";
 import type { ArtifactSource } from "../artifact/types";
 import { runProcessingOperation, type ProcessingState } from "../processing";
+import { STAGE_LABELS, isProcessingStage } from "../processing/types";
 import { SessionStatus } from "../components/SessionStatus/SessionStatus";
+import { IsroLoader } from "../components/IsroLoader/IsroLoader";
 import {
   deriveSessionModified,
   deriveSessionPhase,
@@ -116,6 +118,28 @@ export function App() {
     viewerRef.current?.clearMeasurementGraphics();
     setProfileState({ status: "empty" });
     viewerRef.current?.clearProfileGraphics();
+  }, []);
+
+  // ── IPC stage relay: Electron main process pushes STAGE lines in real time ──
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.depthwizard?.onStageUpdate) {
+      return;
+    }
+    const unsub = window.depthwizard.onStageUpdate((rawStage: string) => {
+      if (isProcessingStage(rawStage)) {
+        setProcessing((prev) => {
+          if (prev.status !== "running") return prev;
+          return {
+            ...prev,
+            stage: rawStage,
+            completedStages: prev.completedStages.includes(rawStage)
+              ? prev.completedStages
+              : [...prev.completedStages, rawStage],
+          };
+        });
+      }
+    });
+    return unsub;
   }, []);
 
   const startOperation = useCallback(
@@ -721,36 +745,47 @@ export function App() {
       <AppShell
         header={<Header />}
         viewport={
-          artifact && layerState ? (
-            <Viewer
-              ref={viewerRef}
-              scene={artifact}
-              layerId={activeLayerId}
-              verticalScale={exaggeration}
-              interactionMode={interactionMode}
-              onCameraReady={handleCameraReady}
-              onPointSelected={handlePointSelected}
-              onMeasurementPointSelected={handleMeasurementPointSelected}
-              onProfilePointSelected={handleProfilePointSelected}
-            />
-          ) : (
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              {artifactState === "loading"
-                ? "Generating terrain…"
-                : artifactState === "error"
-                  ? "Terrain generation failed — select an input to try again"
-                  : "Select an input file or the development fixture to begin"}
-            </div>
-          )
+          <div style={{ position: "relative", width: "100%", height: "100%" }}>
+            {/* ISRO loader overlays whatever is currently in the viewport */}
+            {processing.status === "running" && (
+              <IsroLoader
+                stageText={STAGE_LABELS[processing.stage]}
+                sourceLabel={processing.sourceLabel}
+                stage={processing.stage}
+                completedStages={processing.completedStages}
+              />
+            )}
+            {artifact && layerState ? (
+              <Viewer
+                ref={viewerRef}
+                scene={artifact}
+                layerId={activeLayerId}
+                verticalScale={exaggeration}
+                interactionMode={interactionMode}
+                onCameraReady={handleCameraReady}
+                onPointSelected={handlePointSelected}
+                onMeasurementPointSelected={handleMeasurementPointSelected}
+                onProfilePointSelected={handleProfilePointSelected}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {artifactState === "loading"
+                  ? "Generating terrain…"
+                  : artifactState === "error"
+                    ? "Terrain generation failed — select an input to try again"
+                    : "Select an input file or the development fixture to begin"}
+              </div>
+            )}
+          </div>
         }
         panel={
           <SidePanel>

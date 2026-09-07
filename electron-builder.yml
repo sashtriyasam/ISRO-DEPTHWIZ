@@ -9,7 +9,9 @@ directories:
 files:
   - dist/**
   - electron/main.js
+  - electron/main.cjs
   - electron/preload.js
+  - electron/preload.cjs
   - "!node_modules/**/*"
 
 extraResources:
@@ -18,6 +20,10 @@ extraResources:
     filter:
       - "depthwiz_service.py"
       - "backend_bridge.py"
+      - "setup_backend.bat"
+      - "requirements.txt"
+  - from: src/depthwizard/
+    to: src/depthwizard/
 
 win:
   target:

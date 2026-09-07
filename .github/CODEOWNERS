@@ -1,0 +1,44 @@
+# DepthWizard CODEOWNERS — SIH 26175
+#
+# Ownership is locked per AGENTS.md. Never assign ownership by convenience.
+# Shivam holds final merge authority.
+
+# Default: Shivam owns everything (architecture, Python core, geospatial,
+# calibration, DSM, pipeline, integration, release, scientific acceptance).
+* @sashtriyasam
+
+# Desktop app (React/TS/Three.js), rendering, navigation, measurement, UX,
+# packaging, native host, installer.
+src/app/ @sashtriyasam
+src/components/ @sashtriyasam
+src/camera/ @sashtriyasam
+src/flythrough/ @sashtriyasam
+src/viewer/ @sashtriyasam
+src/layers/ @sashtriyasam
+src/display/ @sashtriyasam
+src/measurement/ @sashtriyasam
+src/session/ @sashtriyasam
+src/processing/ @sashtriyasam
+src/profile/ @sashtriyasam
+src/metadata/ @sashtriyasam
+src/host/ @sashtriyasam
+src/input/ @sashtriyasam
+src/artifact/ @sashtriyasam
+src/inspection/ @sashtriyasam
+electron/ @sashtriyasam
+
+# ML, datasets, depth models, experiments, benchmarks (Shravan track).
+# ML output is relative geometry only (metric=false). Routed to Shivam
+# as sole code owner until Shravan's GitHub handle is registered.
+/tests/evaluation/ @sashtriyasam
+/docs/dav2-level3-evidence.md @sashtriyasam
+/docs/evaluation-protocol.md @sashtriyasam
+/docs/gamus-* @sashtriyasam
+
+# Release governance (Shivam).
+.github/ @sashtriyasam
+electron-builder.yml @sashtriyasam
+docs/final-release-*.md @sashtriyasam
+docs/windows-*.md @sashtriyasam
+docs/sih-compliance-matrix.md @sashtriyasam
+docs/project/final-* @sashtriyasam
