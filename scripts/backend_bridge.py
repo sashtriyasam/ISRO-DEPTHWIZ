@@ -100,6 +100,7 @@ except ImportError as exc:
 
 SYNTHETIC_BACKEND_NAME = "synthetic-depth"
 DAV2_BACKEND_NAME = "depth-anything-v2-small"
+M17_BACKEND_NAME = "m17-geonrw-struct"
 
 DEV_REFERENCE_ID = "synthetic-dev-ref"
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
@@ -135,8 +136,27 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 f"backend {name!r} unavailable: {exc}. "
                 "Set DW_DAV2_CKPT to an external checkpoint; weights are never committed."
             ) from exc
+    if name == M17_BACKEND_NAME:
+        try:
+            from depthwizard.backends.m17 import M17DepthBackend
+        except ImportError as exc:
+            raise RuntimeError(
+                f"backend {name!r} unavailable: M17 backend not importable ({exc})."
+            ) from exc
+        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        try:
+            return M17DepthBackend(
+                checkpoint=os.environ.get("DW_M17_CKPT"),
+                device=backend_device,  # type: ignore[arg-type]
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"backend {name!r} unavailable: {exc}. "
+                "Set DW_M17_CKPT or place m17_geonrw_struct_best.pt under "
+                "checkpoints/ (git-ignored). Weights are never committed."
+            ) from exc
     raise ValueError(
-        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME})"
+        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {M17_BACKEND_NAME})"
     )
 
 

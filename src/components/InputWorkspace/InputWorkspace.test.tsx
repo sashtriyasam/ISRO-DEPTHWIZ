@@ -168,6 +168,39 @@ describe("InputWorkspace", () => {
     expect(source.backendLabel).toBe("Backend model (depth-anything-v2-small)");
   });
 
+  it("lists the M17 adapted backend when the service registers it", async () => {
+    const stubClient = {
+      capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+        contract_version: "1",
+        supported_input_formats: [".png"],
+        supported_target_semantics: ["absolute_elevation_dsm"],
+        available_backends: ["synthetic-depth", "m17-geonrw-struct"],
+        mesh_supported: true,
+        geotiff_supported: false,
+      }),
+    } as unknown as LocalServiceClient;
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={stubClient}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />
+    );
+    await waitForSupported(container);
+    const select = screen.getByRole("combobox", { name: "Inference backend" });
+    expect(select).toHaveValue("m17-geonrw-struct");
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    expect(onGenerate).toHaveBeenCalledOnce();
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.backendLabel).toBe("Backend model (m17-geonrw-struct)");
+  });
+
   it("lets the user switch back to the synthetic backend explicitly", async () => {
     const stubClient = {
       capabilities: async (): Promise<ServiceCapabilitiesWire> => ({

@@ -33,6 +33,8 @@ extraResources:
     to: third_party/Depth-Anything-V2
   - from: checkpoints/depth_anything_v2_vits.pth
     to: checkpoints/depth_anything_v2_vits.pth
+  - from: checkpoints/m17_geonrw_struct_best.pt
+    to: checkpoints/m17_geonrw_struct_best.pt
 
 win:
   target:

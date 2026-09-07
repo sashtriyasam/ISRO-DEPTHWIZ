@@ -12,12 +12,14 @@ Provenance fields are separated:
   in the semantic-meaning record (the canonical provenance contract is
   unchanged — no new fields).
 
-The M17 head implementation is NOT vendored here.  With an injected
-``model_factory`` (tests, deterministic fakes) the backend runs the
-frozen M17 preprocessing path end to end.  Without a factory, the real
-path requires torch, the pinned upstream source, the M17 head code and
-the ``best.pt`` checkpoint; anything missing raises loudly — never a
-silent fallback, never synthetic substitution.
+The M17 head implementation lives in :mod:`depthwizard.backends.m17_head`
+(inference only — forward pass ported from the M17 research branch; no
+training code).  With an injected ``model_factory`` (tests,
+deterministic fakes) the backend runs the frozen M17 preprocessing path
+end to end.  Without a factory, the real path requires torch, the pinned
+upstream source, and the SHA-verified ``best.pt`` checkpoint; anything
+missing raises loudly — never a silent fallback, never synthetic
+substitution.
 
 Output semantics: monocular RELATIVE geometric representation
 (scale-ambiguous), following the source image grid.  ``is_metric`` is
@@ -124,6 +126,7 @@ class M17DepthBackend:
         self._seed = int(seed)
         self._factory = model_factory
         self._model: Any = None
+        self._real: Any = None
 
     @property
     def model_name(self) -> str:
@@ -165,7 +168,7 @@ class M17DepthBackend:
 
     def load(self) -> None:
         """Load checkpoint into memory (idempotent). Raises if missing/unusable."""
-        if self._model is not None:
+        if self._model is not None or self._real is not None:
             return
         if not self._checkpoint.is_file():
             raise ModelInferenceError(
@@ -177,11 +180,52 @@ class M17DepthBackend:
         if self._factory is not None:
             self._model = self._factory()
             return
-        raise ModelInferenceError(
-            "M17 head implementation is not available in this checkout. "
-            "The M17 23k Pearson-adapted head is research code outside the "
-            "open production repository. Inject a factory to test."
+        self._real = self._load_real()
+
+    def _load_real(self) -> dict[str, Any]:
+        """Build the real inference pipeline (frozen backbone + M17 head).
+
+        Verifies the checkpoint SHA-256 before loading weights. Anything
+        missing (torch, upstream source, architecture mismatch) raises
+        loudly — never a silent fallback.
+        """
+        from depthwizard.backends.m17_head import (
+            build_head,
+            count_head_parameters,
+            freeze_module,
         )
+        from depthwizard.runtime.diagnostics import sha256_file
+
+        actual = sha256_file(self._checkpoint)
+        if actual.lower() != CHECKPOINT_SHA256.lower():
+            raise ModelInferenceError(
+                f"M17 checkpoint hash mismatch: got {actual}, "
+                f"expected {CHECKPOINT_SHA256}. Refusing to load."
+            )
+        torch = self._require_torch()
+        from depthwizard.backends.depth_anything_v2 import DepthAnythingV2Backend
+
+        dav2 = DepthAnythingV2Backend(checkpoint=None, device=self._device, seed=self._seed)
+        dav2.load()
+        backbone = dav2.torch_module
+        freeze_module(backbone)
+        head = build_head()
+        payload = torch.load(str(self._checkpoint), map_location="cpu", weights_only=False)
+        try:
+            head.load_state_dict(payload["head_state"], strict=True)
+        except Exception as e:
+            raise ModelInferenceError(
+                f"M17 head weights incompatible with head architecture: {e}"
+            ) from e
+        freeze_module(head)
+        if count_head_parameters(head) != 23201:
+            raise ModelInferenceError("M17 head parameter count mismatch (expected 23201)")
+        try:
+            head.to(next(backbone.parameters()).device)
+        except StopIteration:
+            pass
+        torch.manual_seed(self._seed)
+        return {"backend": dav2, "backbone": backbone, "head": head}
 
     def estimate_depth(self, inspection: InputInspection) -> DepthResult:
         """Run frozen M17 inference on a validated input inspection.
@@ -214,19 +258,34 @@ class M17DepthBackend:
         if image_rgb.dtype != np.uint8:
             raise InvalidInputError(f"Expected uint8 RGB, got dtype {image_rgb.dtype}")
 
-        if self._model is None:
+        if self._model is None and self._real is None:
             self.load()
 
-        # Frozen M17 preprocessing: first-3 channels, ImageNet normalize,
-        # frozen M10 zscore — NumPy only, deterministic.
-        image_f = image_rgb.astype(np.float64) / 255.0
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float64)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float64)
-        normalized = (image_f - mean) / std
-        features = (normalized.mean(axis=2) - M10_ZMU) / M10_ZSIGMA
-
         t0 = time.perf_counter()
-        depth = self._model.infer_image(features, self._input_size)
+        if self._real is not None:
+            # Real path: RGB through the frozen backbone + M17 head
+            # (nDSM-scale meters via the frozen M10 z-score inverse).
+            from depthwizard.backends.m17_head import predict_meters
+
+            real = self._real
+            depth = predict_meters(
+                real["backbone"],
+                real["head"],
+                image_rgb,
+                out_hw=(h, w),
+                mu=M10_ZMU,
+                sigma=M10_ZSIGMA,
+                input_size=self._input_size,
+            )
+        else:
+            # Factory path (tests, deterministic fakes): frozen NumPy
+            # preprocessing, model behind the injected factory. Unchanged.
+            image_f = image_rgb.astype(np.float64) / 255.0
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float64)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float64)
+            normalized = (image_f - mean) / std
+            features = (normalized.mean(axis=2) - M10_ZMU) / M10_ZSIGMA
+            depth = self._model.infer_image(features, self._input_size)
         _ = time.perf_counter() - t0
 
         depth = np.asarray(depth, dtype=np.float64)
@@ -273,8 +332,9 @@ class M17DepthBackend:
         )
 
     def close(self) -> None:
-        """Release model reference (does not guarantee GPU memory reclaim)."""
+        """Release model references (does not guarantee GPU memory reclaim)."""
         self._model = None
+        self._real = None
 
     def config_dict(self) -> dict[str, Any]:
         """Structured metadata for service capability reporting."""

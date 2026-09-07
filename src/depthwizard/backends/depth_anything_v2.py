@@ -179,6 +179,20 @@ class DepthAnythingV2Backend:
     def checkpoint_id(self) -> str | None:
         return f"{CHECKPOINT_HF_ID}:{CHECKPOINT_FILE}"
 
+    @property
+    def torch_module(self) -> Any:
+        """Loaded upstream torch module (read-only feature source).
+
+        Added for the M17 adapted head, which taps frozen backbone
+        features via a forward hook. Raises until :meth:`load` succeeds;
+        callers must never mutate parameters or training state.
+        """
+        if self._model is None:
+            raise ModelInferenceError(
+                "Backbone torch module requested before load() succeeded."
+            )
+        return self._model
+
     def _require_torch(self) -> Any:
         try:
             import torch

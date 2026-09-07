@@ -79,6 +79,10 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
+echo NOTE: the M17 adapted model weights ship inside the installer
+echo (no download needed); this script only provides the PyTorch stack
+echo they run on.
+echo.
 echo ========================================================
 echo  Setup complete! DepthWizard backend is ready.
 echo ========================================================
