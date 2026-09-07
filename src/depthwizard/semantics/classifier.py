@@ -112,7 +112,7 @@ class RuleBasedTerrainClassifier:
 
 def _sobel_horizontal(gray: np.ndarray) -> np.ndarray:
     padded = np.pad(gray, 1, mode="edge")
-    return (
+    res = (
         -padded[:-2, :-2]
         - 2.0 * padded[:-2, 1:-1]
         - padded[:-2, 2:]
@@ -120,11 +120,12 @@ def _sobel_horizontal(gray: np.ndarray) -> np.ndarray:
         + 2.0 * padded[2:, 1:-1]
         + padded[2:, 2:]
     ) / 8.0
+    return np.asarray(res, dtype=np.float64)
 
 
 def _sobel_vertical(gray: np.ndarray) -> np.ndarray:
     padded = np.pad(gray, 1, mode="edge")
-    return (
+    res = (
         -padded[:-2, :-2]
         - 2.0 * padded[1:-1, :-2]
         - padded[2:, :-2]
@@ -132,6 +133,7 @@ def _sobel_vertical(gray: np.ndarray) -> np.ndarray:
         + 2.0 * padded[1:-1, 2:]
         + padded[2:, 2:]
     ) / 8.0
+    return np.asarray(res, dtype=np.float64)
 
 
 def _conv2d(arr: np.ndarray, kernel: np.ndarray) -> np.ndarray:
@@ -153,7 +155,7 @@ def _local_mean(arr: np.ndarray, k: int) -> np.ndarray:
 def _local_variance(arr: np.ndarray, k: int) -> np.ndarray:
     mean = _local_mean(arr, k)
     mean_sq = _local_mean(arr * arr, k)
-    return np.maximum(mean_sq - mean * mean, 0.0)
+    return np.asarray(np.maximum(mean_sq - mean * mean, 0.0), dtype=np.float64)
 
 
 class SemanticMask(BaseModel):
