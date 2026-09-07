@@ -486,7 +486,14 @@ def main() -> None:
             target_value = positional[2] if len(positional) > 2 else None
             if not backend_specified:
                 from depthwizard.runtime.diagnostics import availability_report
-                if bool(availability_report().get("dav2_ready")):
+
+                report = availability_report()
+                checkpoint = report.get("checkpoint")
+                if (
+                    bool(report.get("dav2_ready"))
+                    and isinstance(checkpoint, dict)
+                    and bool(checkpoint.get("sha_match"))
+                ):
                     backend_name = DAV2_BACKEND_NAME
             if mode == "relative":
                 runner = run_relative_on_path(

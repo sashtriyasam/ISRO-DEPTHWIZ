@@ -161,7 +161,7 @@ def _local_variance(arr: np.ndarray, k: int) -> np.ndarray:
 class SemanticMask(BaseModel):
     """Semantic classification result for one image."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     class_map: np.ndarray = Field(description="HxW int16 array of LandCoverClass values.")
     class_probabilities: tuple[tuple[float, ...], ...] | None = Field(

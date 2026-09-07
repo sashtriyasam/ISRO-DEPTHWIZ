@@ -26,7 +26,7 @@ class SemanticPreprocessor:
         classifier: TerrainClassifier | None = None,
         refiner: SAMRefiner | None = None,
     ) -> None:
-        self.classifier = classifier or RuleBasedTerrainClassifier()
+        self.classifier = classifier if classifier is not None else RuleBasedTerrainClassifier()
         self.refiner = refiner
 
     @property
