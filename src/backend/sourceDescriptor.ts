@@ -61,6 +61,40 @@ export function isBackendRegistered(
   return capabilities.available_backends.includes(backendId);
 }
 
+export function hasRealBackend(
+  capabilities: ServiceCapabilitiesWire | null
+): boolean {
+  if (!capabilities) {
+    return false;
+  }
+  return capabilities.available_backends.some((id) => id !== SYNTHETIC_BACKEND_ID);
+}
+
+/**
+ * Smart default for the inference backend selector: prefer the first
+ * registered real (non-synthetic) backend so genuine imagery is processed
+ * by genuine inference whenever the service offers it. Falls back to the
+ * first registered backend, then to synthetic-depth when the service
+ * reports nothing (preserving the historical default).
+ */
+export function defaultBackendForCapabilities(
+  capabilities: ServiceCapabilitiesWire | null
+): string {
+  const available = capabilities?.available_backends ?? [];
+  return (
+    available.find((id) => id !== SYNTHETIC_BACKEND_ID) ??
+    available[0] ??
+    SYNTHETIC_BACKEND_ID
+  );
+}
+
+export function backendDisplayLabel(backendId: string): string {
+  if (backendId === SYNTHETIC_BACKEND_ID) {
+    return "Synthetic Development Backend (demo pattern — ignores image content)";
+  }
+  return `Backend model (${backendId})`;
+}
+
 export async function probeBackendAvailability(
   client?: LocalServiceClient
 ): Promise<{ capabilities: ServiceCapabilitiesWire | null; availability: BackendAvailability }> {

@@ -98,12 +98,89 @@ describe("InputWorkspace", () => {
     expect(source.backendLabel).toBe("Synthetic Development Backend");
   });
 
-  it("shows the registered backend identity without a dropdown", async () => {
+  it("shows a backend selector defaulting to the synthetic backend", async () => {
     const { container } = render(
       <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
     );
     await waitForSupported(container);
     expect(container.textContent).toContain("Backend: Synthetic Development Backend");
+    const select = screen.getByRole("combobox", { name: "Inference backend" });
+    expect(select).toHaveValue("synthetic-depth");
+  });
+
+  it("auto-selects a registered real backend and passes it through on generate", async () => {
+    const stubClient = {
+      capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+        contract_version: "1",
+        supported_input_formats: [".png"],
+        supported_target_semantics: ["absolute_elevation_dsm"],
+        available_backends: ["synthetic-depth", "depth-anything-v2-small"],
+        mesh_supported: true,
+        geotiff_supported: false,
+      }),
+    } as unknown as LocalServiceClient;
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={stubClient}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />
+    );
+    await waitForSupported(container);
+    const select = screen.getByRole("combobox", { name: "Inference backend" });
+    expect(select).toHaveValue("depth-anything-v2-small");
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    expect(onGenerate).toHaveBeenCalledOnce();
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.backendLabel).toBe("Backend model (depth-anything-v2-small)");
+  });
+
+  it("lets the user switch back to the synthetic backend explicitly", async () => {
+    const stubClient = {
+      capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+        contract_version: "1",
+        supported_input_formats: [".png"],
+        supported_target_semantics: ["absolute_elevation_dsm"],
+        available_backends: ["synthetic-depth", "depth-anything-v2-small"],
+        mesh_supported: true,
+        geotiff_supported: false,
+      }),
+    } as unknown as LocalServiceClient;
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={stubClient}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />
+    );
+    await waitForSupported(container);
+    const select = screen.getByRole("combobox", { name: "Inference backend" });
+    fireEvent.change(select, { target: { value: "synthetic-depth" } });
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    expect(onGenerate).toHaveBeenCalledOnce();
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.backendLabel).toBe("Synthetic Development Backend");
+  });
+
+  it("explains synthetic-only operation with provisioning guidance", async () => {
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+    );
+    await waitForSupported(container);
+    expect(container.textContent).toContain("Only the synthetic demo backend is available");
+    expect(container.textContent).toContain("DW_DAV2_CKPT");
   });
 
   it("states the desktop host honestly without claiming production", async () => {
@@ -132,13 +209,13 @@ describe("InputWorkspace", () => {
     expect(source.targetSemantics).toBe("height_agl_ndsm");
   });
 
-  it("blocks generation with an explicit state when the backend is unregistered", async () => {
+  it("blocks generation with an explicit state when no backend is registered", async () => {
     const stubClient = {
       capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
         contract_version: "1",
         supported_input_formats: [".png"],
         supported_target_semantics: ["absolute_elevation_dsm"],
-        available_backends: ["retired-model"],
+        available_backends: [],
         mesh_supported: true,
         geotiff_supported: false,
       }),
@@ -163,6 +240,40 @@ describe("InputWorkspace", () => {
     expect(generate).toBeDisabled();
     fireEvent.click(generate);
     expect(onGenerate).not.toHaveBeenCalled();
+  });
+
+  it("offers an explicitly registered backend instead of blocking it", async () => {
+    const stubClient = {
+      capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+        contract_version: "1",
+        supported_input_formats: [".png"],
+        supported_target_semantics: ["absolute_elevation_dsm"],
+        available_backends: ["retired-model"],
+        mesh_supported: true,
+        geotiff_supported: false,
+      }),
+    } as unknown as LocalServiceClient;
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={stubClient}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />
+    );
+    await waitFor(() => expect(container.textContent).toContain("Supported:"), SLOW);
+    const select = screen.getByRole("combobox", { name: "Inference backend" });
+    expect(select).toHaveValue("retired-model");
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    expect(screen.queryByText(/Backend unavailable/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    expect(onGenerate).toHaveBeenCalledOnce();
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.backendLabel).toBe("Backend model (retired-model)");
   });
 
   it("disables generation while processing runs", async () => {

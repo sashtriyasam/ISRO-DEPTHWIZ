@@ -15,7 +15,11 @@ import {
   ApplicationBackendSource,
   DEFAULT_TARGET_SEMANTICS,
 } from "../../input/applicationSource";
-import { SYNTHETIC_BACKEND_ID, isBackendRegistered } from "../../backend/sourceDescriptor";
+import {
+  backendDisplayLabel,
+  defaultBackendForCapabilities,
+  hasRealBackend,
+} from "../../backend/sourceDescriptor";
 import type { MetricTargetSemantics, ServiceCapabilitiesWire } from "../../service/wireTypes";
 import type {
   ClientFile,
@@ -82,6 +86,9 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
   const [inputState, setInputState] = useState<InputState>({ status: "empty" });
   const [targetSemantics, setTargetSemantics] =
     useState<MetricTargetSemantics>(DEFAULT_TARGET_SEMANTICS);
+  // Explicit user override for the inference backend; null means "auto"
+  // (prefer a registered real model, fall back to synthetic-depth).
+  const [backendChoice, setBackendChoice] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const validationRef = useRef<AbortController | null>(null);
   const stagedRef = useRef<(() => Promise<void>) | null>(null);
@@ -93,14 +100,15 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     (t): t is MetricTargetSemantics =>
       t === "absolute_elevation_dsm" || t === "height_agl_ndsm"
   );
-  const backendRegistered = isBackendRegistered(capabilities);
+  const availableBackends = useMemo(
+    () => capabilities?.available_backends ?? [],
+    [capabilities],
+  );
+  const effectiveBackend = backendChoice ?? defaultBackendForCapabilities(capabilities);
   const backendIdentity =
     capabilities === null
       ? null
-      : capabilities.available_backends.length === 1 &&
-          capabilities.available_backends[0] === SYNTHETIC_BACKEND_ID
-        ? "Synthetic Development Backend"
-        : `Backends: ${capabilities.available_backends.join(", ") || "none reported"}`;
+      : `Backend: ${backendDisplayLabel(effectiveBackend)}`;
 
   const loadCapabilities = useCallback(async () => {
     setCapabilitiesError(null);
@@ -241,7 +249,11 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     }
   }, [releaseStaged, processingRunning]);
 
-  const backendUnavailable = capabilities !== null && !backendRegistered;
+  // Generation is blocked only when the service reports no usable backend
+  // at all. The effective (selected or auto-resolved) backend must be one
+  // the service actually registered — never silently substituted.
+  const backendUnavailable =
+    capabilities !== null && !availableBackends.includes(effectiveBackend);
 
   const handleGenerate = useCallback(() => {
     if (inputState.status !== "validated" || processingRunning || backendUnavailable) {
@@ -252,12 +264,13 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
         stagedPath: inputState.stagedPath,
         metadata: inputState.metadata,
         targetSemantics,
+        backend: effectiveBackend,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, effectiveBackend]);
 
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
@@ -325,7 +338,42 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       )}
 
       {backendIdentity && (
-        <div style={mutedStyle}>Backend: {backendIdentity}</div>
+        <div style={mutedStyle}>{backendIdentity}</div>
+      )}
+
+      {capabilities !== null && availableBackends.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+          <label
+            htmlFor="inference-backend-select"
+            style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}
+          >
+            Inference backend
+          </label>
+          <select
+            id="inference-backend-select"
+            aria-label="Inference backend"
+            value={effectiveBackend}
+            onChange={(e) => setBackendChoice(e.target.value)}
+            disabled={processingRunning}
+            style={{ fontSize: "var(--font-size-xs)" }}
+          >
+            {availableBackends.map((backendId) => (
+              <option key={backendId} value={backendId}>
+                {backendDisplayLabel(backendId)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {capabilities !== null && !hasRealBackend(capabilities) && (
+        <div style={mutedStyle}>
+          Only the synthetic demo backend is available, so results use a fixed test
+          pattern and ignore image content. For real inference: install Python 3.10+,
+          torch, the depth-anything-v2 package and depthwizard[dav2], then place
+          depth_anything_v2_vits.pth in the app checkpoints folder (or set
+          DW_DAV2_CKPT) and reopen this workspace.
+        </div>
       )}
 
       <div style={mutedStyle}>Host: {hostLabel(detectedHost)}</div>
@@ -389,7 +437,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
           )}
           {backendUnavailable && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }} role="alert">
-              <div style={errorStyle}>Backend unavailable: synthetic backend is not registered.</div>
+              <div style={errorStyle}>Backend unavailable: the service reported no usable backends.</div>
               <div style={mutedStyle}>Check the backend installation. Synthetic output will not be substituted.</div>
             </div>
           )}

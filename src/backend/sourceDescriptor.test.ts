@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { LocalServiceClient } from "../service/client";
 import {
   SYNTHETIC_BACKEND_ID,
+  backendDisplayLabel,
+  defaultBackendForCapabilities,
   describeBackendSource,
+  hasRealBackend,
   isBackendRegistered,
   kindForBackendName,
   probeBackendAvailability,
@@ -37,6 +40,34 @@ describe("backend identity", () => {
     expect(isBackendRegistered(capabilitiesWith(["other-model"]))).toBe(false);
     expect(isBackendRegistered(capabilitiesWith([]))).toBe(false);
     expect(isBackendRegistered(null)).toBe(false);
+  });
+
+  it("detects whether a real backend is registered", () => {
+    expect(hasRealBackend(capabilitiesWith(["synthetic-depth"]))).toBe(false);
+    expect(hasRealBackend(capabilitiesWith(["synthetic-depth", "depth-anything-v2-small"]))).toBe(true);
+    expect(hasRealBackend(capabilitiesWith([]))).toBe(false);
+    expect(hasRealBackend(null)).toBe(false);
+  });
+
+  it("prefers a registered real backend as the selector default", () => {
+    expect(defaultBackendForCapabilities(capabilitiesWith(["synthetic-depth"]))).toBe(
+      "synthetic-depth"
+    );
+    expect(
+      defaultBackendForCapabilities(
+        capabilitiesWith(["synthetic-depth", "depth-anything-v2-small"])
+      )
+    ).toBe("depth-anything-v2-small");
+    expect(defaultBackendForCapabilities(capabilitiesWith(["only-model"]))).toBe("only-model");
+    expect(defaultBackendForCapabilities(capabilitiesWith([]))).toBe("synthetic-depth");
+    expect(defaultBackendForCapabilities(null)).toBe("synthetic-depth");
+  });
+
+  it("labels backends honestly for the selector", () => {
+    expect(backendDisplayLabel("synthetic-depth")).toContain("Synthetic Development Backend");
+    expect(backendDisplayLabel("depth-anything-v2-small")).toBe(
+      "Backend model (depth-anything-v2-small)"
+    );
   });
 });
 

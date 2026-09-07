@@ -38,6 +38,9 @@ export {
   kindForBackendName,
   describeBackendSource,
   isBackendRegistered,
+  hasRealBackend,
+  defaultBackendForCapabilities,
+  backendDisplayLabel,
   probeBackendAvailability,
 } from "./sourceDescriptor";
 export type {
