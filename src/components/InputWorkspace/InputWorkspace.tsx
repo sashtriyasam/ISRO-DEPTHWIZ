@@ -248,16 +248,26 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       return;
     }
     if (inputState.stagedPath) {
+      let selectedBackend: string | undefined = undefined;
+      if (capabilities && capabilities.available_backends.length > 0) {
+        if (capabilities.available_backends.includes("depth-anything-v2-small")) {
+          selectedBackend = "depth-anything-v2-small";
+        } else if (capabilities.available_backends.includes("m17-geonrw-struct")) {
+          selectedBackend = "m17-geonrw-struct";
+        }
+      }
+
       const source = new ApplicationBackendSource({
         stagedPath: inputState.stagedPath,
         metadata: inputState.metadata,
         targetSemantics,
+        backend: selectedBackend,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities]);
 
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
