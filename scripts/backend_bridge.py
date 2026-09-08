@@ -484,7 +484,7 @@ def main() -> None:
                 print(json.dumps({"error": f"Input file not found: {input_path}"}))
                 sys.exit(1)
             target_value = positional[2] if len(positional) > 2 else None
-            if not backend_specified or backend_name == SYNTHETIC_BACKEND_NAME:
+            if not backend_specified:
                 from depthwizard.runtime.diagnostics import availability_report
 
                 report = availability_report()
