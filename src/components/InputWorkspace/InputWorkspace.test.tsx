@@ -65,6 +65,27 @@ describe("InputWorkspace", () => {
     expect(within(workspace).getByText("Not available")).toBeInTheDocument();
   });
 
+  it("passes selected calibration method and mesh levels through", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+    );
+    await waitForSupported(container);
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    fireEvent.click(screen.getByRole("radio", { name: "Piecewise Linear" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Mesh LOD levels" }), {
+      target: { value: "1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    expect(onGenerate).toHaveBeenCalledOnce();
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.calibrationMethod).toBe("piecewise_linear");
+    expect(source.meshLevels).toEqual([1]);
+  });
+
   it("shows backend rejection reasons for corrupt files", async () => {
     const { container } = render(
       <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />

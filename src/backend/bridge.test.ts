@@ -117,5 +117,28 @@ describe("BackendBridge", () => {
         }
       }
     });
+
+  });
+
+  it("forwards calibration method to the Python bridge", async () => {
+    const methodBridge = new BackendBridge({
+      bridgeScript: "scripts/backend_bridge.py",
+      calibrationMethod: "scale_offset_huber",
+    });
+    const result = await methodBridge.executeTerrain(4, 4);
+    expect(result.success).toBe(true);
+    expect(result.artifact).toBeDefined();
+    expect(result.artifact!.metadata.backend?.calibration_method).toBe("scale_offset_huber");
+  });
+
+  it("forwards mesh levels to the Python bridge", async () => {
+    const lodBridge = new BackendBridge({
+      bridgeScript: "scripts/backend_bridge.py",
+      meshLevels: [1, 4],
+    });
+    const result = await lodBridge.executeTerrain(8, 8);
+    expect(result.success).toBe(true);
+    expect(result.artifact).toBeDefined();
+    expect(result.artifact!.mesh.vertexCount).toBeGreaterThan(0);
   });
 });

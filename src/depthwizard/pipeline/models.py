@@ -24,6 +24,7 @@ from depthwizard.pipeline.protocols import (
     CancellationToken,
     IdentityPreprocessor,
     Preprocessor,
+    SemanticPreprocessor,
 )
 from depthwizard.version import __version__
 
@@ -58,6 +59,7 @@ class PipelineRequest:
     export_options: ExportOptions | None = None
     cancellation: CancellationToken | None = None
     solar_config: SolarConfig | None = None
+    semantic_preprocessor: SemanticPreprocessor | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,7 @@ class PipelineResult:
     solar_constraints: tuple[Any, ...] = field(default_factory=tuple)
     solar_refused_reason: str | None = None
     engine_version: str = __version__
+    warnings: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def succeeded(self) -> bool:

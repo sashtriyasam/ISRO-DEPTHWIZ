@@ -10,6 +10,8 @@ both axis-aligned and north-up (flipped) frames.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from depthwizard.dsm.grid import DSMGrid
@@ -212,7 +214,129 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
     )
 
 
-def build_lod_meshes(grid: DSMGrid, levels: tuple[int, ...]) -> tuple[TerrainMesh, ...]:
+def decimate_mesh(
+    mesh: TerrainMesh, target_vertices: int | None = None, target_ratio: float | None = None
+) -> TerrainMesh:
+    """Decimate mesh using vertex clustering."""
+    if target_vertices is None and target_ratio is None:
+        return mesh
+    if target_ratio is not None:
+        target_vertices = max(4, int(mesh.vertex_count * target_ratio))
+    assert target_vertices is not None
+    if target_vertices >= mesh.vertex_count:
+        return mesh
+
+    vertices = mesh.vertices
+    indices = mesh.indices
+    normals = mesh.normals
+    uvs = mesh.uvs
+    source_indices = mesh.vertex_source_indices
+
+    min_x, max_x = float(vertices[:, 0].min()), float(vertices[:, 0].max())
+    min_y, max_y = float(vertices[:, 1].min()), float(vertices[:, 1].max())
+    min_z, max_z = float(vertices[:, 2].min()), float(vertices[:, 2].max())
+
+    bbox_dim = max(max_x - min_x, max_y - min_y, max_z - min_z)
+    if bbox_dim == 0.0:
+        return mesh
+
+    grid_size = bbox_dim / math.ceil((mesh.vertex_count / target_vertices) ** (1.0 / 3.0))
+
+    cell_map: dict[tuple[int, int, int], int] = {}
+    new_vertices: list[np.ndarray] = []
+    new_normals: list[np.ndarray] = []
+    new_uvs: list[np.ndarray] = []
+    new_source_indices: list[int] = []
+
+    for i in range(mesh.vertex_count):
+        x, y, z = float(vertices[i, 0]), float(vertices[i, 1]), float(vertices[i, 2])
+        cx = int((x - min_x) / grid_size) if grid_size > 0 else 0
+        cy = int((y - min_y) / grid_size) if grid_size > 0 else 0
+        cz = int((z - min_z) / grid_size) if grid_size > 0 else 0
+        cell = (cx, cy, cz)
+
+        if cell not in cell_map:
+            cell_map[cell] = len(new_vertices)
+            new_vertices.append(vertices[i])
+            new_normals.append(normals[i])
+            new_uvs.append(uvs[i])
+            new_source_indices.append(source_indices[i])
+
+    new_index_map = {}
+    for i in range(mesh.vertex_count):
+        x, y, z = float(vertices[i, 0]), float(vertices[i, 1]), float(vertices[i, 2])
+        cx = int((x - min_x) / grid_size) if grid_size > 0 else 0
+        cy = int((y - min_y) / grid_size) if grid_size > 0 else 0
+        cz = int((z - min_z) / grid_size) if grid_size > 0 else 0
+        cell = (cx, cy, cz)
+        new_index_map[i] = cell_map[cell]
+
+    new_indices = []
+    for i in range(0, len(indices), 3):
+        v0 = new_index_map[indices[i]]
+        v1 = new_index_map[indices[i + 1]]
+        v2 = new_index_map[indices[i + 2]]
+        if v0 != v1 and v1 != v2 and v0 != v2:
+            new_indices.extend([v0, v1, v2])
+
+    if not new_indices:
+        raise MeshGenerationError("decimation produced no valid triangles")
+
+    new_vertices_arr = np.array(new_vertices, dtype=np.float64)
+    new_uvs_arr = np.array(new_uvs, dtype=np.float64)
+    new_indices_arr = np.array(new_indices, dtype=np.int64).ravel()
+    new_source_indices_arr = np.array(new_source_indices, dtype=np.int64)
+
+    edges_a = new_vertices_arr[new_indices_arr[1::3]] - new_vertices_arr[new_indices_arr[0::3]]
+    edges_b = new_vertices_arr[new_indices_arr[2::3]] - new_vertices_arr[new_indices_arr[0::3]]
+    faces = np.cross(edges_a, edges_b)
+    recomputed_normals = np.zeros_like(new_vertices_arr)
+    np.add.at(recomputed_normals, new_indices_arr.ravel(), np.repeat(faces, 3, axis=0))
+    lengths = np.sqrt((recomputed_normals**2).sum(axis=1))
+    nonzero = lengths > 0.0
+    recomputed_normals[nonzero] /= lengths[nonzero, np.newaxis]
+    recomputed_normals[~nonzero] = np.array([0.0, 1.0, 0.0])
+
+    return TerrainMesh(
+        vertices=new_vertices_arr,
+        indices=new_indices_arr,
+        normals=recomputed_normals,
+        uvs=new_uvs_arr,
+        vertex_source_indices=new_source_indices_arr,
+        vertex_count=len(new_vertices),
+        triangle_count=len(new_indices) // 3,
+        valid_source_pixels=mesh.valid_source_pixels,
+        invalid_source_pixels=mesh.invalid_source_pixels,
+        skipped_cells=mesh.skipped_cells,
+        coverage=mesh.coverage,
+        frame=mesh.frame,
+        origin_x=mesh.origin_x,
+        origin_y=mesh.origin_y,
+        width=mesh.width,
+        height=mesh.height,
+        units=mesh.units,
+        semantics=mesh.semantics,
+        georeferencing=mesh.georeferencing,
+        spatial=mesh.spatial,
+        depth_model_name=mesh.depth_model_name,
+        depth_model_version=mesh.depth_model_version,
+        depth_checkpoint_id=mesh.depth_checkpoint_id,
+        source_input_id=mesh.source_input_id,
+        source_checksum=mesh.source_checksum,
+        calibration_method=mesh.calibration_method,
+        calibration_reference=mesh.calibration_reference,
+        calibration_scale=mesh.calibration_scale,
+        calibration_offset=mesh.calibration_offset,
+        calibration_valid_samples=mesh.calibration_valid_samples,
+        provenance=mesh.provenance,
+        decimated=True,
+        lod_level=None,
+    )
+
+
+def build_lod_meshes(
+    grid: DSMGrid, levels: tuple[int, ...] = (1, 4, 16)
+) -> tuple[TerrainMesh, ...]:
     """Build LOD meshes by simple slicing subsampling of the DSM grid.
 
     For each level in `levels`:

@@ -1,10 +1,6 @@
 import type { BridgeExecutionHooks } from "../backend/bridge";
 import { OperationCancelledError } from "../backend/bridge";
-import {
-  validateServiceCapabilities,
-  validateServiceResponse,
-  ServiceWireError,
-} from "./validator";
+import { validateServiceCapabilities, validateServiceResponse, ServiceWireError } from "./validator";
 import { SubprocessServiceTransport, type ServiceTransport } from "./transport";
 import {
   SERVICE_CONTRACT_VERSION,
@@ -20,6 +16,8 @@ export interface ServiceExecutionArgs {
   buildMesh?: boolean;
   backend?: string;
   outputMode?: "metric" | "relative";
+  meshLevels?: number[];
+  calibrationMethod?: string;
 }
 
 export interface ServiceExecution {
@@ -49,7 +47,7 @@ export class LocalServiceClient {
         throw err;
       }
       throw new ServiceWireError(
-        `Service capabilities unavailable: ${err instanceof Error ? err.message : String(err)}`,
+        "Service capabilities unavailable: " + (err instanceof Error ? err.message : String(err)),
       );
     }
     if (typeof raw !== "object" || raw === null || !("capabilities" in raw)) {
@@ -70,7 +68,7 @@ export class LocalServiceClient {
         "Service request needs a non-empty input path",
       );
     }
-    return {
+    const request: ServiceRequestWire = {
       contract_version: SERVICE_CONTRACT_VERSION,
       input_path: args.inputPath,
       target_semantics: args.targetSemantics ?? "absolute_elevation_dsm",
@@ -82,6 +80,13 @@ export class LocalServiceClient {
       export_compression: "deflate",
       export_overwrite: false,
     };
+    if (args.meshLevels !== undefined) {
+      request.mesh_levels = args.meshLevels;
+    }
+    if (args.calibrationMethod !== undefined) {
+      request.calibration_method = args.calibrationMethod;
+    }
+    return request;
   }
 
   async executeService(
@@ -97,7 +102,7 @@ export class LocalServiceClient {
         throw err;
       }
       throw new ServiceWireError(
-        `Service execution failed: ${err instanceof Error ? err.message : String(err)}`,
+        "Service execution failed: " + (err instanceof Error ? err.message : String(err)),
       );
     }
     if (typeof raw !== "object" || raw === null || !("response" in raw)) {

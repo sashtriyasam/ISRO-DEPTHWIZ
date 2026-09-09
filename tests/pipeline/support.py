@@ -154,6 +154,7 @@ def make_request(
     build_mesh: bool = False,
     geotiff_path: str | None = None,
     token: CancellationToken | None = None,
+    semantic_preprocessor: Any = None,
 ) -> PipelineRequest:
     """Build a deterministic pipeline request with test defaults."""
     return PipelineRequest(
@@ -166,4 +167,5 @@ def make_request(
         build_mesh=build_mesh,
         geotiff_path=geotiff_path,
         cancellation=token,
+        semantic_preprocessor=semantic_preprocessor,
     )

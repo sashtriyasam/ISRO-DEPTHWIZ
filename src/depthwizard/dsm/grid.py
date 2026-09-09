@@ -96,6 +96,10 @@ class DSMGrid(BaseModel):
     calibration_scale: float
     calibration_offset: float
     calibration_valid_samples: int = Field(ge=0)
+    piecewise_params: tuple[tuple[float, float, float], ...] | None = Field(
+        default=None,
+        description="For PIECEWISE_LINEAR: each tuple is (knot_x, scale, offset).",
+    )
     provenance: ProductProvenance = Field(description="Reused product provenance.")
 
     @model_validator(mode="after")

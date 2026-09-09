@@ -106,6 +106,12 @@ class TerrainMesh(BaseModel):
     calibration_offset: float
     calibration_valid_samples: int = Field(ge=0)
     provenance: ProductProvenance = Field(description="Reused product provenance.")
+    decimated: bool = Field(
+        default=False, description="True if this mesh was produced by LOD decimation."
+    )
+    lod_level: int | None = Field(
+        default=None, description="LOD level index (1 = full res, higher = coarser)."
+    )
 
     @model_validator(mode="after")
     def _check_mesh_honesty(self) -> TerrainMesh:

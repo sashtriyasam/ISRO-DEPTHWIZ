@@ -12,6 +12,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from depthwizard.calibration.models import CalibrationResult
 from depthwizard.contracts.artifacts import METRIC_UNIT, DepthResult
 from depthwizard.contracts.pipeline import PipelineState
@@ -128,6 +130,10 @@ class _Engine:
         self._export: ExportResult | None = None
         self._solar_constraints: tuple[Any, ...] = ()
         self._solar_refused_reason: str | None = None
+        self._prepared_inspection: InputInspection | None = None
+        self._semantic_preprocessor: Any | None = None
+        self._semantic_preprocessor = request.semantic_preprocessor
+        self._warnings: list[str] = []
 
     def _enter(self, state: PipelineState) -> None:
         """Record a transition (bootstrap allows terminal states first).
@@ -182,6 +188,7 @@ class _Engine:
             calibration_scale=calibration.scale if calibration else None,
             calibration_offset=calibration.offset if calibration else None,
             target_semantics=request.target_semantics,
+            warnings=tuple(self._warnings),
             mesh_requested=request.build_mesh,
             geotiff_path=request.geotiff_path,
             solar_constraints=self._solar_constraints,
@@ -203,6 +210,7 @@ class _Engine:
     def execute(self) -> PipelineResult:
         """Run every requested stage in dependency order."""
         request = self._request
+        self._warnings = []
         if self._cancelled():
             return self._finish(PipelineState.CANCELLED)
         try:
@@ -243,6 +251,7 @@ class _Engine:
             prepared = request.preprocessor.prepare(inspection)
         except Exception as exc:
             return self._fail(PipelineState.PREPROCESSING, exc)
+        self._prepared_inspection = prepared
         if not isinstance(prepared, InputInspection):
             return self._fail(
                 PipelineState.PREPROCESSING,
@@ -267,6 +276,23 @@ class _Engine:
                     f"DepthResult, got {type(depth).__name__}"
                 ),
             )
+        self._depth = depth
+        if self._semantic_preprocessor is not None:
+            try:
+                from depthwizard.solar.integrate import load_image_rgb
+
+                rgb = load_image_rgb(self._prepared_inspection)
+                depth_array = np.asarray(depth.depth_values, dtype=np.float32).reshape(
+                    depth.output_resolution.height, depth.output_resolution.width
+                )
+                refined_depth, _ = self._semantic_preprocessor.process(rgb, depth_array)
+                depth = depth.model_copy(
+                    update={"depth_values": tuple(refined_depth.ravel().tolist())}
+                )
+            except Exception as exc:
+                self._warnings.append(
+                    f"Semantic preprocessing skipped: {type(exc).__name__}: {exc}"
+                )
         self._depth = depth
 
         if self._cancelled():

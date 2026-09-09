@@ -37,3 +37,11 @@ venv/
 third_party/
 deps/
 .deps/
+
+# Local tooling artifacts
+.opencode/
+uv.lock
+sample_test_data/
+scratch/
+sih_satellite_data/
+fix.js

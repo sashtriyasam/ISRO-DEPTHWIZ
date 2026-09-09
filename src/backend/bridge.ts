@@ -160,6 +160,8 @@ export interface BackendBridgeOptions {
   host?: HostDetectionOverrides;
   backend?: string;
   mode?: "metric" | "relative";
+  meshLevels?: number[];
+  calibrationMethod?: string;
 }
 
 export class OperationCancelledError extends Error {
@@ -199,6 +201,8 @@ export class BackendBridge {
   private host: HostCapabilities;
   private backend: string;
   private mode: "metric" | "relative";
+  private meshLevels: number[] | undefined;
+  private calibrationMethod: string | undefined;
 
   constructor(options: BackendBridgeOptions = {}) {
     this.pythonPath = options.pythonPath ?? defaultPythonExecutable();
@@ -208,6 +212,8 @@ export class BackendBridge {
     this.host = detectHost(options.host);
     this.backend = options.backend ?? "synthetic-depth";
     this.mode = options.mode ?? "metric";
+    this.meshLevels = options.meshLevels;
+    this.calibrationMethod = options.calibrationMethod;
   }
 
   get backendName(): string {
@@ -219,15 +225,30 @@ export class BackendBridge {
   }
 
   private backendArgs(override?: string): string[] {
-    const selected = override ?? this.backend;
-    if (!selected || selected === "synthetic-depth") {
-      return [];
-    }
-    return ["--backend", selected];
+    return ["--backend", override ?? this.backend];
   }
 
   private modeArgs(override?: "metric" | "relative"): string[] {
     return ["--mode", override ?? this.mode];
+  }
+
+  private meshLevelsArgs(override?: number[]): string[] {
+    const levels = override ?? this.meshLevels;
+    if (!levels || levels.length === 0) {
+      return [];
+    }
+    return [
+      "--mesh-levels",
+      ...levels.map((level) => String(level)),
+    ];
+  }
+
+  private calibrationMethodArgs(override?: string): string[] {
+    const method = override ?? this.calibrationMethod;
+    if (!method) {
+      return [];
+    }
+    return ["--calibration-method", method];
   }
 
   get hostCapabilities(): HostCapabilities {
@@ -280,7 +301,14 @@ export class BackendBridge {
 
     try {
       const jsonData = await this.spawnPython(
-        [...this.backendArgs(), "--terrain", String(width), String(height)],
+        [
+          ...this.backendArgs(),
+          "--terrain",
+          String(width),
+          String(height),
+          ...this.meshLevelsArgs(),
+          ...this.calibrationMethodArgs(),
+        ],
         hooks,
       );
       return this.processTerrainData(jsonData, errors, warnings);
@@ -295,6 +323,8 @@ export class BackendBridge {
     targetSemantics?: string,
     backendOverride?: string,
     modeOverride?: "metric" | "relative",
+    meshLevels?: number[],
+    calibrationMethod?: string,
   ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
@@ -324,6 +354,8 @@ export class BackendBridge {
           ? [
               ...this.backendArgs(backendOverride),
               ...this.modeArgs(mode),
+              ...this.meshLevelsArgs(meshLevels),
+              ...this.calibrationMethodArgs(calibrationMethod),
               "--terrain-file",
               stagedPath,
               targetSemantics,
@@ -331,6 +363,8 @@ export class BackendBridge {
           : [
               ...this.backendArgs(backendOverride),
               ...this.modeArgs(mode),
+              ...this.meshLevelsArgs(meshLevels),
+              ...this.calibrationMethodArgs(calibrationMethod),
               "--terrain-file",
               stagedPath,
             ];

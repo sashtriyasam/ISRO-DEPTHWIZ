@@ -22,6 +22,8 @@ export interface ApplicationBackendOptions {
   transport?: ArtifactTransport;
   bridge?: BackendBridge;
   backend?: string;
+  meshLevels?: number[];
+  calibrationMethod?: string;
 }
 
 export class ApplicationBackendSource implements ArtifactSource {
@@ -30,6 +32,8 @@ export class ApplicationBackendSource implements ArtifactSource {
   readonly kind: ApplicationBackendKind;
   readonly targetSemantics: MetricTargetSemantics;
   readonly backendLabel: string;
+  readonly meshLevels: number[] | undefined;
+  readonly calibrationMethod: string | undefined;
 
   private fileSource: FileInputSource | null;
   private bridge: BackendBridge;
@@ -42,8 +46,11 @@ export class ApplicationBackendSource implements ArtifactSource {
       options.backend && options.backend !== "synthetic-depth"
         ? `Backend model (${options.backend})`
         : APPLICATION_BACKEND_LABEL;
+    this.meshLevels = options.meshLevels;
+    this.calibrationMethod = options.calibrationMethod;
     this.bridge =
-      options.bridge ?? new BackendBridge({ backend: options.backend });
+      options.bridge ??
+      new BackendBridge({ backend: options.backend, meshLevels: options.meshLevels, calibrationMethod: options.calibrationMethod });
     if (options.stagedPath && options.metadata) {
       this.kind = "file";
       this.fileSource = new FileInputSource({

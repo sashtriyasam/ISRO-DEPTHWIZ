@@ -3,6 +3,13 @@
 import json
 from pathlib import Path
 
+from depthwizard.calibration import (
+    CalibrationResult,
+    CalibrationSamples,
+    HuberScaleOffsetCalibrator,
+    PiecewiseLinearCalibrator,
+)
+from depthwizard.contracts.artifacts import DepthResult
 from depthwizard.contracts.semantics import ElevationSemantics
 from depthwizard.service import (
     ArtifactKind,
@@ -172,3 +179,92 @@ def test_relative_mode_unknown_backend_loud(tmp_path: Path) -> None:
     )
     with pytest.raises(PipelineExecutionError, match="unknown backend"):
         LocalService().execute(request, SyntheticCalibrationProvider())
+
+
+class _HuberCalibrationProvider:
+    """Custom provider using HuberScaleOffsetCalibrator."""
+
+    def __init__(self, target: ElevationSemantics = ElevationSemantics.HEIGHT_AGL_NDSM) -> None:
+        self._target = target
+
+    @property
+    def name(self) -> str:
+        return "huber-test-provider"
+
+    def calibrate(self, depth_result: DepthResult) -> CalibrationResult:
+        predicted = depth_result.depth_values
+        reference = tuple(2.5 * value + 10.0 for value in predicted)
+        samples = CalibrationSamples(
+            predicted_values=predicted,
+            reference_values=reference,
+            reference_id="synthetic-huber-ref",
+            reference_units="meters",
+            target_semantics=self._target,
+            source_checksum=depth_result.provenance.input_checksum,
+        )
+        return HuberScaleOffsetCalibrator().calibrate(samples)
+
+
+class _PiecewiseCalibrationProvider:
+    """Custom provider using PiecewiseLinearCalibrator."""
+
+    def __init__(self, target: ElevationSemantics = ElevationSemantics.HEIGHT_AGL_NDSM) -> None:
+        self._target = target
+
+    @property
+    def name(self) -> str:
+        return "piecewise-test-provider"
+
+    def calibrate(self, depth_result: DepthResult) -> CalibrationResult:
+        predicted = depth_result.depth_values
+        reference = tuple(2.5 * value + 10.0 for value in predicted)
+        samples = CalibrationSamples(
+            predicted_values=predicted,
+            reference_values=reference,
+            reference_id="synthetic-piecewise-ref",
+            reference_units="meters",
+            target_semantics=self._target,
+            source_checksum=depth_result.provenance.input_checksum,
+        )
+        return PiecewiseLinearCalibrator().calibrate(samples)
+
+
+def test_lod_mesh_via_service(tmp_path: Path) -> None:
+    """LOD mesh levels are passed through the service to the pipeline."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        mesh_levels=(1, 2, 4),
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.success is True
+    assert response.final_state == "completed"
+    by_kind = {artifact.kind: artifact for artifact in response.artifacts}
+    assert by_kind[ArtifactKind.MESH].available is True
+    assert "mesh_generation" in response.states
+    assert response.summary.mesh_requested is True
+
+
+def test_calibration_method_huber(tmp_path: Path) -> None:
+    """Huber calibrator is selected via calibration_method field."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        calibration_method="scale_offset_huber",
+    )
+    response = LocalService().execute(request, _HuberCalibrationProvider())
+    assert response.success is True
+    assert response.summary.calibration_method == "scale_offset_huber"
+
+
+def test_calibration_method_piecewise(tmp_path: Path) -> None:
+    """PiecewiseLinear calibrator is selected via calibration_method field."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        calibration_method="piecewise_linear",
+    )
+    response = LocalService().execute(request, _PiecewiseCalibrationProvider())
+    assert response.success is True
+    assert response.summary.calibration_method == "piecewise_linear"

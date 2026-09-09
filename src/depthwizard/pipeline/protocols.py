@@ -9,7 +9,9 @@ APIs directly — no generic plugin framework.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
+
+import numpy as np
 
 from depthwizard.calibration.models import CalibrationResult
 from depthwizard.contracts.artifacts import DepthResult
@@ -83,3 +85,15 @@ class CancellationToken:
     def cancel(self) -> None:
         """Request cancellation (idempotent)."""
         self._cancelled = True
+
+
+class SemanticPreprocessor(Protocol):
+    """Semantic pre-processing boundary (refines depth with RGB context).
+
+    Implementations take the RGB image and the raw depth array and
+    return a refined depth array plus optional auxiliary output.
+    """
+
+    def process(self, rgb: np.ndarray, depth: np.ndarray) -> tuple[np.ndarray, Any]:
+        """Refine depth using RGB semantics; return (refined_depth, aux)."""
+        ...

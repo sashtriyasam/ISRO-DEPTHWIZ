@@ -121,3 +121,48 @@ def test_real_dav2_terrain_payload(tmp_path: Path) -> None:
         "dsm_generation",
         "mesh_generation",
     ]
+
+
+def test_large_backend_unknown_fails_loudly() -> None:
+    """The large DA-V2 backend fails loudly when unavailable."""
+    proc = run_bridge("--backend", "depth-anything-v2-large", "--terrain", "4", "4")
+    assert proc.returncode != 0
+    payload = json.loads(proc.stdout)
+    assert "error" in payload
+    assert "unknown backend" in payload["error"] or (
+        "depth-anything-v2-large" in payload["error"].lower()
+        and "not found" in payload["error"].lower()
+    )
+
+
+def test_mesh_levels_synthetic() -> None:
+    """Mesh levels are forwarded to the LOD mesh builder."""
+    proc = run_bridge(
+        "--backend",
+        "synthetic-depth",
+        "--terrain",
+        "8",
+        "8",
+        "--mesh-levels",
+        "1",
+        "4",
+    )
+    assert proc.returncode == 0, proc.stdout
+    payload = json.loads(proc.stdout)
+    assert payload["mesh"]["vertex_count"] > 0
+
+
+def test_calibration_method_huber_synthetic() -> None:
+    """Huber calibration method is accepted and reflected in the payload."""
+    proc = run_bridge(
+        "--backend",
+        "synthetic-depth",
+        "--terrain",
+        "4",
+        "4",
+        "--calibration-method",
+        "scale_offset_huber",
+    )
+    assert proc.returncode == 0, proc.stdout
+    payload = json.loads(proc.stdout)
+    assert payload["mesh"]["calibration_method"] == "scale_offset_huber"
