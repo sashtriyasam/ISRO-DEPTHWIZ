@@ -1,15 +1,15 @@
-# DepthWizard — ISRO SIH 26175 Release Candidate
+﻿# DepthWizard — ISRO SIH 26175 Release Candidate
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0--sih--26175--rc1-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
+[![Release](https://img.shields.io/badge/Release-v0.1.0--sih--26175--rc2-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc2)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
-[![Python](https://img.shields.io/badge/Python-3.12_|_664_Tests_Passed-success.svg)](#python-scientific-engine)
-[![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_627_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
+[![Python](https://img.shields.io/badge/Python-3.12_|_687_Tests_Passed-success.svg)](#python-scientific-engine)
+[![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_631_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
 
 > **Single-View Height Estimation and 3D Flythrough**  
 > **Problem Statement ID:** 26175  
 > **Organization:** Indian Space Research Organisation (ISRO), Department of Space / SAC  
 > **Theme:** Disaster Management / Urban Planning / Reconnaissance  
-> **Canonical Main Commit SHA:** `54264ec261edbfafb405527a206a461b6c6b4b45` (`54264ec`)  
+> **Canonical Main Commit SHA:** `45124c85785205013ac1a35f6ed647a079d4d2a9` (`45124c8`)  
 
 ---
 
@@ -20,6 +20,12 @@
 - **Path A (Non-Georeferenced PNG/JPG)**: Converts raw optical images into a **Relative Digital Surface Model (`rDSM`)** in the local coordinate frame (`units=None`) without fabricating spatial metadata, CRS, or metric units.
 - **Path B (Georeferenced GeoTIFF)**: Converts relative depth maps into an **Absolute Metric Digital Surface Model (`DSMGrid`)** with height in metres ($m$) using low-resolution reference DEMs (e.g., SRTM 30m) or Ground Control Points (GCPs), strictly preserving spatial CRS and affine transformation.
 - **3D Texture Projection & Interactive Flythrough**: Projects original optical RGB textures onto generated 3D terrain meshes rendered via React 19 + Three.js + Electron, supporting Orbit, First-Person aerial controls, Waypoint Flythrough playback, slope degree calculation (`SlopeGrid`), and height inspection.
+
+### 🆕 Recent Enhancements (v0.1.0-sih-26175-rc2)
+- **Calibration Method Selection**: Users can now choose between OLS (`scale_offset`), robust Huber (`scale_offset_huber`), and piecewise-linear (`piecewise_linear`) calibration methods via the UI and service API.
+- **Mesh LOD Control**: Selectable mesh detail levels (`1`, `1,4,16`, `1,2,4,8,16`) enable performance-optimized terrain rendering. The pipeline now supports adaptive mesh decimation via vertex clustering.
+- **Semantic Preprocessing**: Optional semantic-aware depth refinement can be injected into the pipeline. Implementations include rule-based terrain classification and bilateral/SAM refinement stubs.
+- **DepthAnything V2 Large**: The scientific engine now supports the DA-V2 Large backbone (`depth-anything-v2-large`) when its checkpoint is available, with automatic fallback to smaller backends.
 
 > **Scope & Compliance Policy:** All implemented PS capabilities in the defined acceptance matrix were verified; scientific generalization/accuracy beyond the tested evidence is not claimed.
 
@@ -32,13 +38,13 @@
 | **1. Single-View Optical RGB Input** | `InputInspection` ([src/depthwizard/ingestion/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/ingestion)) | **PASS** — Accepts PNG, JPG, and GeoTIFF. Validates checksums & georeferencing. |
 | **2. Non-Georeferenced Relative DSM (rDSM)** | `RelativeSurfaceGrid` ([src/depthwizard/rdsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/rdsm)) | **PASS** — Relative height model (`units=None`, `LOCAL` frame). Zero fabricated CRS or metres. |
 | **3. Georeferenced Metric DSM (DSM)** | `ScientificHeightProduct` ([src/depthwizard/dsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm)) | **PASS** — Calibrated metric DSM in metres ($m$), preserving original CRS and affine bounds. |
-| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Canonical `DepthBackend` protocol (DA-V2 Small shipped product model; M17 research candidate). |
-| **5. Scale Calibration Module** | `ScaleOffsetCalibrator` ([src/depthwizard/calibration/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/calibration)) | **PASS** — Calibrates depth via DEM (SRTM 30m) or GCP reference controls. |
+| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Canonical `DepthBackend` protocol (DA-V2 Small shipped; DA-V2 Large available when checkpoint present; M17 research candidate). |
+| **5. Scale Calibration Module** | `ScaleOffsetCalibrator`, `HuberScaleOffsetCalibrator`, `PiecewiseLinearCalibrator` ([src/depthwizard/calibration/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/calibration)) | **PASS** — Calibrates depth via DEM (SRTM 30m) or GCP reference controls with selectable robust methods. |
 | **6. Optical Texture Projection** | `TextureProjection` ([src/depthwizard/texture/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/texture)) | **PASS** — Binds optical RGB texture to 3D terrain mesh UVs. |
-| **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 627 passing Vitest tests. |
+| **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 631 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — Signed NSIS Installer (`DepthWizard Setup 1.0.0.exe`, `115,579,824 bytes`); Authenticode signed with DigiCert RFC 3161 timestamp; clean machine physical witness trial passed. |
+| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — Signed NSIS Installer; Authenticode signed; clean machine physical witness trial passed. |
 
 ---
 
@@ -52,15 +58,19 @@
 │  ├── Renderer: React 19 + Three.js 0.177 (Vite)                                 │
 │  ├── Viewport & Flythrough: Orbit/First-Person/Aerial Navigation + Waypoints    │
 │  ├── Measurement & Tools: Point Inspector, Height/Slope Profile, Exaggeration  │
+│  ├── Workspace Controls: Backend auto-selection, calibration method, mesh LOD   │
 │  └── Preload Bridge: ContextBridge IPC (8 service methods)                      │
 │       ↓                                                                         │
 │  Managed Python Scientific Service (depthwiz_service.py)                        │
 │  ├── Ingestion & Geospatial: InputInspection, CRS & Affine Preservation         │
-│  ├── Depth Backends: DepthAnythingV2Backend (DA-V2 Small), M17DepthBackend      │
-│  ├── Calibration Engine: ScaleOffsetCalibrator (DEM/GCP controls)               │
+│  ├── Depth Backends: DepthAnythingV2Backend (Small + Large), M17DepthBackend    │
+│  ├── Calibration Engine: ScaleOffsetCalibrator, HuberScaleOffsetCalibrator,     │
+│  │   PiecewiseLinearCalibrator                                                  │
+│  ├── Semantic Preprocessing: Optional RGB-guided depth refinement               │
 │  ├── Products: RelativeSurfaceGrid (Path A) / ScientificHeightProduct (Path B)   │
 │  ├── Analytics: SlopeGrid (degree computation)                                  │
-│  ├── Mesh & Texture: TerrainMesh generation, TextureProjection mapping          │
+│  ├── Mesh & Texture: TerrainMesh generation, adaptive LOD decimation,           │
+│  │   TextureProjection mapping                                                  │
 │  └── Export: GeoTIFF export (prepare-only, zero CRS invention)                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -71,7 +81,7 @@
 
 ### Standalone Windows Installer (Release Candidate)
 Download the signed standalone installer directly from the GitHub Release Candidate tag:
-- **Download Installer**: [`DepthWizard Setup 1.0.0.exe` (115.57 MB / 115,579,824 bytes)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc1)
+- **Download Installer**: [`DepthWizard Setup 1.0.0.exe`](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc2)
 - **Installer SHA-256**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717`
 - **Authenticode Signature**: Verified (`CN=DepthWizard Release Candidate, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
 - **Clean Machine Physical Witness**: `PASSED` (Verification items verified)
@@ -82,7 +92,7 @@ Download the signed standalone installer directly from the GitHub Release Candid
 
 ### Python Core Engine
 ```bash
-# Execute all 671 Python tests (664 passed, 7 skipped opt-in heavy models)
+# Execute all 687 Python tests (5 skipped opt-in heavy models)
 python -m pytest tests/
 
 # Code quality & typing checks
@@ -96,9 +106,15 @@ python -m mypy --python-version 3.12 src
 # Run TypeScript compilation check (0 errors)
 npm run typecheck
 
-# Run Vitest test suite (627 passed)
+# Run Vitest test suite (631 passed)
 npm run test
 ```
+
+### Key Test Files Added in rc2
+- `tests/semantics/test_classifier.py` — Semantic classifier unit tests
+- `tests/pipeline/test_chain.py` — Semantic preprocessing integration tests
+- `tests/service/test_execute.py` — LOD mesh and calibration method service tests
+- `tests/integration/test_dav2_bridge.py` — Backend bridge integration tests
 
 ---
 
@@ -112,6 +128,7 @@ npm run test
    - High visual fidelity with real-time Three.js mesh rasterization.
    - Seamless first-person and aerial waypoint navigation.
    - Idempotent offline deployment with managed Python runtime.
+   - User-selectable calibration methods and mesh LOD levels for optimized workflows.
 
 ---
 
