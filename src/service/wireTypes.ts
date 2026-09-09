@@ -66,6 +66,8 @@ export interface ServiceRequestWire {
   geotiff_path: string | null;
   export_compression: string;
   export_overwrite: boolean;
+  mesh_levels?: number[];
+  calibration_method?: string;
 }
 
 export interface ServiceFailureWire {

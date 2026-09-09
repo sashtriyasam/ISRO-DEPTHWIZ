@@ -82,6 +82,13 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
   const [inputState, setInputState] = useState<InputState>({ status: "empty" });
   const [targetSemantics, setTargetSemantics] =
     useState<MetricTargetSemantics>(DEFAULT_TARGET_SEMANTICS);
+  const [calibrationMethod, setCalibrationMethod] = useState("scale_offset_huber");
+  const [meshLevels, setMeshLevels] = useState<string>("1,4,16");
+  const MESH_LEVEL_PRESETS: Record<string, number[]> = {
+    "1": [1],
+    "1,4,16": [1, 4, 16],
+    "1,2,4,8,16": [1, 2, 4, 8, 16],
+  };
   const [dragActive, setDragActive] = useState(false);
   const validationRef = useRef<AbortController | null>(null);
   const stagedRef = useRef<(() => Promise<void>) | null>(null);
@@ -250,7 +257,9 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     if (inputState.stagedPath) {
       let selectedBackend: string | undefined = undefined;
       if (capabilities && capabilities.available_backends.length > 0) {
-        if (capabilities.available_backends.includes("depth-anything-v2-small")) {
+        if (capabilities.available_backends.includes("depth-anything-v2-large")) {
+          selectedBackend = "depth-anything-v2-large";
+        } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
           selectedBackend = "depth-anything-v2-small";
         } else if (capabilities.available_backends.includes("m17-geonrw-struct")) {
           selectedBackend = "m17-geonrw-struct";
@@ -262,13 +271,14 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
         metadata: inputState.metadata,
         targetSemantics,
         backend: selectedBackend,
+        meshLevels: MESH_LEVEL_PRESETS[meshLevels],
+        calibrationMethod,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities]);
-
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, calibrationMethod]);
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
   return (
@@ -407,6 +417,59 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               ))}
             </div>
           )}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+              Calibration method
+            </span>
+            <div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
+                <input
+                  type="radio"
+                  name="calibration-method"
+                  checked={calibrationMethod === "scale_offset"}
+                  onChange={() => setCalibrationMethod("scale_offset")}
+                  disabled={processingRunning}
+                />
+                <span>OLS (Scale + Offset)</span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
+                <input
+                  type="radio"
+                  name="calibration-method"
+                  checked={calibrationMethod === "scale_offset_huber"}
+                  onChange={() => setCalibrationMethod("scale_offset_huber")}
+                  disabled={processingRunning}
+                />
+                <span>Robust (Huber)</span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
+                <input
+                  type="radio"
+                  name="calibration-method"
+                  checked={calibrationMethod === "piecewise_linear"}
+                  onChange={() => setCalibrationMethod("piecewise_linear")}
+                  disabled={processingRunning}
+                />
+                <span>Piecewise Linear</span>
+              </label>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+              Mesh LOD levels
+            </span>
+            <select
+              aria-label="Mesh LOD levels"
+              value={meshLevels}
+              onChange={(e) => setMeshLevels(e.target.value)}
+              disabled={processingRunning}
+              style={{ fontSize: "var(--font-size-xs)", padding: "var(--spacing-xs)" }}
+            >
+              <option value="1">Full resolution (1)</option>
+              <option value="1,4,16">Standard LOD (1, 4, 16)</option>
+              <option value="1,2,4,8,16">High LOD (1, 2, 4, 8, 16)</option>
+            </select>
+          </div>
           {backendUnavailable && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }} role="alert">
               <div style={errorStyle}>Backend unavailable: synthetic backend is not registered.</div>
@@ -483,3 +546,5 @@ const dropZoneStyle: React.CSSProperties = {
   color: "var(--color-text-muted)",
   textAlign: "center",
 };
+
+

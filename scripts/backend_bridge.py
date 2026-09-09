@@ -69,6 +69,8 @@ try:
     from depthwizard.backends.synthetic import SyntheticDepthBackend
     from depthwizard.calibration import (
         CalibrationSamples,
+        HuberScaleOffsetCalibrator,
+        PiecewiseLinearCalibrator,
         ScaleOffsetCalibrator,
     )
     from depthwizard.contracts.semantics import ElevationSemantics
@@ -76,7 +78,7 @@ try:
     from depthwizard.height import create_scientific_height_product
     from depthwizard.ingestion.api import inspect_input
     from depthwizard.integration import terrain_product, to_json_text
-    from depthwizard.mesh.build import build_terrain_mesh
+    from depthwizard.mesh.build import build_terrain_mesh, build_lod_meshes
 except ImportError as exc:
     print(
         json.dumps(
@@ -100,6 +102,7 @@ except ImportError as exc:
 
 SYNTHETIC_BACKEND_NAME = "synthetic-depth"
 DAV2_BACKEND_NAME = "depth-anything-v2-small"
+DAV2_LARGE_BACKEND_NAME = "depth-anything-v2-large"
 
 DEV_REFERENCE_ID = "synthetic-dev-ref"
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
@@ -135,18 +138,40 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 f"backend {name!r} unavailable: {exc}. "
                 "Set DW_DAV2_CKPT to an external checkpoint; weights are never committed."
             ) from exc
+    if name == DAV2_LARGE_BACKEND_NAME:
+        try:
+            from depthwizard.backends.depth_anything_v2_large import (
+                DepthAnythingV2LargeBackend,
+            )
+        except ImportError as exc:
+            raise RuntimeError(
+                f"backend {name!r} unavailable: DA-V2 Large runtime not importable ({exc}). "
+                "Install the 'dav2' extra and provide the upstream source."
+            ) from exc
+        checkpoint = os.environ.get("DW_DAV2_LARGE_CKPT")
+        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        try:
+            return DepthAnythingV2LargeBackend(
+                checkpoint=Path(checkpoint) if checkpoint else None,
+                device=backend_device,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"backend {name!r} unavailable: {exc}. "
+                "Set DW_DAV2_LARGE_CKPT to an external checkpoint; weights are never committed."
+            ) from exc
     raise ValueError(
-        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME})"
+        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME})"
     )
 
 
-def fit_dev_calibration(depth: Any, target: ElevationSemantics) -> Any:
+def fit_dev_calibration(depth: Any, target: ElevationSemantics, method: str = "scale_offset") -> Any:
     """Fit the sanctioned deterministic dev calibration to actual values.
 
     Reference rule ``reference = 2.5 * predicted + 10`` (same as
     ``tests/pipeline/support.py::SyntheticCalibrationProvider``) fitted
-    with the real ``ScaleOffsetCalibrator`` against the backend's actual
-    depth output. Never production data; the reference id says so.
+    with the real calibrator against the backend's actual depth output.
+    Never production data; the reference id says so.
     """
     predicted = depth.depth_values
     samples = CalibrationSamples(
@@ -157,7 +182,17 @@ def fit_dev_calibration(depth: Any, target: ElevationSemantics) -> Any:
         target_semantics=target,
         source_checksum=depth.provenance.input_checksum,
     )
-    return ScaleOffsetCalibrator().calibrate(samples)
+    _METHOD_MAP: dict[str, Any] = {
+        "scale_offset": ScaleOffsetCalibrator(),
+        "scale_offset_huber": HuberScaleOffsetCalibrator(),
+        "piecewise_linear": PiecewiseLinearCalibrator(),
+    }
+    calibrator = _METHOD_MAP.get(method)
+    if calibrator is None:
+        raise ValueError(
+            f"unsupported calibration method: {method!r} (supported: {', '.join(sorted(_METHOD_MAP))})"
+        )
+    return calibrator.calibrate(samples)
 
 
 def create_synthetic_png(width: int, height: int, path: Path) -> Path:
@@ -203,14 +238,23 @@ def run_depth_only(
 
 
 def run_terrain(
-    width: int, height: int, backend_name: str = SYNTHETIC_BACKEND_NAME
+    width: int,
+    height: int,
+    backend_name: str = SYNTHETIC_BACKEND_NAME,
+    mesh_levels: tuple[int, ...] | None = None,
+    calibration_method: str = "scale_offset",
 ) -> dict[str, Any]:
     """Full terrain chain on a generated synthetic input."""
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
     try:
         create_synthetic_png(width, height, tmp_path)
-        return run_terrain_on_path(tmp_path, backend_name=backend_name)
+        return run_terrain_on_path(
+            tmp_path,
+            backend_name=backend_name,
+            mesh_levels=mesh_levels,
+            calibration_method=calibration_method,
+        )
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -222,7 +266,9 @@ _USAGE = (
     "<input_path> | --synthetic <w> <h> "
     "| --terrain <w> <h> | --terrain-file <path> [target] "
     "| --inspect <path> | --capabilities | --diagnostics "
-    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>]"
+    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>] "
+    "[--mesh-levels <int> [<int> ...]] "
+    "[--calibration-method <scale_offset|scale_offset_huber|piecewise_linear>]"
 )
 
 
@@ -249,6 +295,8 @@ def run_terrain_on_path(
     target_value: str | None = None,
     backend_name: str = SYNTHETIC_BACKEND_NAME,
     device: str | None = None,
+    mesh_levels: tuple[int, ...] | None = None,
+    calibration_method: str = "scale_offset",
 ) -> dict[str, Any]:
     """Full terrain chain on a real input file using only real backend subsystems."""
     target = parse_target_semantics(target_value)
@@ -265,13 +313,17 @@ def run_terrain_on_path(
             close()
     emit_stage("inference_running")
 
-    calibration = fit_dev_calibration(depth, target)
+    calibration = fit_dev_calibration(depth, target, method=calibration_method)
 
     emit_stage("calibrating")
     product = create_scientific_height_product(depth, calibration, target)
     grid = rasterize_height_product(product)
     emit_stage("dsm_generation")
-    mesh = build_terrain_mesh(grid)
+    if mesh_levels is not None:
+        meshes = build_lod_meshes(grid, mesh_levels)
+        mesh = meshes[0]
+    else:
+        mesh = build_terrain_mesh(grid)
     emit_stage("mesh_generation")
 
     # Canonical serialization only: the transport shape is owned by
@@ -430,6 +482,8 @@ def main() -> None:
     sun_azimuth: float | None = None
     min_area = 20
     gsd: float | None = None
+    mesh_levels: tuple[int, ...] | None = None
+    calibration_method = "scale_offset"
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -455,6 +509,16 @@ def main() -> None:
         elif args[i] == "--gsd" and i + 1 < len(args):
             gsd = float(args[i + 1])
             i += 2
+        elif args[i] == "--mesh-levels" and i + 1 < len(args):
+            levels: list[int] = []
+            i += 1
+            while i < len(args) and not args[i].startswith("-"):
+                levels.append(int(args[i]))
+                i += 1
+            mesh_levels = tuple(levels) if levels else None
+        elif args[i] == "--calibration-method" and i + 1 < len(args):
+            calibration_method = args[i + 1]
+            i += 2
         else:
             positional.append(args[i])
             i += 1
@@ -471,7 +535,13 @@ def main() -> None:
             height = int(positional[2]) if len(positional) > 2 else 8
             print(
                 json.dumps(
-                    run_terrain(width, height, backend_name=backend_name),
+                    run_terrain(
+                        width,
+                        height,
+                        backend_name=backend_name,
+                        mesh_levels=mesh_levels,
+                        calibration_method=calibration_method,
+                    ),
                     allow_nan=False,
                 )
             )
@@ -494,7 +564,15 @@ def main() -> None:
                     and isinstance(checkpoint, dict)
                     and bool(checkpoint.get("sha_match"))
                 ):
-                    backend_name = DAV2_BACKEND_NAME
+                    # Prefer DA-V2 Large when its checkpoint is present, then
+                    # Small, otherwise keep the deterministic synthetic backend.
+                    large_ckpt = os.environ.get("DW_DAV2_LARGE_CKPT")
+                    if large_ckpt and Path(large_ckpt).is_file():
+                        backend_name = DAV2_LARGE_BACKEND_NAME
+                    elif (Path(__file__).resolve().parent / "checkpoints" / "depth_anything_v2_vitl.pth").is_file():
+                        backend_name = DAV2_LARGE_BACKEND_NAME
+                    else:
+                        backend_name = DAV2_BACKEND_NAME
             if mode == "relative":
                 runner = run_relative_on_path(
                     input_path,
@@ -507,6 +585,8 @@ def main() -> None:
                     target_value,
                     backend_name=backend_name,
                     device=device,
+                    mesh_levels=mesh_levels,
+                    calibration_method=calibration_method,
                 )
             print(json.dumps(runner, allow_nan=False))
         elif positional[0] == "--inspect":

@@ -58,6 +58,7 @@ class PipelineRequest:
     export_options: ExportOptions | None = None
     cancellation: CancellationToken | None = None
     solar_config: SolarConfig | None = None
+    semantic_preprocessor: Any | None = None
 
 
 @dataclass(frozen=True)

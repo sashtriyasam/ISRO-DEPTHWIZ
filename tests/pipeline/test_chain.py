@@ -81,3 +81,23 @@ def test_source_immutability(tmp_path: Path) -> None:
     assert repr(request) == snapshot
     remaining = {child.name for child in tmp_path.iterdir()}
     assert remaining == {"a.png", "out.tif"}
+
+
+def test_semantic_preprocessor_failure_falls_back_to_unrefined_depth(
+    tmp_path: Path,
+) -> None:
+    """When semantic preprocessing fails, the pipeline still succeeds with raw depth."""
+    from depthwizard.backends.synthetic import synthetic_depth_values
+
+    class FailingPreprocessor:
+        def process(self, rgb, depth):
+            raise RuntimeError("semantic boom")
+
+    source = make_png(tmp_path / 'a.png')
+    request = make_request(str(source), semantic_preprocessor=FailingPreprocessor())
+    result = PipelineRunner().run(request)
+    assert result.succeeded
+    assert result.depth is not None
+    res = result.depth.output_resolution
+    expected = synthetic_depth_values(res.width, res.height)
+    assert result.depth.depth_values == expected

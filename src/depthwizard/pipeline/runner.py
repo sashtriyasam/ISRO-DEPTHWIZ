@@ -12,6 +12,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from depthwizard.calibration.models import CalibrationResult
 from depthwizard.contracts.artifacts import METRIC_UNIT, DepthResult
 from depthwizard.contracts.pipeline import PipelineState
@@ -128,6 +130,9 @@ class _Engine:
         self._export: ExportResult | None = None
         self._solar_constraints: tuple[Any, ...] = ()
         self._solar_refused_reason: str | None = None
+        self._prepared_inspection: InputInspection | None = None
+        self._semantic_preprocessor: Any | None = None
+        self._semantic_preprocessor = request.semantic_preprocessor
 
     def _enter(self, state: PipelineState) -> None:
         """Record a transition (bootstrap allows terminal states first).
@@ -243,6 +248,7 @@ class _Engine:
             prepared = request.preprocessor.prepare(inspection)
         except Exception as exc:
             return self._fail(PipelineState.PREPROCESSING, exc)
+        self._prepared_inspection = prepared
         if not isinstance(prepared, InputInspection):
             return self._fail(
                 PipelineState.PREPROCESSING,
@@ -267,6 +273,20 @@ class _Engine:
                     f"DepthResult, got {type(depth).__name__}"
                 ),
             )
+        self._depth = depth
+        if self._semantic_preprocessor is not None:
+            try:
+                from depthwizard.solar.integrate import load_image_rgb
+                rgb = load_image_rgb(self._prepared_inspection)
+                depth_array = np.asarray(depth.depth_values, dtype=np.float32).reshape(
+                    depth.output_resolution.height, depth.output_resolution.width
+                )
+                refined_depth, _ = self._semantic_preprocessor.process(rgb, depth_array)
+                depth = depth.model_copy(
+                    update={"depth_values": tuple(refined_depth.ravel().tolist())}
+                )
+            except Exception:
+                pass
         self._depth = depth
 
         if self._cancelled():

@@ -175,4 +175,14 @@ describe("ApplicationBackendSource", () => {
       APPLICATION_BACKEND_LABEL,
     );
   });
+  it("forwards mesh levels and calibration method to the bridge", () => {
+    const source = new ApplicationBackendSource({
+      backend: "depth-anything-v2-small",
+      meshLevels: [1, 2],
+      calibrationMethod: "scale_offset_huber",
+    });
+    expect(source.meshLevels).toEqual([1, 2]);
+    expect(source.calibrationMethod).toBe("scale_offset_huber");
+    expect(source.backendLabel).toBe("Backend model (depth-anything-v2-small)");
+  });
 });
