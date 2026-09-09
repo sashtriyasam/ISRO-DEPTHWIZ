@@ -97,5 +97,3 @@ class SemanticPreprocessor:
     def process(self, rgb: np.ndarray, depth: np.ndarray) -> tuple[np.ndarray, Any]:
         """Refine depth using RGB semantics; return (refined_depth, aux)."""
         ...
-
-
