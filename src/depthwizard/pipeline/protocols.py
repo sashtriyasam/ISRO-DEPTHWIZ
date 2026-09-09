@@ -87,7 +87,7 @@ class CancellationToken:
         self._cancelled = True
 
 
-class SemanticPreprocessor:
+class SemanticPreprocessor(Protocol):
     """Semantic pre-processing boundary (refines depth with RGB context).
 
     Implementations take the RGB image and the raw depth array and
