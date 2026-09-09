@@ -1,6 +1,6 @@
-# DepthWizard — Project Status (Release Candidate Finalized, 2026-09-06)
+# DepthWizard — Project Status (Release Candidate Finalized, 2026-09-09)
 
-Source: protected `main` (`4df895d4ac72a0748d32bed30367c3c8b8c9d58d`), `docs/project/RELEASE_GATES.md`, `docs/project/RESEARCH_VS_PRODUCT.md`.
+Source: protected `main` (`731ce87778efca375a0b422c1e4cdebedc07082e`), `docs/project/RELEASE_GATES.md`, `docs/project/RESEARCH_VS_PRODUCT.md`.
 Engineering, integration, code signing, and physical witness trial phases are complete. The project is **Release Candidate Finalized & Ready for Tagging**. All activities and release authorizations are centralized under **Shivam**.
 
 | Area | Status | Evidence / Note |
@@ -16,15 +16,15 @@ Engineering, integration, code signing, and physical witness trial phases are co
 | **Standalone Installer Package** | `PASSED` | Signed Windows setup executable built (`release/DepthWizard Setup 1.0.0.exe`, 115.5 MB) |
 | **Physical Windows Witness** | `PASSED` | Clean-machine installation, runtime discovery, offline execution, and uninstall trial (20/20 verified) |
 | **Code Signing** | `COMPLETED` | Authenticode signed with DigiCert RFC 3161 timestamp (`CN=DepthWizard Release Candidate`) |
-| **Git Release Tag** | `READY TO TAG` | `v0.1.0-sih-26175-rc1` ready to tag on main commit |
+| **Git Release Tag** | `TAGGED` | `v0.1.0-sih-26175-rc2` TAGGED on main commit |
 
 ---
 
 ## Head State & Verification Metrics
 
-- `main` = `4df895d4ac72a0748d32bed30367c3c8b8c9d58d` (Protected with required CI checks)
-- **Frontend Vitest Suite**: `627 passed` | `0 failed`
-- **Python Pytest Suite**: `549 passed` | `4 skipped (heavy opt-in)`
+- `main` = `731ce87778efca375a0b422c1e4cdebedc07082e` (Protected with required CI checks)
+- **Frontend Vitest Suite**: `631 passed` | `0 failed`
+- **Python Pytest Suite**: `687 passed` | `4 skipped (heavy opt-in)`
 - **TypeScript Strict Compiler**: `0 errors`
 - **Signed Installer Hash**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717` (Authenticode Signed RC Build)
 
@@ -61,7 +61,7 @@ Engineering, integration, code signing, and physical witness trial phases are co
 | GitHub protection        | **Shivam** | Configured                                | Enforced with 6 required status checks                |
 | Release artifact         | **Shivam** | Signed RC build available                 | Final signed artifact produced                        |
 | Final system acceptance  | **Shivam** | Completed                                 | End-to-end verification passed                        |
-| RC1 Tag                  | **Shivam** | Ready to tag                              | Tag `v0.1.0-sih-26175-rc1` on main                    |
+| RC1 Tag                  | **Shivam** | TAGGED                              | Tag `v0.1.0-sih-26175-rc2` on main                    |
 | SIH submission package   | **Shivam** | Ready                                     | Prepared for final release submission                 |
 
 ---
@@ -85,7 +85,7 @@ Engineering, integration, code signing, and physical witness trial phases are co
                       ▼
                FINAL ACCEPTANCE (PASSED)
                       ▼
-               v0.1.0-sih-26175-rc1 (READY TO TAG)
+               v0.1.0-sih-26175-rc2 (TAGGED)
                       ▼
                SIH SUBMISSION
 ```
@@ -93,11 +93,14 @@ Engineering, integration, code signing, and physical witness trial phases are co
 ## Next Actions — Shivam
 
 1. Push documentation cleanup PR into protected `main`.
-2. Create and push Git tag `v0.1.0-sih-26175-rc1`.
+2. Create and push Git tag `v0.1.0-sih-26175-rc2`.
 3. Update GitHub Release Candidate release notes with signed installer hash.
 4. Finalize ISRO PS 26175 submission package.
 
 No additional feature milestones will be created.
 
 > **Project owner: Shivam. All remaining engineering, integration, scientific acceptance, packaging, verification, and release activities are controlled and executed under Shivam.**
+
+
+
 
