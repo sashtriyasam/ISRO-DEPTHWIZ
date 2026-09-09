@@ -222,6 +222,7 @@ def decimate_mesh(
         return mesh
     if target_ratio is not None:
         target_vertices = max(4, int(mesh.vertex_count * target_ratio))
+    assert target_vertices is not None
     if target_vertices >= mesh.vertex_count:
         return mesh
 
