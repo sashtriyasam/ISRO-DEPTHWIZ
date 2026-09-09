@@ -133,6 +133,7 @@ class _Engine:
         self._prepared_inspection: InputInspection | None = None
         self._semantic_preprocessor: Any | None = None
         self._semantic_preprocessor = request.semantic_preprocessor
+        self._warnings: list[str] = []
 
     def _enter(self, state: PipelineState) -> None:
         """Record a transition (bootstrap allows terminal states first).
@@ -187,6 +188,7 @@ class _Engine:
             calibration_scale=calibration.scale if calibration else None,
             calibration_offset=calibration.offset if calibration else None,
             target_semantics=request.target_semantics,
+            warnings=tuple(self._warnings),
             mesh_requested=request.build_mesh,
             geotiff_path=request.geotiff_path,
             solar_constraints=self._solar_constraints,
@@ -208,6 +210,7 @@ class _Engine:
     def execute(self) -> PipelineResult:
         """Run every requested stage in dependency order."""
         request = self._request
+        self._warnings = []
         if self._cancelled():
             return self._finish(PipelineState.CANCELLED)
         try:
@@ -286,8 +289,10 @@ class _Engine:
                 depth = depth.model_copy(
                     update={"depth_values": tuple(refined_depth.ravel().tolist())}
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self._warnings.append(
+                    f"Semantic preprocessing skipped: {type(exc).__name__}: {exc}"
+                )
         self._depth = depth
 
         if self._cancelled():

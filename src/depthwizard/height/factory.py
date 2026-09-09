@@ -101,7 +101,9 @@ def create_scientific_height_product(
             f"({depth_checksum}) differs from calibration source checksum "
             f"({calibration_checksum}); refusing to combine unrelated sources"
         )
-    values = apply_calibration(depth_result.depth_values, calibration)
+    values = apply_calibration(
+        depth_result.depth_values, calibration, piecewise_params=calibration.piecewise_params
+    )
     source_input_id = depth_result.provenance.source_input_id or calibration.source_input_id
     source_checksum = depth_checksum or calibration_checksum
     provenance = calibration.to_provenance().model_copy(
@@ -132,5 +134,6 @@ def create_scientific_height_product(
         calibration_scale=calibration.scale,
         calibration_offset=calibration.offset,
         calibration_valid_samples=calibration.valid_samples,
+        piecewise_params=calibration.piecewise_params,
         provenance=provenance,
     )

@@ -85,6 +85,7 @@ def rasterize_height_product(
         calibration_scale=product.calibration_scale,
         calibration_offset=product.calibration_offset,
         calibration_valid_samples=product.calibration_valid_samples,
+        piecewise_params=product.piecewise_params,
         provenance=product.provenance,
     )
 

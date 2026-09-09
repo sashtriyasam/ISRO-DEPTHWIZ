@@ -1,6 +1,8 @@
 """Basic tests for RuleBasedTerrainClassifier and SemanticMask."""
 
 import numpy as np
+import pytest
+from pydantic import ValidationError
 
 from depthwizard.semantics.classifier import (
     LandCoverClass,
@@ -56,11 +58,8 @@ def test_semantic_mask_model():
 def test_semantic_mask_frozen():
     class_map = np.full((4, 4), LandCoverClass.BUILDING, dtype=np.int16)
     mask = SemanticMask(class_map=class_map, method="test")
-    try:
+    with pytest.raises(ValidationError):
         mask.class_map = np.zeros((2, 2), dtype=np.int16)
-        raise AssertionError("Should not allow mutation")
-    except Exception:
-        pass
 
 
 def test_classifier_rejects_bad_input():

@@ -58,6 +58,10 @@ class ScientificHeightProduct(BaseModel):
     calibration_scale: float
     calibration_offset: float
     calibration_valid_samples: int = Field(ge=0)
+    piecewise_params: tuple[tuple[float, float, float], ...] | None = Field(
+        default=None,
+        description="For PIECEWISE_LINEAR: each tuple is (knot_x, scale, offset).",
+    )
     provenance: ProductProvenance = Field(
         description="Product provenance derived from the calibration record "
         "plus depth-backend identity (authoritative source: calibration)."
