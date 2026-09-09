@@ -59,7 +59,7 @@ def load_image_rgb(inspection: InputInspection) -> np.ndarray:
                 bands = ds.count
                 if bands >= 3:
                     data = ds.read((1, 2, 3))
-                    return np.transpose(data, (1, 2, 0)).astype(np.uint8)  # type: ignore[no-any-return]
+                    return np.transpose(data, (1, 2, 0)).astype(np.uint8)
                 elif bands == 1:
                     gray = ds.read(1)
                     return np.stack([gray, gray, gray], axis=-1).astype(np.uint8)

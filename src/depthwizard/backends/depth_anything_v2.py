@@ -123,7 +123,7 @@ def _load_image_rgb(inspection: InputInspection) -> np.ndarray:
                     f"{inspection.handle.display_name}"
                 )
             # rasterio returns (bands, H, W) — transpose to (H, W, bands)
-            return np.transpose(data, (1, 2, 0)).astype(np.uint8)  # type: ignore[no-any-return]
+            return np.transpose(data, (1, 2, 0)).astype(np.uint8)
 
     raise InvalidInputError(
         f"Unsupported format for DA-V2 inference: {fmt.value} ({inspection.handle.display_name})"
