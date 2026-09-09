@@ -93,7 +93,7 @@ def test_semantic_preprocessor_failure_falls_back_to_unrefined_depth(
         def process(self, rgb, depth):
             raise RuntimeError("semantic boom")
 
-    source = make_png(tmp_path / 'a.png')
+    source = make_png(tmp_path / "a.png")
     request = make_request(str(source), semantic_preprocessor=FailingPreprocessor())
     result = PipelineRunner().run(request)
     assert result.succeeded

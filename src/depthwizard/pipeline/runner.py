@@ -277,6 +277,7 @@ class _Engine:
         if self._semantic_preprocessor is not None:
             try:
                 from depthwizard.solar.integrate import load_image_rgb
+
                 rgb = load_image_rgb(self._prepared_inspection)
                 depth_array = np.asarray(depth.depth_values, dtype=np.float32).reshape(
                     depth.output_resolution.height, depth.output_resolution.width
