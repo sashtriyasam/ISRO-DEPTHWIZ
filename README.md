@@ -1,15 +1,15 @@
 ﻿# DepthWizard — ISRO SIH 26175 Release Candidate
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0--sih--26175--rc2-orange.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc2)
+[![Release](https://img.shields.io/badge/Release-v1.2.0-success.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
-[![Python](https://img.shields.io/badge/Python-3.12_|_687_Tests_Passed-success.svg)](#python-scientific-engine)
+[![Python](https://img.shields.io/badge/Python-3.12_|_685_Tests_Passed-success.svg)](#python-scientific-engine)
 [![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_631_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
 
 > **Single-View Height Estimation and 3D Flythrough**  
 > **Problem Statement ID:** 26175  
 > **Organization:** Indian Space Research Organisation (ISRO), Department of Space / SAC  
 > **Theme:** Disaster Management / Urban Planning / Reconnaissance  
-> **Canonical Main Commit SHA:** `45124c85785205013ac1a35f6ed647a079d4d2a9` (`45124c8`)  
+> **Canonical Main Commit SHA:** `093eef8`
 
 ---
 
@@ -21,8 +21,9 @@
 - **Path B (Georeferenced GeoTIFF)**: Converts relative depth maps into an **Absolute Metric Digital Surface Model (`DSMGrid`)** with height in metres ($m$) using low-resolution reference DEMs (e.g., SRTM 30m) or Ground Control Points (GCPs), strictly preserving spatial CRS and affine transformation.
 - **3D Texture Projection & Interactive Flythrough**: Projects original optical RGB textures onto generated 3D terrain meshes rendered via React 19 + Three.js + Electron, supporting Orbit, First-Person aerial controls, Waypoint Flythrough playback, slope degree calculation (`SlopeGrid`), and height inspection.
 
-### 🆕 Recent Enhancements (v0.1.0-sih-26175-rc2)
+### 🆕 Recent Enhancements (v1.2.0)
 - **Calibration Method Selection**: Users can now choose between OLS (`scale_offset`), robust Huber (`scale_offset_huber`), and piecewise-linear (`piecewise_linear`) calibration methods via the UI and service API.
+- **FileBasedCalibrationProvider**: File-backed calibration provider for loading calibration parameters from external files, enabling persistent and reusable calibration profiles.
 - **Mesh LOD Control**: Selectable mesh detail levels (`1`, `1,4,16`, `1,2,4,8,16`) enable performance-optimized terrain rendering. The pipeline now supports adaptive mesh decimation via vertex clustering.
 - **Semantic Preprocessing**: Optional semantic-aware depth refinement can be injected into the pipeline. Implementations include rule-based terrain classification and bilateral/SAM refinement stubs.
 - **DepthAnything V2 Large**: The scientific engine now supports the DA-V2 Large backbone (`depth-anything-v2-large`) when its checkpoint is available, with automatic fallback to smaller backends.
@@ -31,7 +32,7 @@
 
 ---
 
-## 📊 ISRO Problem Statement 26175 Matrix & Verification
+## 🌟 ISRO Problem Statement 26175 Matrix & Verification
 
 | Requirement | Implementation Component | Status & Verification Evidence |
 | :--- | :--- | :--- |
@@ -81,7 +82,7 @@
 
 ### Standalone Windows Installer (Release Candidate)
 Download the signed standalone installer directly from the GitHub Release Candidate tag:
-- **Download Installer**: [`DepthWizard Setup 1.0.0.exe`](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v0.1.0-sih-26175-rc2)
+- **Download Installer**: [`DepthWizard Setup 1.0.0.exe`](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
 - **Installer SHA-256**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717`
 - **Authenticode Signature**: Verified (`CN=DepthWizard Release Candidate, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
 - **Clean Machine Physical Witness**: `PASSED` (Verification items verified)
@@ -92,7 +93,7 @@ Download the signed standalone installer directly from the GitHub Release Candid
 
 ### Python Core Engine
 ```bash
-# Execute all 687 Python tests (5 skipped opt-in heavy models)
+# Execute all 685 Python tests (7 skipped opt-in heavy models)
 python -m pytest tests/
 
 # Code quality & typing checks
