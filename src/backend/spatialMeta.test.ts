@@ -55,12 +55,12 @@ describe("applyProvenance", () => {
     applyProvenance(backend, {
       source_input_id: "tile.png",
       input_checksum: "abc",
-      software_version: "0.1.0",
+      software_version: "1.2.0",
       semantic_meaning: "relative_depth",
     });
     expect(backend.input_id).toBe("tile.png");
     expect(backend.input_checksum).toBe("abc");
-    expect(backend.software_version).toBe("0.1.0");
+    expect(backend.software_version).toBe("1.2.0");
     expect(backend.semantic_meaning).toBe("relative_depth");
   });
 
@@ -88,7 +88,7 @@ describe("adapter provenance and spatial preservation", () => {
     const backend = result.artifact!.metadata.backend!;
     expect(backend.input_id).toBe("test-input.png");
     expect(backend.input_checksum).toBe("a".repeat(64));
-    expect(backend.software_version).toBe("0.1.0");
+    expect(backend.software_version).toBe("1.2.0");
     expect(backend.semantic_meaning).toBe("relative_depth from synthetic development backend");
   });
 
@@ -147,7 +147,7 @@ describe("terrain adapter preservation", () => {
     expect(backend.calibration_offset).toBe(10);
     expect(backend.calibration_reference).toBe("synthetic-dev-ref");
     expect(backend.input_checksum).toMatch(/^[0-9a-f]{64}$/);
-    expect(backend.software_version).toBe("0.1.0");
+    expect(backend.software_version).toBe("1.2.0");
     expect(result.artifact!.metadata.spatialDetails).toBeUndefined();
   });
 });
