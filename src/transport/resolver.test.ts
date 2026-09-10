@@ -98,7 +98,7 @@ function minimalBundle(): {
         target_semantics: "absolute_elevation_dsm",
         mesh_requested: true,
         geotiff_path: null,
-        engine_version: "0.1.0",
+        engine_version: "1.2.0",
       },
     },
   };

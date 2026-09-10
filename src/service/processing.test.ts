@@ -27,7 +27,7 @@ function responseWith(
       target_semantics: null,
       mesh_requested: false,
       geotiff_path: null,
-      engine_version: "0.1.0",
+      engine_version: "1.2.0",
     },
   };
 }

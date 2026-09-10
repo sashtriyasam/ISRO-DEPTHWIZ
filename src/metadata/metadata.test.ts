@@ -38,7 +38,7 @@ function metricArtifact(): SceneArtifact {
         calibration_offset: 10.0,
         input_id: "tile.png",
         input_checksum: "a".repeat(64),
-        software_version: "0.1.0",
+        software_version: "1.2.0",
         semantic_meaning: "absolute_elevation_dsm",
       },
       spatialDetails: {

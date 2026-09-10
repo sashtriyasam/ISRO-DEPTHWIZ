@@ -55,7 +55,7 @@ describe("applyProvenance", () => {
     applyProvenance(backend, {
       source_input_id: "tile.png",
       input_checksum: "abc",
-      software_version: "0.1.0",
+      software_version: "1.2.0",
       semantic_meaning: "relative_depth",
     });
     expect(backend.input_id).toBe("tile.png");
