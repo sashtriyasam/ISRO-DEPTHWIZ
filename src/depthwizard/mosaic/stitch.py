@@ -140,8 +140,8 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     )
 
     # Accumulator buffers
-    accum_sum = np.zeros((mosaic_h, mosaic_w), dtype=np.float64)
-    accum_count = np.zeros((mosaic_h, mosaic_w), dtype=np.int32)
+    accum_sum: np.ndarray = np.zeros((mosaic_h, mosaic_w), dtype=np.float64)
+    accum_count: np.ndarray = np.zeros((mosaic_h, mosaic_w), dtype=np.int32)
 
     for g in grids:
         assert g.spatial.details is not None
@@ -169,7 +169,7 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
                         accum_count[mr, mc] += 1
 
     mosaic_valid = accum_count > 0
-    mosaic_array = np.full((mosaic_h, mosaic_w), NODATA, dtype=np.float32)
+    mosaic_array: np.ndarray = np.full((mosaic_h, mosaic_w), NODATA, dtype=np.float32)
     mosaic_array[mosaic_valid] = (accum_sum[mosaic_valid] / accum_count[mosaic_valid]).astype(
         np.float32
     )

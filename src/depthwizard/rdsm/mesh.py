@@ -30,8 +30,8 @@ def build_relative_mesh(grid: RelativeSurfaceGrid) -> RelativeTerrainMesh:
     height, width = grid.height, grid.width
     valid = grid.valid_mask
     rows, cols = np.nonzero(valid)
-    plane_x = cols.astype(np.float64)
-    plane_z = rows.astype(np.float64)
+    plane_x: np.ndarray = cols.astype(np.float64)
+    plane_z: np.ndarray = rows.astype(np.float64)
     surface = _triangulate_surface(grid.array, valid, plane_x, plane_z, False, width, height)
     assert isinstance(surface["vertices"], np.ndarray)
     return RelativeTerrainMesh(

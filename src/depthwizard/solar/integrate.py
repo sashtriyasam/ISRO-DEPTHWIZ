@@ -25,7 +25,9 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import numpy as np
-
+    from numpy.typing import NDArray
+else:
+    from numpy.typing import NDArray
 from depthwizard.errors import InvalidInputError
 from depthwizard.ingestion.models import InputInspection
 from depthwizard.solar.geometry import estimate_height
@@ -34,7 +36,7 @@ from depthwizard.solar.shadow_detect import ShadowRegion, detect_shadows, gsd_fr
 from depthwizard.solar.sun_angles import SunAngles, resolve_sun_angles
 
 
-def load_image_rgb(inspection: InputInspection) -> np.ndarray:
+def load_image_rgb(inspection: InputInspection) -> NDArray[np.uint8]:
     """Load image pixels as HWC uint8 RGB from an InputInspection."""
     import numpy as np
 

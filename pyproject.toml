@@ -54,6 +54,7 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = ["numpy", "numpy.*"]
 ignore_errors = true
+follow_imports = "skip"
 
 # rasterio ships no stubs/py.typed (verified with rasterio 1.5.1):
 # skip type analysis of its imports instead of failing the run.

@@ -111,7 +111,7 @@ class TerrainClassWeighter:
             return
         arr = np.asarray(predicted_values, dtype=np.float64)
         if self.elevation_bins <= 0 or self.elevation_bins > len(arr):
-            bins = np.zeros(len(arr), dtype=np.int64)
+            bins: np.ndarray = np.zeros(len(arr), dtype=np.int64)
         else:
             quantiles = np.quantile(arr, np.linspace(0.0, 1.0, self.elevation_bins + 1))
             bins = np.digitize(arr, quantiles[1:-1], right=False)
@@ -134,7 +134,7 @@ class TerrainClassWeighter:
             raise RuntimeError("TerrainClassWeighter must be fit before weighting samples")
         arr = np.asarray((predicted,), dtype=np.float64)
         if self.elevation_bins <= 0 or self.elevation_bins > 1:
-            bins = np.zeros(1, dtype=np.int64)
+            bins: np.ndarray = np.zeros(1, dtype=np.int64)
         else:
             quantiles = np.quantile(
                 np.asarray(tuple(self._bin_counts.keys()), dtype=np.float64)

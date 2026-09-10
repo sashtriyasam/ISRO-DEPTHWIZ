@@ -33,8 +33,8 @@ def _planar_coordinates(
     """
     details = grid.spatial.details
     transform = details.transform if details is not None else None
-    cols_f = cols.astype(np.float64)
-    rows_f = rows.astype(np.float64)
+    cols_f: np.ndarray = cols.astype(np.float64)
+    rows_f: np.ndarray = rows.astype(np.float64)
     if transform is not None:
         a, b, c, d, e, f = (
             transform.a,
@@ -91,7 +91,7 @@ def _triangulate_surface(
             f"mesh needs valid source pixels; grid {width}x{height} "
             f"has {invalid_count} invalid and 0 valid"
         )
-    index_of = np.full((height, width), -1, dtype=np.int64)
+    index_of: np.ndarray = np.full((height, width), -1, dtype=np.int64)
     index_of[valid] = np.arange(valid_count, dtype=np.int64)
     rows, cols = np.nonzero(valid)
     source_indices = (rows.astype(np.int64) * width + cols.astype(np.int64)).astype(np.int64)
@@ -117,7 +117,7 @@ def _triangulate_surface(
     i11 = index_of[1:, 1:][quad_ok]
     first = np.stack([i00, i10, i01], axis=1)
     second = np.stack([i10, i11, i01], axis=1)
-    triangles = np.empty((2 * quad_used, 3), dtype=np.int64)
+    triangles: np.ndarray = np.empty((2 * quad_used, 3), dtype=np.int64)
     triangles[0::2] = first
     triangles[1::2] = second
     if flip:
@@ -125,7 +125,7 @@ def _triangulate_surface(
     edges_a = vertices[triangles[:, 1]] - vertices[triangles[:, 0]]
     edges_b = vertices[triangles[:, 2]] - vertices[triangles[:, 0]]
     faces = np.cross(edges_a, edges_b)
-    normals = np.zeros((valid_count, 3), dtype=np.float64)
+    normals: np.ndarray = np.zeros((valid_count, 3), dtype=np.float64)
     np.add.at(normals, triangles.ravel(), np.repeat(faces, 3, axis=0))
     lengths = np.sqrt((normals**2).sum(axis=1))
     nonzero = lengths > 0.0
@@ -260,7 +260,7 @@ def decimate_mesh(
             new_vertices.append(vertices[i])
             new_normals.append(normals[i])
             new_uvs.append(uvs[i])
-            new_source_indices.append(source_indices[i])
+            new_source_indices.append(int(source_indices[i]))
 
     new_index_map = {}
     for i in range(mesh.vertex_count):
@@ -273,9 +273,9 @@ def decimate_mesh(
 
     new_indices = []
     for i in range(0, len(indices), 3):
-        v0 = new_index_map[indices[i]]
-        v1 = new_index_map[indices[i + 1]]
-        v2 = new_index_map[indices[i + 2]]
+        v0 = new_index_map[int(indices[i])]
+        v1 = new_index_map[int(indices[i + 1])]
+        v2 = new_index_map[int(indices[i + 2])]
         if v0 != v1 and v1 != v2 and v0 != v2:
             new_indices.extend([v0, v1, v2])
 

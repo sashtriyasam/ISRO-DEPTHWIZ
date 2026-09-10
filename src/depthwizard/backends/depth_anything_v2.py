@@ -38,6 +38,7 @@ from depthwizard.version import __version__
 
 if TYPE_CHECKING:
     import numpy as np
+    from numpy.typing import NDArray
 
 MODEL_NAME = "DepthAnythingV2-Small"
 MODEL_VERSION = "2.0.0"
@@ -82,7 +83,7 @@ def _default_checkpoint_path() -> Path:
     return Path.cwd() / "checkpoints" / CHECKPOINT_FILE
 
 
-def _load_image_rgb(inspection: InputInspection) -> np.ndarray:
+def _load_image_rgb(inspection: InputInspection) -> NDArray[np.uint8]:
     """Load image pixels as HWC uint8 RGB from the inspected input.
 
     Uses Pillow for PNG/JPEG, rasterio for TIFF.  Returns a numpy array

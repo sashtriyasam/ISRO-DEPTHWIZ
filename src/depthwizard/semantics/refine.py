@@ -49,7 +49,7 @@ def refine_depth_map(
         return depth.copy()
 
     h, w = depth.shape
-    out = depth.astype(np.float64, copy=True)
+    out: np.ndarray = depth.astype(np.float64, copy=True)
     radius = max(1, int(math.ceil(2.0 * spatial_sigma)))
 
     # Pre-calculate spatial Gaussian kernel
