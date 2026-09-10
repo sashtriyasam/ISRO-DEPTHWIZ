@@ -299,6 +299,9 @@ class _Engine:
             return self._finish(PipelineState.CANCELLED)
         self._enter(PipelineState.CALIBRATING)
         try:
+            prepare = getattr(request.calibration_provider, "prepare", None)
+            if callable(prepare):
+                prepare(self._inspection)
             calibration = request.calibration_provider.calibrate(depth)
             self._check_calibration(calibration)
             product = create_scientific_height_product(depth, calibration, request.target_semantics)
