@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import NDArray
 
 from depthwizard.calibration.apply import apply_calibration
 from depthwizard.contracts.artifacts import DepthBackend
@@ -121,7 +122,9 @@ def run_sample(
         reference.crs,
     )
 
-    predicted = np.asarray(depth.depth_values, dtype=np.float64).reshape(height, width)
+    predicted: NDArray[np.float64] = np.asarray(depth.depth_values, dtype=np.float64).reshape(
+        height, width
+    )
     reference_values = np.asarray(reference.values, dtype=np.float64)
     base_valid = valid_evaluation_mask(
         predicted, reference_values, np.asarray(reference.valid_mask, dtype=bool)
@@ -149,7 +152,7 @@ def run_sample(
     if not np.isfinite(eval_predicted).all():
         raise ValueError("NO_VALID_PIXELS: evaluation pixels must be finite")
     timer_start = time.perf_counter()
-    calibrated = np.asarray(
+    calibrated: NDArray[np.float64] = np.asarray(
         apply_calibration(tuple(float(value) for value in eval_predicted), calibration),
         dtype=np.float64,
     )

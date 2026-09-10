@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 import numpy as np
+from numpy.typing import NDArray
 
 from depthwizard.calibration.models import CalibrationSamples
 from depthwizard.controls.build import build_calibration_samples
@@ -109,7 +110,7 @@ class TerrainClassWeighter:
             self._bin_counts = {}
             self._fitted = True
             return
-        arr = np.asarray(predicted_values, dtype=np.float64)
+        arr: NDArray[np.float64] = np.asarray(predicted_values, dtype=np.float64)
         if self.elevation_bins <= 0 or self.elevation_bins > len(arr):
             bins: np.ndarray = np.zeros(len(arr), dtype=np.int64)
         else:
@@ -132,7 +133,7 @@ class TerrainClassWeighter:
     ) -> float:
         if not self._fitted:
             raise RuntimeError("TerrainClassWeighter must be fit before weighting samples")
-        arr = np.asarray((predicted,), dtype=np.float64)
+        arr: NDArray[np.float64] = np.asarray((predicted,), dtype=np.float64)
         if self.elevation_bins <= 0 or self.elevation_bins > 1:
             bins: np.ndarray = np.zeros(1, dtype=np.int64)
         else:

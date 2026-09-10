@@ -8,6 +8,7 @@ relative grid is never built from calibrated output.
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import NDArray
 
 from depthwizard.contracts.artifacts import DepthResult
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
@@ -44,9 +45,13 @@ def rasterize_relative_surface(depth: DepthResult) -> RelativeSurfaceGrid:
         )
     width = depth.output_resolution.width
     height = depth.output_resolution.height
-    array = np.asarray(depth.depth_values, dtype=np.float64).reshape(height, width)
+    array: NDArray[np.float64] = np.asarray(depth.depth_values, dtype=np.float64).reshape(
+        height, width
+    )
     if depth.valid_mask is not None:
-        declared = np.asarray(depth.valid_mask, dtype=bool).reshape(height, width)
+        declared: NDArray[np.bool_] = np.asarray(depth.valid_mask, dtype=bool).reshape(
+            height, width
+        )
         valid = np.ascontiguousarray(declared & np.isfinite(array))
     else:
         valid = np.ascontiguousarray(np.isfinite(array))

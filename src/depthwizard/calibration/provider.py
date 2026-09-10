@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import NDArray
 
 from depthwizard.calibration.calibrator import (
     MIN_VALID_SAMPLES,
@@ -99,9 +100,9 @@ class FileBasedCalibrationProvider:
         dem_inspection = inspect_dem(path)
         terrain = build_terrain_reference(dem_inspection, target)
 
-        depth_array = np.asarray(depth_result.depth_values, dtype=np.float32).reshape(
-            target.height, target.width
-        )
+        depth_array: NDArray[np.float32] = np.asarray(
+            depth_result.depth_values, dtype=np.float32
+        ).reshape(target.height, target.width)
 
         predicted = depth_array[terrain.valid_mask]
         reference = terrain.array[terrain.valid_mask]
@@ -133,7 +134,9 @@ class FileBasedCalibrationProvider:
                 f"Too few GCPs for calibration: {len(gcps)} (need >= {MIN_VALID_SAMPLES})"
             )
 
-        depth_array = np.asarray(depth_result.depth_values, dtype=np.float32).reshape(
+        depth_array: NDArray[np.float32] = np.asarray(
+            depth_result.depth_values, dtype=np.float32
+        ).reshape(
             depth_result.output_resolution.height,
             depth_result.output_resolution.width,
         )
@@ -144,7 +147,7 @@ class FileBasedCalibrationProvider:
             row = int(round(gcp["row"]))
             col = int(round(gcp["col"]))
             if 0 <= row < depth_array.shape[0] and 0 <= col < depth_array.shape[1]:
-                predicted.append(depth_array[row, col])
+                predicted.append(float(depth_array[row, col]))
                 reference.append(gcp["elevation"])
 
         if len(predicted) < MIN_VALID_SAMPLES:
