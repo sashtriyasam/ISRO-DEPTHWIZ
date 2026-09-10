@@ -38,6 +38,7 @@ from depthwizard.version import __version__
 
 if TYPE_CHECKING:
     import numpy as np
+    from numpy.typing import NDArray
 
 MODEL_NAME = "DepthAnythingV2-Small"
 MODEL_VERSION = "2.0.0"
@@ -82,7 +83,7 @@ def _default_checkpoint_path() -> Path:
     return Path.cwd() / "checkpoints" / CHECKPOINT_FILE
 
 
-def _load_image_rgb(inspection: InputInspection) -> np.ndarray:
+def _load_image_rgb(inspection: InputInspection) -> NDArray[np.uint8]:
     """Load image pixels as HWC uint8 RGB from the inspected input.
 
     Uses Pillow for PNG/JPEG, rasterio for TIFF.  Returns a numpy array
@@ -123,7 +124,7 @@ def _load_image_rgb(inspection: InputInspection) -> np.ndarray:
                     f"{inspection.handle.display_name}"
                 )
             # rasterio returns (bands, H, W) — transpose to (H, W, bands)
-            return np.transpose(data, (1, 2, 0)).astype(np.uint8)  # type: ignore[no-any-return]
+            return np.transpose(data, (1, 2, 0)).astype(np.uint8)
 
     raise InvalidInputError(
         f"Unsupported format for DA-V2 inference: {fmt.value} ({inspection.handle.display_name})"

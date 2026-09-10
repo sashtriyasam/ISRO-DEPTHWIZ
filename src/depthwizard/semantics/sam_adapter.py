@@ -68,7 +68,7 @@ class EdgeAwareBilateralRefiner:
             return depth.copy()
 
         h, w = depth.shape
-        out = depth.astype(np.float64, copy=True)
+        out: np.ndarray = depth.astype(np.float64, copy=True)
         radius = max(1, int((2.0 * self.spatial_sigma) + 0.5))
 
         y, x = np.ogrid[-radius : radius + 1, -radius : radius + 1]

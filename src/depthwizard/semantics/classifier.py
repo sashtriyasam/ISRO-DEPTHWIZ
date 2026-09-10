@@ -60,9 +60,9 @@ class RuleBasedTerrainClassifier:
         if rgb.ndim != 3 or rgb.shape[2] != 3:
             raise ValueError("rgb must be HxWx3")
         h, w = rgb.shape[:2]
-        r = rgb[:, :, 0].astype(np.float64)
-        g = rgb[:, :, 1].astype(np.float64)
-        b = rgb[:, :, 2].astype(np.float64)
+        r: np.ndarray = rgb[:, :, 0].astype(np.float64)
+        g: np.ndarray = rgb[:, :, 1].astype(np.float64)
+        b: np.ndarray = rgb[:, :, 2].astype(np.float64)
 
         lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
         max_c = np.maximum(np.maximum(r, g), b)
@@ -107,7 +107,7 @@ class RuleBasedTerrainClassifier:
         )
         class_map[bare] = LandCoverClass.BARE_SOIL
 
-        return class_map
+        return class_map  # type: ignore[no-any-return]
 
 
 def _sobel_horizontal(gray: np.ndarray) -> np.ndarray:
@@ -120,7 +120,7 @@ def _sobel_horizontal(gray: np.ndarray) -> np.ndarray:
         + 2.0 * padded[2:, 1:-1]
         + padded[2:, 2:]
     ) / 8.0
-    return np.asarray(res, dtype=np.float64)
+    return np.asarray(res, dtype=np.float64)  # type: ignore[no-any-return]
 
 
 def _sobel_vertical(gray: np.ndarray) -> np.ndarray:
@@ -133,7 +133,7 @@ def _sobel_vertical(gray: np.ndarray) -> np.ndarray:
         + 2.0 * padded[1:-1, 2:]
         + padded[2:, 2:]
     ) / 8.0
-    return np.asarray(res, dtype=np.float64)
+    return np.asarray(res, dtype=np.float64)  # type: ignore[no-any-return]
 
 
 def _conv2d(arr: np.ndarray, kernel: np.ndarray) -> np.ndarray:
@@ -144,7 +144,7 @@ def _conv2d(arr: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     for dy in range(kh):
         for dx in range(kw):
             out += kernel[dy, dx] * padded[dy : dy + arr.shape[0], dx : dx + arr.shape[1]]
-    return out
+    return out  # type: ignore[no-any-return]
 
 
 def _local_mean(arr: np.ndarray, k: int) -> np.ndarray:
@@ -155,7 +155,7 @@ def _local_mean(arr: np.ndarray, k: int) -> np.ndarray:
 def _local_variance(arr: np.ndarray, k: int) -> np.ndarray:
     mean = _local_mean(arr, k)
     mean_sq = _local_mean(arr * arr, k)
-    return np.asarray(np.maximum(mean_sq - mean * mean, 0.0), dtype=np.float64)
+    return np.asarray(np.maximum(mean_sq - mean * mean, 0.0), dtype=np.float64)  # type: ignore[no-any-return]
 
 
 class SemanticMask(BaseModel):

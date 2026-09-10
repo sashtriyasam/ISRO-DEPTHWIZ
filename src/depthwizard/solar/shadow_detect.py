@@ -92,9 +92,9 @@ def _luminance(rgb: np.ndarray) -> np.ndarray:
     """BT.709 luminance from HxWx3 uint8 array, returned as float32 HxW."""
     import numpy as np
 
-    r = rgb[:, :, 0].astype(np.float32)
-    g = rgb[:, :, 1].astype(np.float32)
-    b = rgb[:, :, 2].astype(np.float32)
+    r: np.ndarray = rgb[:, :, 0].astype(np.float32)
+    g: np.ndarray = rgb[:, :, 1].astype(np.float32)
+    b: np.ndarray = rgb[:, :, 2].astype(np.float32)
     return 0.2126 * r + 0.7152 * g + 0.0722 * b  # type: ignore[no-any-return]
 
 
@@ -149,7 +149,7 @@ def _connected_regions(
     import numpy as np
 
     h, w = mask.shape
-    labels = np.zeros((h, w), dtype=np.int32)
+    labels: np.ndarray = np.zeros((h, w), dtype=np.int32)
     parent: list[int] = [0]  # index 0 = background root
 
     def find(x: int) -> int:
@@ -168,8 +168,8 @@ def _connected_regions(
         for col in range(w):
             if not mask[row, col]:
                 continue
-            above = labels[row - 1, col] if row > 0 else 0
-            left = labels[row, col - 1] if col > 0 else 0
+            above = int(labels[row - 1, col]) if row > 0 else 0
+            left = int(labels[row, col - 1]) if col > 0 else 0
             above_r = find(above) if above else 0
             left_r = find(left) if left else 0
             if above_r == 0 and left_r == 0:
@@ -188,7 +188,7 @@ def _connected_regions(
     for row in range(h):
         for col in range(w):
             if labels[row, col]:
-                labels[row, col] = find(labels[row, col])
+                labels[row, col] = find(int(labels[row, col]))
     return labels
 
 

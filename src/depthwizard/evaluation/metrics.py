@@ -50,7 +50,7 @@ def valid_evaluation_mask(
         if valid.shape != mask.shape:
             raise ValueError(f"mask shape mismatch: {valid.shape} vs {mask.shape}")
         mask = mask & valid
-    return np.ascontiguousarray(mask)
+    return np.ascontiguousarray(mask)  # type: ignore[no-any-return]
 
 
 def _r_squared(errors: np.ndarray, reference: np.ndarray) -> float:

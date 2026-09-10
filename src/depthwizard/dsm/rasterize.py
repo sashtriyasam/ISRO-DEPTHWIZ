@@ -9,6 +9,7 @@ an explicit invalid count. All-invalid input fails explicitly.
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import NDArray
 
 from depthwizard.dsm.grid import (
     BAND_COUNT,
@@ -45,14 +46,16 @@ def rasterize_height_product(
     expected = width * height
     # np.asarray on a tuple always allocates; reshape is C-order
     # (row-major), matching DepthResult/ScientificHeightProduct layout.
-    base = np.asarray(product.values, dtype=np.float64).reshape((height, width))
+    base: NDArray[np.float64] = np.asarray(product.values, dtype=np.float64).reshape(
+        (height, width)
+    )
     if base.size != expected:  # defensive: model already guarantees this
         raise InvalidInputError(f"raster value count {base.size} != dimensions {width}x{height}")
     # Overflow to inf on downcast is an explicit policy input: the
     # finiteness mask below is the handling, so the runtime warning
     # would add no information.
     with np.errstate(over="ignore"):
-        working = base.astype(opts.dtype, copy=True)
+        working: NDArray[np.float64] = base.astype(opts.dtype, copy=True)
     valid = np.isfinite(working)
     invalid_count = int((~valid).sum())
     if invalid_count == expected:

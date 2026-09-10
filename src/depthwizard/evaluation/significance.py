@@ -78,7 +78,7 @@ def _check_values(values: np.ndarray, label: str) -> np.ndarray:
         raise ValueError(f"EVALUATION_FAILED: no {label} samples for comparison")
     if not np.isfinite(array).all():
         raise ValueError(f"EVALUATION_FAILED: non-finite {label} metric values")
-    return array
+    return array  # type: ignore[no-any-return]
 
 
 def bootstrap_mean_interval(

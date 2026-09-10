@@ -182,7 +182,7 @@ def _verify_written(target: Path, grid: DSMGrid) -> None:
             if not bool(np.array_equal(data, grid.array, equal_nan=True)):
                 raise failure("data values differ from grid array")
             mask = dataset.read_masks(1)
-            expected_mask = (grid.valid_mask.astype("uint8")) * 255
+            expected_mask: np.ndarray = (grid.valid_mask.astype("uint8")) * 255
             if not bool((mask == expected_mask).all()):
                 raise failure("dataset mask differs from grid valid_mask")
 

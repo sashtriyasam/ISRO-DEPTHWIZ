@@ -32,7 +32,7 @@ def smoke_reference() -> np.ndarray:
 
 def smoke_relative() -> np.ndarray:
     """Exactly affine relative pair: (reference - 10) / 2.5."""
-    return (smoke_reference() - 10.0) / 2.5
+    return (smoke_reference() - 10.0) / 2.5  # type: ignore[no-any-return]
 
 
 class SmokeBackend:
@@ -78,7 +78,7 @@ class SmokeBackend:
 
 def smoke_loaded_sample() -> LoadedSample:
     """Build the in-memory 4x4 fixture (checker RGB + arange reference)."""
-    rgb = np.zeros((SMOKE_HEIGHT, SMOKE_WIDTH, 3), dtype=np.uint8)
+    rgb: np.ndarray = np.zeros((SMOKE_HEIGHT, SMOKE_WIDTH, 3), dtype=np.uint8)
     for row in range(SMOKE_HEIGHT):
         for col in range(SMOKE_WIDTH):
             value = 255 if (row + col) % 2 == 0 else 0

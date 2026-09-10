@@ -96,10 +96,10 @@ def _read_h5_array(path: Path) -> np.ndarray:
     with h5py.File(path, "r") as handle:
         for key in ("image", "data"):
             if key in handle and isinstance(handle[key], h5py.Dataset):
-                return np.array(handle[key])
+                return np.array(handle[key])  # type: ignore[no-any-return]
         for value in handle.values():
             if isinstance(value, h5py.Dataset):
-                return np.array(value)
+                return np.array(value)  # type: ignore[no-any-return]
     raise ValueError(f"no readable dataset in {path.name}")
 
 
