@@ -155,7 +155,7 @@ describe("describeArtifact for a complete metric product", () => {
     expect(rowOf(artifact, "calibration", "Offset")).toBe("10");
     expect(rowOf(artifact, "provenance", "Backend")).toBe("synthetic-depth 0.1.0");
     expect(rowOf(artifact, "provenance", "Source")).toBe("Synthetic Development Backend");
-    expect(rowOf(artifact, "provenance", "Software")).toBe("0.1.0");
+    expect(rowOf(artifact, "provenance", "Software")).toBe("1.2.0");
     expect(rowOf(artifact, "input", "File")).toBe("tile.png");
     expect(rowOf(artifact, "input", "Checksum")).toContain("…");
   });
