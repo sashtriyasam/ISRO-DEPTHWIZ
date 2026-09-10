@@ -47,7 +47,7 @@ def test_calibration_transport() -> None:
     assert (transport.total_samples, transport.valid_samples) == (5, 5)
     assert transport.rmse == 0.0
     assert transport.r_squared == 1.0
-    assert transport.engine_version == "0.1.0"
+    assert transport.engine_version == "1.2.0"
 
 
 def test_dsm_transport(tmp_path: Path) -> None:
