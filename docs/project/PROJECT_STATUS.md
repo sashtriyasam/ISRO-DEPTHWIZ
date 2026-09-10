@@ -1,6 +1,6 @@
-# DepthWizard — Project Status (Release Candidate Finalized, 2026-09-09)
+# DepthWizard � Project Status (v1.2.0, 2026-09-10)
 
-Source: protected `main` (`731ce87778efca375a0b422c1e4cdebedc07082e`), `docs/project/RELEASE_GATES.md`, `docs/project/RESEARCH_VS_PRODUCT.md`.
+Source: protected `main` (`093eef8`), `docs/project/RELEASE_GATES.md`, `docs/project/RESEARCH_VS_PRODUCT.md`.
 Engineering, integration, code signing, and physical witness trial phases are complete. The project is **Release Candidate Finalized & Ready for Tagging**. All activities and release authorizations are centralized under **Shivam**.
 
 | Area | Status | Evidence / Note |
@@ -9,28 +9,27 @@ Engineering, integration, code signing, and physical witness trial phases are co
 | **Core Geospatial & Pipeline** | `PASSED` | `depthwizard.geospatial/dem/export/ingestion` + test suites 100% green |
 | **Shipped Depth Model** | `LOCKED` | **Depth Anything V2 Small** (`depth-anything-v2-small` / `depth_anything_v2_vits.pth`) |
 | **Research Model Track** | `FROZEN` | **M17** (`M17DepthBackend`) frozen in research track per `RESEARCH_VS_PRODUCT.md` |
-| **Calibration & Height Semantics**| `PASSED` | Engine + DEM reference + GCP controls integrated; metric validity rules strictly enforced |
+| **Calibration & Height Semantics** | `PASSED` | Engine + DEM reference + GCP controls integrated; metric validity rules strictly enforced; `FileBasedCalibrationProvider` for file-backed calibration |
 | **DSM / rDSM & GeoTIFF Export** | `PASSED` | Path A (rDSM relative) and Path B (GeoTIFF metric DSM) with preserved CRS & transform metadata |
 | **Mesh & Three.js 3D Flythrough** | `PASSED` | Smooth vertex normals, solar shading, texture projection, Orbit/First-Person aerial controls |
 | **Desktop Application & IPC** | `PASSED` | Electron IPC stage relay, Uint8Array staging serialization, zero-byte Store alias protection |
 | **Standalone Installer Package** | `PASSED` | Signed Windows setup executable built (`release/DepthWizard Setup 1.0.0.exe`, 115.5 MB) |
 | **Physical Windows Witness** | `PASSED` | Clean-machine installation, runtime discovery, offline execution, and uninstall trial (20/20 verified) |
 | **Code Signing** | `COMPLETED` | Authenticode signed with DigiCert RFC 3161 timestamp (`CN=DepthWizard Release Candidate`) |
-| **Git Release Tag** | `TAGGED` | `v0.1.0-sih-26175-rc2` TAGGED on main commit |
+| **Git Release Tag** | `TAGGED` | `v1.2.0` TAGGED on main commit |
 
 ---
 
 ## Head State & Verification Metrics
 
-- `main` = `731ce87778efca375a0b422c1e4cdebedc07082e` (Protected with required CI checks)
-- **Frontend Vitest Suite**: `631 passed` | `0 failed`
-- **Python Pytest Suite**: `687 passed` | `4 skipped (heavy opt-in)`
-- **TypeScript Strict Compiler**: `0 errors`
+- `main` = `093eef8` (Protected with required CI checks)
+- **Frontend Vitest Suite**: `631 passed` | `4 skipped` | `0 failed`
+- **Python Pytest Suite**: `685 passed` | `7 skipped (heavy opt-in)`
 - **Signed Installer Hash**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717` (Authenticode Signed RC Build)
 
 ---
 
-## DepthWizard — Final Release Control Board
+## DepthWizard � Final Release Control Board
 
 | Area                     | Owner      | Current status                            | Final action                                          |
 | ------------------------ | ---------- | ----------------------------------------- | ----------------------------------------------------- |
@@ -61,7 +60,7 @@ Engineering, integration, code signing, and physical witness trial phases are co
 | GitHub protection        | **Shivam** | Configured                                | Enforced with 6 required status checks                |
 | Release artifact         | **Shivam** | Signed RC build available                 | Final signed artifact produced                        |
 | Final system acceptance  | **Shivam** | Completed                                 | End-to-end verification passed                        |
-| RC1 Tag                  | **Shivam** | TAGGED                              | Tag `v0.1.0-sih-26175-rc2` on main                    |
+| v1.2.0 Tag               | **Shivam** | TAGGED                              | Tag `v1.2.0` on main                    |
 | SIH submission package   | **Shivam** | Ready                                     | Prepared for final release submission                 |
 
 ---
@@ -69,38 +68,31 @@ Engineering, integration, code signing, and physical witness trial phases are co
 ## Single-Owner Architecture & Release Hierarchy
 
 ```text
-                 DEPTHWIZARD
-                      │
-              SHIVAM — OWNER
-                      │
-        ┌─────────────┼─────────────┐
-        │             │             │
-     SCIENCE       PRODUCT        RELEASE
-        │             │             │
-     Shivam        Shivam        Shivam
-        │             │             │
-        └─────────────┼─────────────┘
-                      ▼
-               CODE SIGNING & WITNESS (PASSED)
-                      ▼
-               FINAL ACCEPTANCE (PASSED)
-                      ▼
-               v0.1.0-sih-26175-rc2 (TAGGED)
-                      ▼
-               SIH SUBMISSION
+                  DEPTHWIZARD
+                       �
+               SHIVAM � OWNER
+                       �
+         +-------------+-------------+
+         �             �             �
+      SCIENCE       PRODUCT        RELEASE
+         �             �             �
+      Shivam        Shivam        Shivam
+         �             �             �
+         +-------------+-------------+
+                       ?
+                CODE SIGNING & WITNESS (PASSED)
+                       ?
+                FINAL ACCEPTANCE (PASSED)
+                       ?
+                v1.2.0 (TAGGED)
+                       ?
+                SIH SUBMISSION
 ```
 
-## Next Actions — Shivam
+## Release Status � v1.2.0 Complete
 
-1. Push documentation cleanup PR into protected `main`.
-2. Create and push Git tag `v0.1.0-sih-26175-rc2`.
-3. Update GitHub Release Candidate release notes with signed installer hash.
-4. Finalize ISRO PS 26175 submission package.
+v1.2.0 is tagged and shipped. The release candidate on protected `main` (`093eef8`) has been promoted through every gate: all 6 required CI checks pass (Python pytest/ruff/mypy strict + TS typecheck/test/build), the Depth Anything V2 Small backend is locked, the M17 research candidate is frozen in the research track, and calibration/height semantics, DSM/rDSM/GeoTIFF export, mesh + Three.js flythrough, Electron IPC, and the signed NSIS Windows installer are all complete and verified. The signed installer (`release/DepthWizard Setup 1.0.0.exe`, 115.5 MB, Authenticode signed with DigiCert RFC 3161 timestamp) passed the physical Windows witness trial (clean-machine install, runtime discovery, offline execution, and uninstall � 20/20 verified). The Git release tag `v1.2.0` is on `main`, the SIH submission package is prepared, and the single-owner release hierarchy under Shivam is closed out.
 
 No additional feature milestones will be created.
 
 > **Project owner: Shivam. All remaining engineering, integration, scientific acceptance, packaging, verification, and release activities are controlled and executed under Shivam.**
-
-
-
-
