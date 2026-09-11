@@ -469,6 +469,32 @@ def run_solar(
 
 def main() -> None:
     """Main entry point: invoke the actual backend and serialize the result."""
+    # When no CLI args are provided, try reading a JSON envelope from stdin.
+    # This is used by the TypeScript bridge for solar analysis and other
+    # request/response patterns. CLI arg invocations (e.g. --terrain 4 4)
+    # skip stdin entirely to avoid blocking on empty stdin.
+    if len(sys.argv) < 2 and not sys.stdin.isatty():
+        try:
+            raw = sys.stdin.read()
+            if raw.strip():
+                envelope = json.loads(raw)
+                if isinstance(envelope, dict) and "solar" in envelope:
+                    solar_cfg = envelope["solar"]
+                    input_path = solar_cfg.get("input_path")
+                    if not input_path:
+                        print(json.dumps({"error": "Missing input_path in solar config"}))
+                        sys.exit(1)
+                    result = run_solar(
+                        Path(input_path),
+                        sun_elevation_deg=solar_cfg.get("sun_elevation_deg"),
+                        sun_azimuth_deg=solar_cfg.get("sun_azimuth_deg"),
+                        min_area_px=solar_cfg.get("min_shadow_area_px", 20),
+                        gsd_override=solar_cfg.get("gsd_override"),
+                    )
+                    print(json.dumps(result, allow_nan=False))
+                    return
+        except Exception:
+            pass  # Fall through to CLI arg parsing
     if len(sys.argv) < 2:
         print(json.dumps({"error": _USAGE}))
         sys.exit(1)
