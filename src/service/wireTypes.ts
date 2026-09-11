@@ -55,6 +55,13 @@ export interface ServiceRequestArgs {
   buildMesh?: boolean;
 }
 
+export interface SolarConfigWire {
+  sun_elevation_deg?: number;
+  sun_azimuth_deg?: number;
+  min_shadow_area_px?: number;
+  gsd_override?: number;
+}
+
 export interface ServiceRequestWire {
   contract_version: string;
   input_path: string;
@@ -68,6 +75,7 @@ export interface ServiceRequestWire {
   export_overwrite: boolean;
   mesh_levels?: number[];
   calibration_method?: string;
+  solar_config: SolarConfigWire | null;
 }
 
 export interface ServiceFailureWire {

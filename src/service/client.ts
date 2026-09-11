@@ -10,6 +10,8 @@ import {
   type ServiceResponseWire,
 } from "./wireTypes";
 
+import type { SolarConfig } from './solarTypes';
+
 export interface ServiceExecutionArgs {
   inputPath: string;
   targetSemantics?: MetricTargetSemantics;
@@ -18,6 +20,7 @@ export interface ServiceExecutionArgs {
   outputMode?: "metric" | "relative";
   meshLevels?: number[];
   calibrationMethod?: string;
+  solarConfig?: SolarConfig;
 }
 
 export interface ServiceExecution {
@@ -79,6 +82,7 @@ export class LocalServiceClient {
       geotiff_path: null,
       export_compression: "deflate",
       export_overwrite: false,
+      solar_config: args.solarConfig ?? null,
     };
     if (args.meshLevels !== undefined) {
       request.mesh_levels = args.meshLevels;
@@ -116,3 +120,4 @@ export class LocalServiceClient {
     return { request, response };
   }
 }
+

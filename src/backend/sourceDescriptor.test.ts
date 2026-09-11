@@ -158,7 +158,9 @@ describe("request construction honesty", () => {
         "output_mode",
         "preprocessor",
         "target_semantics",
+        "solar_config",
       ].sort()
     );
   });
 });
+

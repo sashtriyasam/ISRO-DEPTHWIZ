@@ -164,6 +164,18 @@ export interface BackendBridgeOptions {
   calibrationMethod?: string;
 }
 
+export interface SolarAnalysisResult {
+  constraints: Array<{
+    height_m: number;
+    quality: string;
+    assumptions: string[];
+    method: string;
+    source_input_id: string;
+  }>;
+  count: number;
+  refused_reason: string | null;
+}
+
 export class OperationCancelledError extends Error {
   constructor() {
     super("Operation cancelled");
@@ -422,6 +434,72 @@ export class BackendBridge {
         : [...this.backendArgs(backendOverride), "--terrain-file", stagedPath];
     const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
+  }
+
+  async executeSolar(
+    inputPath: string,
+    config: {
+      sunElevationDeg?: number;
+      sunAzimuthDeg?: number;
+      minShadowAreaPx?: number;
+      gsdOverride?: number;
+    },
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<SolarAnalysisResult> {
+    if (!this.host.processSpawning) {
+      throw new Error(
+        "Solar analysis requires a desktop host with process spawning"
+      );
+    }
+    if (hooks.signal?.aborted) {
+      throw new OperationCancelledError();
+    }
+
+    const args: string[] = [
+      "--solar",
+      inputPath,
+      "--sun-elevation",
+      String(config.sunElevationDeg ?? 45),
+      "--sun-azimuth",
+      String(config.sunAzimuthDeg ?? 180),
+      "--min-area",
+      String(config.minShadowAreaPx ?? 20),
+    ];
+    if (config.gsdOverride !== undefined) {
+      args.push("--gsd", String(config.gsdOverride));
+    }
+
+    const jsonData = await this.spawnPython(args, hooks);
+    if (
+      typeof jsonData !== "object" ||
+      jsonData === null ||
+      !("constraints" in jsonData) ||
+      !("count" in jsonData)
+    ) {
+      throw new Error("Malformed solar analysis response from backend");
+    }
+    return {
+      constraints: Array.isArray((jsonData as { constraints: unknown }).constraints)
+        ? (jsonData as { constraints: unknown[] }).constraints.map((c) => {
+            const obj = c as Record<string, unknown>;
+            return {
+              height_m: typeof obj.height_m === "number" ? obj.height_m : 0,
+              quality: typeof obj.quality === "string" ? obj.quality : "",
+              assumptions: Array.isArray(obj.assumptions)
+                ? obj.assumptions.filter((a): a is string => typeof a === "string")
+                : [],
+              method: typeof obj.method === "string" ? obj.method : "",
+              source_input_id: typeof obj.source_input_id === "string" ? obj.source_input_id : "",
+            };
+          })
+        : [],
+      count: typeof (jsonData as Record<string, unknown>).count === "number"
+        ? (jsonData as Record<string, unknown>).count as number
+        : 0,
+      refused_reason: typeof (jsonData as Record<string, unknown>).refused_reason === "string"
+        ? (jsonData as Record<string, unknown>).refused_reason as string
+        : null,
+    };
   }
 
   private processRelativeData(
@@ -848,3 +926,6 @@ export class BackendBridge {
     };
   }
 }
+
+
+

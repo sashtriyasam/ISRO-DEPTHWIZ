@@ -3,7 +3,8 @@ export type BackendStage =
   | "inference_running"
   | "calibrating"
   | "dsm_generation"
-  | "mesh_generation";
+  | "mesh_generation"
+  | "solar_shadow_analysis";
 
 export type ProcessingStage = "loading" | BackendStage;
 
@@ -14,6 +15,7 @@ export const ALL_STAGES: readonly ProcessingStage[] = [
   "calibrating",
   "dsm_generation",
   "mesh_generation",
+  "solar_shadow_analysis",
 ];
 
 export const BACKEND_STAGES: readonly BackendStage[] = [
@@ -22,6 +24,7 @@ export const BACKEND_STAGES: readonly BackendStage[] = [
   "calibrating",
   "dsm_generation",
   "mesh_generation",
+  "solar_shadow_analysis",
 ];
 
 export function isProcessingStage(value: string): value is ProcessingStage {
@@ -35,6 +38,7 @@ export const STAGE_LABELS: Record<ProcessingStage, string> = {
   calibrating: "Calibrating height",
   dsm_generation: "Generating DSM",
   mesh_generation: "Generating terrain mesh",
+  solar_shadow_analysis: "Running solar shadow analysis",
 };
 
 export const STAGE_DESCRIPTIONS: Record<ProcessingStage, string> = {
@@ -44,6 +48,7 @@ export const STAGE_DESCRIPTIONS: Record<ProcessingStage, string> = {
   calibrating: "Backend is calibrating relative depth to metric height.",
   dsm_generation: "Backend is rasterizing the metric DSM.",
   mesh_generation: "Backend is building the terrain mesh.",
+  solar_shadow_analysis: "Backend is detecting shadows and deriving height constraints from solar geometry.",
 };
 
 export type ProcessingStatus = "idle" | "running" | "ready" | "error" | "cancelled";
@@ -176,3 +181,4 @@ export function transition(state: ProcessingState, event: ProcessingEvent): Proc
       return { status: "idle" };
   }
 }
+
