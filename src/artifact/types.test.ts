@@ -13,6 +13,7 @@ describe("ArtifactSource interface", () => {
     const source: ArtifactSource = {
       id: "test",
       label: "Test Source",
+      inputPath: "",
       load: async () => ({ id: "a", label: "A", mesh: {} as any, metadata: {} as any }),
     };
     expect(source.id).toBe("test");

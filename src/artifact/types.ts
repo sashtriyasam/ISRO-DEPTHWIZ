@@ -10,6 +10,7 @@ export interface ArtifactLoadOptions {
 export interface ArtifactSource {
   readonly id: string;
   readonly label: string;
+  readonly inputPath: string;
   load(options?: ArtifactLoadOptions): Promise<SceneArtifact>;
 }
 

@@ -25,6 +25,7 @@ export interface BackendSourceOptions {
 export class BackendArtifactSource implements ArtifactSource {
   readonly id: string;
   readonly label: string;
+  readonly inputPath = "";
 
   private bridge: BackendBridge;
   private width: number;

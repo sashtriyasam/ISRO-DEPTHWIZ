@@ -16,6 +16,7 @@ function stageReportingSource(stages: string[]): ArtifactSource {
   return {
     id: "stage-source",
     label: "Stage Source",
+    inputPath: "",
     load: async (options) => {
       for (const stage of stages) {
         options?.onStage?.(stage);
@@ -57,6 +58,7 @@ describe("runProcessingOperation", () => {
     const failing: ArtifactSource = {
       id: "failing",
       label: "Failing",
+      inputPath: "",
       load: async () => {
         throw new BackendOperationError(bridgeErrors);
       },
@@ -82,6 +84,7 @@ describe("runProcessingOperation", () => {
     const failing: ArtifactSource = {
       id: "failing",
       label: "Failing",
+      inputPath: "",
       load: async () => {
         throw new Error("weird failure");
       },
@@ -104,7 +107,7 @@ describe("runProcessingOperation", () => {
     const controller = new AbortController();
     controller.abort();
     const load = vi.fn(async () => new FixtureSource().load());
-    const source: ArtifactSource = { id: "s", label: "s", load };
+    const source: ArtifactSource = { id: "s", label: "s", inputPath: "", load };
     const { states, emit } = collect();
     const outcome = await runProcessingOperation(
       { status: "idle" },
@@ -124,6 +127,7 @@ describe("runProcessingOperation", () => {
     const failing: ArtifactSource = {
       id: "failing",
       label: "Failing",
+      inputPath: "",
       load: async () => {
         throw new BackendOperationError([
           { code: "OPERATION_CANCELLED", message: "Operation cancelled", phase: "process" },
@@ -144,6 +148,7 @@ describe("runProcessingOperation", () => {
     const failing: ArtifactSource = {
       id: "failing",
       label: "Failing",
+      inputPath: "",
       load: async () => {
         throw new BackendOperationError([
           { code: "RESOLUTION_FAILED", message: "payload rejected", phase: "adapter" },
