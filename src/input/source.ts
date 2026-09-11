@@ -54,6 +54,10 @@ export class FileInputSource implements ArtifactSource {
     this.label = options.metadata.filename;
   }
 
+  get inputPath(): string {
+    return this.stagedPath;
+  }
+
   async load(loadOptions?: ArtifactLoadOptions): Promise<SceneArtifact> {
     try {
       if (this.mode === "relative") {

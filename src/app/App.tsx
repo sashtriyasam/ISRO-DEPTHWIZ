@@ -97,6 +97,7 @@ export function App() {
     DEFAULT_PLAYBACK_SPEED,
   );
   const [flythroughIndex, setFlythroughIndex] = useState(0);
+  const [inputFilePath, setInputFilePath] = useState<string>("");
   const waypointCounterRef = useRef(0);
   const trajectoryCounterRef = useRef(0);
   const playbackStatusRef = useRef<PlaybackStatus>("idle");
@@ -119,6 +120,7 @@ export function App() {
     viewerRef.current?.clearMeasurementGraphics();
     setProfileState({ status: "empty" });
     viewerRef.current?.clearProfileGraphics();
+    setInputFilePath("");
   }, []);
 
   // ── IPC stage relay: Electron main process pushes STAGE lines in real time ──
@@ -217,6 +219,7 @@ export function App() {
   const handleGenerate = useCallback(
     (source: ArtifactSource) => {
       pendingRef.current = source;
+      setInputFilePath(source.inputPath);
       startOperation(source);
     },
     [startOperation],
@@ -887,7 +890,7 @@ export function App() {
               onClear={handleClearInspection}
             />
             <MetadataPanel artifact={artifact} activeLayerId={activeLayerId} />
-            <SolarShadowPanel inputPath={""} />
+            <SolarShadowPanel inputPath={inputFilePath} />
             <SceneInfo
               artifact={artifact}
               state={artifactState}

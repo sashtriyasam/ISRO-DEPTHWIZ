@@ -5,6 +5,7 @@ import { createDeterministicFixture } from "../fixtures/deterministicFixture";
 export class FixtureSource implements ArtifactSource {
   readonly id = "deterministic-fixture";
   readonly label = "Development Fixture";
+  readonly inputPath = "";
 
   async load(): Promise<SceneArtifact> {
     return createDeterministicFixture();

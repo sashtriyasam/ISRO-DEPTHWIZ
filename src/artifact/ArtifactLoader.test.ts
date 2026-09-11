@@ -36,6 +36,7 @@ describe("ArtifactLoader", () => {
     const failingSource: ArtifactSource = {
       id: "failing",
       label: "Failing",
+      inputPath: "",
       load: async () => { throw new Error("test failure"); },
     };
 

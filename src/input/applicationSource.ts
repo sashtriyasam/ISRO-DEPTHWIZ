@@ -72,6 +72,10 @@ export class ApplicationBackendSource implements ArtifactSource {
     }
   }
 
+  get inputPath(): string {
+    return this.fileSource ? this.fileSource.inputPath : "";
+  }
+
   async load(loadOptions?: ArtifactLoadOptions): Promise<SceneArtifact> {
     if (this.fileSource) {
       return this.fileSource.load(loadOptions);
