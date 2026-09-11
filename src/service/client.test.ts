@@ -32,6 +32,7 @@ describe("LocalServiceClient request construction", () => {
       geotiff_path: null,
       export_compression: "deflate",
       export_overwrite: false,
+      solar_config: null,
     });
   });
 
@@ -123,3 +124,4 @@ describe("LocalServiceClient live wire round-trip", () => {
     ).rejects.toThrow();
   });
 });
+
