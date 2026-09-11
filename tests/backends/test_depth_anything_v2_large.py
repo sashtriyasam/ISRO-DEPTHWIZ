@@ -656,7 +656,9 @@ class TestMetadataConstants:
         assert UPSTREAM_REVISION == "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 
     def test_checkpoint_sha256(self) -> None:
-        assert CHECKPOINT_SHA256 == "PLACEHOLDER_SHA256_VITL"
+        assert (
+            CHECKPOINT_SHA256 == "a7ea19fa0ed99244e67b624c72b8580b7e9553043245905be58796a608eb9345"
+        )
 
     def test_encoder_config(self) -> None:
         assert ENCODER_CONFIG["encoder"] == "vitl"
@@ -669,9 +671,7 @@ class TestMetadataConstants:
     def test_provenance_distinction(self) -> None:
         """Repository revision (40 hex) and checkpoint SHA-256 (256 hex) are distinct."""
         assert len(UPSTREAM_REVISION) == 40, "UPSTREAM_REVISION is a git commit hash"
-        assert len(CHECKPOINT_SHA256) == 64 or CHECKPOINT_SHA256.startswith("PLACEHOLDER"), (
-            "CHECKPOINT_SHA256 must be 64 hex chars or a placeholder"
-        )
+        assert len(CHECKPOINT_SHA256) == 64, "CHECKPOINT_SHA256 must be 64 hex chars"
         assert UPSTREAM_REVISION != CHECKPOINT_SHA256, "These must be different values"
 
 
