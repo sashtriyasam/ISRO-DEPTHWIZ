@@ -1,4 +1,4 @@
-﻿# DepthWizard — ISRO SIH 26175 Release Candidate
+﻿# DepthWizard — ISRO SIH 26175
 
 [![Release](https://img.shields.io/badge/Release-v1.2.0-success.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
@@ -80,11 +80,11 @@
 
 ## 🚀 Download & Installation
 
-### Standalone Windows Installer (Release Candidate)
-Download the signed standalone installer directly from the GitHub Release Candidate tag:
-- **Download Installer**: [`DepthWizard Setup 1.0.0.exe`](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
+### Standalone Windows Installer
+Download the signed standalone installer directly from the GitHub release tag:
+- **Download Installer**: [`DepthWizard Setup v1.2.0.exe`](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
 - **Installer SHA-256**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717`
-- **Authenticode Signature**: Verified (`CN=DepthWizard Release Candidate, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
+- **Authenticode Signature**: Verified (`CN=DepthWizard, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
 - **Clean Machine Physical Witness**: `PASSED` (Verification items verified)
 
 ---

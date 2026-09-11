@@ -50,7 +50,7 @@ ENCODER_CONFIG: dict[str, Any] = {
 }
 CHECKPOINT_FILE = "depth_anything_v2_vitl.pth"
 CHECKPOINT_HF_ID = "depth-anything/Depth-Anything-V2-Large"
-CHECKPOINT_SHA256 = "PLACEHOLDER_SHA256_VITL"
+CHECKPOINT_SHA256 = "a7ea19fa0ed99244e67b624c72b8580b7e9553043245905be58796a608eb9345"
 UPSTREAM_REVISION = "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 UPSTREAM_URL = "https://github.com/DepthAnything/Depth-Anything-V2"
 DEFAULT_INPUT_SIZE = 518
