@@ -1,4 +1,4 @@
-﻿# DepthWizard — ISRO SIH 26175
+# DepthWizard — ISRO SIH 26175
 
 [![Release](https://img.shields.io/badge/Release-v1.2.0-success.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
@@ -45,7 +45,7 @@
 | **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 631 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | `electron-builder.yml` & `provision_runtime.py` | **PASS** — Signed NSIS Installer; Authenticode signed; clean machine physical witness trial passed. |
+| **10. Standalone Application Deployment** | electron-builder.yml & provision_runtime.py | **PASS** — Unsigned NSIS Installer (orceCodeSigning: false); clean machine physical witness trial passed. |
 
 ---
 
@@ -81,10 +81,10 @@
 ## 🚀 Download & Installation
 
 ### Standalone Windows Installer
-Download the signed standalone installer directly from the GitHub release tag:
-- **Download Installer**: [`DepthWizard Setup v1.2.0.exe`](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
-- **Installer SHA-256**: `2A974B514694D79C0B7E72D6F17EE33B2B07A532CDD33207F9D34FFB3452D717`
-- **Authenticode Signature**: Verified (`CN=DepthWizard, O=ISRO DepthWizard Team`, DigiCert RFC 3161 SHA256 Timestamp Responder 2026)
+Download the standalone installer directly from the GitHub release:
+- **Download Installer**: [DepthWizard Setup v1.2.0.exe](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/download/v1.2.0/DepthWizard.Setup.1.2.0.exe)
+- **Installer SHA-256**: e10691c38d2c6bc2c9a3d6d40904bfbd3cec7cd07fb58e4001e8dafec222729
+- **Authenticode Signature**: Not signed (orceCodeSigning: false)
 - **Clean Machine Physical Witness**: `PASSED` (Verification items verified)
 
 ---
