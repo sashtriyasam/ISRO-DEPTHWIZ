@@ -35,7 +35,7 @@ export const BACKEND_TEST_FIXTURE: BackendDepthResult = {
     calibration_method: null,
     calibration_reference: null,
     calibration_params: null,
-    software_version: "1.2.0",
+    software_version: "1.3.0",
     code_commit: null,
     generated_at: null,
     units: null,
@@ -57,7 +57,7 @@ export const BACKEND_CALIBRATION_FIXTURE: BackendCalibrationResult = {
   mae: 0.0,
   max_abs_residual: 0.0,
   r_squared: 1.0,
-  engine_version: "1.2.0",
+  engine_version: "1.3.0",
   source_input_id: "test-input.png",
   source_checksum: null,
 };

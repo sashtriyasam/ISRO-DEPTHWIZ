@@ -90,6 +90,8 @@ _METRIC_TARGETS = frozenset(
     }
 )
 
+FLAT_DEPTH_STD_MEAN_THRESHOLD = 1e-6
+
 
 def check_transition(current: PipelineState, nxt: PipelineState) -> None:
     """Validate one state transition (raises on illegal moves)."""
@@ -197,6 +199,26 @@ class _Engine:
             engine_version=__version__,
         )
 
+    def _warn_if_flat_depth(self, depth: DepthResult) -> None:
+        """Warn if depth output has near-zero variance (flat terrain)."""
+        import math
+
+        vals = depth.depth_values
+        if not vals:
+            return
+        mean = math.fsum(vals) / len(vals)
+        if mean == 0.0:
+            return
+        var = math.fsum((v - mean) ** 2 for v in vals) / len(vals)
+        std = math.sqrt(var) if var > 0 else 0.0
+        ratio = std / abs(mean) if mean != 0 else float("inf")
+        if ratio < FLAT_DEPTH_STD_MEAN_THRESHOLD:
+            self._warnings.append(
+                f"Flat depth detected: output variance near zero "
+                f"(std/mean ratio = {ratio:.2e}). "
+                "This may indicate a model failure on uniform imagery (e.g., map screenshots)."
+            )
+
     def _fail(self, stage: PipelineState, exc: BaseException) -> PipelineResult:
         """Record a stage failure, preserving earlier artifacts."""
         return self._finish(
@@ -295,6 +317,7 @@ class _Engine:
                     f"Semantic preprocessing skipped: {type(exc).__name__}: {exc}"
                 )
         self._depth = depth
+        self._warn_if_flat_depth(self._depth)
 
         if self._cancelled():
             return self._finish(PipelineState.CANCELLED)
