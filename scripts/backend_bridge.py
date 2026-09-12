@@ -103,6 +103,7 @@ except ImportError as exc:
 SYNTHETIC_BACKEND_NAME = "synthetic-depth"
 DAV2_BACKEND_NAME = "depth-anything-v2-small"
 DAV2_LARGE_BACKEND_NAME = "depth-anything-v2-large"
+DA_V2_SAT_BACKEND_NAME = "depth-anything-v2-satellite"
 
 DEV_REFERENCE_ID = "synthetic-dev-ref"
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
@@ -160,8 +161,19 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 f"backend {name!r} unavailable: {exc}. "
                 "Set DW_DAV2_LARGE_CKPT to an external checkpoint; weights are never committed."
             ) from exc
+    if name == DA_V2_SAT_BACKEND_NAME:
+        try:
+            from depthwizard.backends.satellite import SatelliteDepthBackend
+        except ImportError as exc:
+            raise RuntimeError(f"backend {name!r} unavailable: satellite backend not importable ({exc}). Install the 'dav2' extra and provide the upstream source.") from exc
+        checkpoint = os.environ.get("DW_DAV2_SAT_CKPT")
+        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        try:
+            return SatelliteDepthBackend(checkpoint=Path(checkpoint) if checkpoint else None, device=backend_device)  # type: ignore[arg-type]
+        except Exception as exc:
+            raise RuntimeError(f"backend {name!r} unavailable: {exc}. Set DW_DAV2_SAT_CKPT to an external checkpoint; weights are never committed.") from exc
     raise ValueError(
-        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME})"
+        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME}, {DA_V2_SAT_BACKEND_NAME})"
     )
 
 

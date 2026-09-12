@@ -9,6 +9,7 @@ from depthwizard.integration.adapt import (
     mesh_to_transport,
     terrain_product,
 )
+from depthwizard.version import __version__
 from tests.integration.support import (
     calibration_fixture,
     depth_fixture,
@@ -47,7 +48,7 @@ def test_calibration_transport() -> None:
     assert (transport.total_samples, transport.valid_samples) == (5, 5)
     assert transport.rmse == 0.0
     assert transport.r_squared == 1.0
-    assert transport.engine_version == "1.2.0"
+    assert transport.engine_version == __version__
 
 
 def test_dsm_transport(tmp_path: Path) -> None:
