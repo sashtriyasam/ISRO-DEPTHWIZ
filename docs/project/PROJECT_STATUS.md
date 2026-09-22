@@ -14,10 +14,10 @@ Engineering, integration, satellite-backend wiring, and release packaging are un
 | **DSM / rDSM & GeoTIFF Export** | `PASSED` | Path A (rDSM relative) and Path B (metric DSM) with preserved CRS & transform |
 | **Mesh & Three.js 3D Flythrough** | `PASSED` | Texture projection, Orbit / First-Person / waypoint flythrough |
 | **Desktop Application & IPC** | `PASSED` | Electron injects `DW_DAV2_CKPT` + `DW_DAV2_SAT_CKPT` into service spawns |
-| **Standalone Installer Package** | `IN PROGRESS` | Windows NSIS installer for `v1.3.1` (unsigned, `forceCodeSigning: false`) |
+| **Standalone Installer Package** | `DONE` | `DepthWizard.Setup.1.3.1.exe` published on `v1.3.1` release (unsigned NSIS); SHA-256 `B858DC52..CF40` |
 | **Physical Windows Witness** | `PENDING` | Installer install/check after `v1.3.1` publish |
 | **Code Signing** | `SKIPPED` | `forceCodeSigning: false` for this cut |
-| **Git Release Tag** | `PENDING` | `v1.3.1` to be tagged on merge tip after CI |
+| **Git Release Tag** | `DONE` | `v1.3.1` tagged on merge tip and published as Latest release with installer |
 
 ---
 
