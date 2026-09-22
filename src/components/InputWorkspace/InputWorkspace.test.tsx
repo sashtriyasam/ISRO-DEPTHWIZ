@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { BackendBridge } from "../../backend/bridge";
 import { InputWorkspace } from "./InputWorkspace";
 import { makeTestPng, makeCorruptBytes } from "../../input/testFixtures";
@@ -11,24 +17,47 @@ import type { ServiceCapabilitiesWire } from "../../service/wireTypes";
 const bridge = new BackendBridge({ bridgeScript: "scripts/backend_bridge.py" });
 const SLOW = { timeout: 20000 };
 
+// Stub client that only advertises the synthetic backend (for isolated tests)
+const syntheticOnlyClient = {
+  capabilities: async (): Promise<ServiceCapabilitiesWire> => ({
+    contract_version: "1",
+    supported_input_formats: [".png", ".jpg", ".jpeg", ".tif", ".tiff"],
+    supported_target_semantics: ["absolute_elevation_dsm", "height_agl_ndsm"],
+    available_backends: ["synthetic-depth"],
+    mesh_supported: true,
+    geotiff_supported: true,
+  }),
+} as unknown as LocalServiceClient;
+
 function pngFile(name = "tile.png"): File {
-  return new File([makeTestPng(4, 4) as unknown as BlobPart], name, { type: "image/png" });
+  return new File([makeTestPng(4, 4) as unknown as BlobPart], name, {
+    type: "image/png",
+  });
 }
 
 async function openFile(container: HTMLElement, file: File) {
-  const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+  const input = container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
   Object.defineProperty(input, "files", { value: [file], configurable: true });
   fireEvent.change(input);
 }
 
 async function waitForSupported(container: HTMLElement) {
-  await waitFor(() => expect(container.textContent).toContain("Supported:"), SLOW);
+  await waitFor(
+    () => expect(container.textContent).toContain("Supported:"),
+    SLOW,
+  );
 }
 
 describe("InputWorkspace", () => {
   it("loads capabilities and advertises real backend formats", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
     );
     await waitForSupported(container);
     expect(container.textContent).toContain("PNG");
@@ -39,20 +68,30 @@ describe("InputWorkspace", () => {
   it("rejects unsupported extensions without backend validation", async () => {
     const onGenerate = vi.fn();
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />,
     );
     await waitForSupported(container);
     const bad = new File(["hello"], "notes.txt", { type: "text/plain" });
     await openFile(container, bad);
     await waitFor(() => {
-      expect(screen.getByText("Unsupported input format (.txt).")).toBeInTheDocument();
+      expect(
+        screen.getByText("Unsupported input format (.txt)."),
+      ).toBeInTheDocument();
     }, SLOW);
     expect(screen.getByText(/Choose another file/)).toBeInTheDocument();
   });
 
   it("validates a file through the backend and shows metadata", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
     );
     await waitForSupported(container);
     await openFile(container, pngFile());
@@ -68,7 +107,11 @@ describe("InputWorkspace", () => {
   it("passes selected calibration method and mesh levels through", async () => {
     const onGenerate = vi.fn();
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />,
     );
     await waitForSupported(container);
     await openFile(container, pngFile());
@@ -76,9 +119,12 @@ describe("InputWorkspace", () => {
       expect(screen.getByText("Validated")).toBeInTheDocument();
     }, SLOW);
     fireEvent.click(screen.getByRole("radio", { name: "Piecewise Linear" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Mesh LOD levels" }), {
-      target: { value: "1" },
-    });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Mesh LOD levels" }),
+      {
+        target: { value: "1" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
     expect(onGenerate).toHaveBeenCalledOnce();
     const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
@@ -88,12 +134,20 @@ describe("InputWorkspace", () => {
 
   it("shows backend rejection reasons for corrupt files", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
     );
     await waitForSupported(container);
-    const corrupt = new File([makeCorruptBytes() as unknown as BlobPart], "corrupt.png", {
-      type: "image/png",
-    });
+    const corrupt = new File(
+      [makeCorruptBytes() as unknown as BlobPart],
+      "corrupt.png",
+      {
+        type: "image/png",
+      },
+    );
     await openFile(container, corrupt);
     await waitFor(() => {
       expect(screen.getByText("Input could not be read.")).toBeInTheDocument();
@@ -103,7 +157,12 @@ describe("InputWorkspace", () => {
   it("generates a file source on demand, not on selection", async () => {
     const onGenerate = vi.fn();
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={syntheticOnlyClient}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />,
     );
     await waitForSupported(container);
     await openFile(container, pngFile());
@@ -121,15 +180,26 @@ describe("InputWorkspace", () => {
 
   it("shows the registered backend identity without a dropdown", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        serviceClient={syntheticOnlyClient}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
     );
     await waitForSupported(container);
-    expect(container.textContent).toContain("Backend: Synthetic Development Backend");
+    expect(container.textContent).toContain(
+      "Backend: Synthetic Development Backend",
+    );
   });
 
   it("states the desktop host honestly without claiming production", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
     );
     await waitForSupported(container);
     expect(container.textContent).toContain("Host: Desktop host");
@@ -139,7 +209,11 @@ describe("InputWorkspace", () => {
   it("offers capability-driven output targets and passes the selection through", async () => {
     const onGenerate = vi.fn();
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />,
     );
     await waitForSupported(container);
     await openFile(container, pngFile());
@@ -171,9 +245,12 @@ describe("InputWorkspace", () => {
         serviceClient={stubClient}
         processingRunning={false}
         onGenerate={onGenerate}
-      />
+      />,
     );
-    await waitFor(() => expect(container.textContent).toContain("Supported:"), SLOW);
+    await waitFor(
+      () => expect(container.textContent).toContain("Supported:"),
+      SLOW,
+    );
     await openFile(container, pngFile());
     await waitFor(() => {
       expect(screen.getByText("Validated")).toBeInTheDocument();
@@ -188,11 +265,15 @@ describe("InputWorkspace", () => {
 
   it("disables generation while processing runs", async () => {
     const { container: runningContainer } = render(
-      <InputWorkspace bridge={bridge} processingRunning onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning
+        onGenerate={() => undefined}
+      />,
     );
     await waitFor(
       () => expect(runningContainer.textContent).toContain("Supported:"),
-      SLOW
+      SLOW,
     );
     const generate = screen.queryByRole("button", { name: "Generate terrain" });
     if (generate) {
@@ -203,9 +284,15 @@ describe("InputWorkspace", () => {
   it("offers the development fixture without backend validation", async () => {
     const onGenerate = vi.fn();
     render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Use development fixture" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use development fixture" }),
+    );
     await waitFor(() => {
       expect(screen.getByText("Validated")).toBeInTheDocument();
     }, SLOW);
@@ -216,7 +303,11 @@ describe("InputWorkspace", () => {
 
   it("clears back to empty", async () => {
     const { container } = render(
-      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={() => undefined} />
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
     );
     await waitForSupported(container);
     await openFile(container, pngFile());
@@ -228,5 +319,4 @@ describe("InputWorkspace", () => {
       expect(screen.queryByText("Validated")).toBeNull();
     }, SLOW);
   });
-
 });

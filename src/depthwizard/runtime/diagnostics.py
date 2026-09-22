@@ -30,6 +30,15 @@ from depthwizard.backends.depth_anything_v2 import (
 from depthwizard.backends.depth_anything_v2 import (
     UPSTREAM_URL as UPSTREAM_URL,
 )
+from depthwizard.backends.satellite import (
+    CHECKPOINT_ENV as SAT_CHECKPOINT_ENV,
+)
+from depthwizard.backends.satellite import (
+    CHECKPOINT_FILE as SAT_CHECKPOINT_FILE,
+)
+from depthwizard.backends.satellite import (
+    CHECKPOINT_SHA256 as SAT_CHECKPOINT_SHA256,
+)
 from depthwizard.version import __version__
 
 #: Minimum interpreter (mirrors ``pyproject.toml`` ``requires-python``).
@@ -52,6 +61,17 @@ CHECKPOINT_ENV = "DW_DAV2_CKPT"
 
 #: Packaged checkpoint layout relative to the data directory.
 DATA_CHECKPOINT_REL = Path("checkpoints") / CHECKPOINT_FILE
+
+
+def _repo_root() -> Path | None:
+    """Developer checkout root, when diagnostics run from the source tree."""
+    try:
+        root = Path(__file__).resolve().parents[3]
+        if (root / "src").exists():
+            return root
+    except Exception:
+        pass
+    return None
 
 
 @dataclass(frozen=True)
@@ -82,13 +102,27 @@ def default_data_dir() -> Path:
 
 def _repo_dev_checkpoint() -> Path | None:
     """Developer-checkout checkpoint (source tree layout, if present)."""
-    try:
-        root = Path(__file__).resolve().parents[3]
-        if (root / "src").exists():
-            return root / "checkpoints" / CHECKPOINT_FILE
-    except Exception:
-        pass
+    root = _repo_root()
+    if root is not None:
+        return root / "checkpoints" / CHECKPOINT_FILE
     return None
+
+
+def _ensure_repo_dev_dav2_source_on_path() -> None:
+    """Expose the pinned local DA-V2 clone in developer checkouts.
+
+    The inference backends support the repo-local ``third_party``/``deps``
+    layout. The runtime diagnostics need to use the same discovery path so
+    ``runtime_check.py --require-dav2`` reflects whether the app can actually
+    load the backend on this machine.
+    """
+    root = _repo_root()
+    roots = (Path.cwd(),) if root is None else (root, Path.cwd())
+    for parent in roots:
+        for subdir in ("third_party", "deps", ".deps"):
+            candidate = parent / subdir / "Depth-Anything-V2"
+            if (candidate / DAV2_SOURCE).is_dir() and str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
 
 
 def resolve_checkpoint(explicit: str | Path | None = None) -> tuple[Path | None, str]:
@@ -114,6 +148,32 @@ def resolve_checkpoint(explicit: str | Path | None = None) -> tuple[Path | None,
     if repo_candidate is not None and repo_candidate.is_file():
         return repo_candidate, "repo-dev"
     cwd_candidate = Path.cwd() / "checkpoints" / CHECKPOINT_FILE
+    if cwd_candidate.is_file():
+        return cwd_candidate, "cwd"
+    return None, "absent"
+
+
+def resolve_satellite_checkpoint(
+    explicit: str | Path | None = None,
+) -> tuple[Path | None, str]:
+    """Locate the satellite-adapted DA-V2 checkpoint without importing torch.
+
+    Order mirrors ``resolve_checkpoint`` but for ``DW_DAV2_SAT_CKPT`` /
+    ``depth_anything_v2_satellite.pth``.
+    """
+    if explicit is not None:
+        candidate = Path(explicit)
+        return (candidate, "explicit") if candidate.is_file() else (None, "absent")
+    env = os.environ.get(SAT_CHECKPOINT_ENV)
+    if env:
+        candidate = Path(env)
+        return (candidate, "env") if candidate.is_file() else (None, "absent")
+    root = _repo_root()
+    if root is not None:
+        repo_candidate = root / "checkpoints" / SAT_CHECKPOINT_FILE
+        if repo_candidate.is_file():
+            return repo_candidate, "repo-dev"
+    cwd_candidate = Path.cwd() / "checkpoints" / SAT_CHECKPOINT_FILE
     if cwd_candidate.is_file():
         return cwd_candidate, "cwd"
     return None, "absent"
@@ -157,6 +217,8 @@ def verify_checkpoint(path: Path, expected: str = CHECKPOINT_SHA256) -> CheckSta
 
 def module_available(name: str) -> bool:
     """Whether a module is import-discoverable (never imports it)."""
+    if name == DAV2_SOURCE:
+        _ensure_repo_dev_dav2_source_on_path()
     try:
         return importlib.util.find_spec(name) is not None
     except Exception:
@@ -165,6 +227,7 @@ def module_available(name: str) -> bool:
 
 def upstream_revision() -> str | None:
     """Pinned-clone git revision, when the source tree exposes git."""
+    _ensure_repo_dev_dav2_source_on_path()
     try:
         spec = importlib.util.find_spec(DAV2_SOURCE)
     except Exception:
@@ -197,6 +260,12 @@ def availability_report() -> dict[str, object]:
     source = module_available(DAV2_SOURCE)
     checkpoint, location = resolve_checkpoint()
     checkpoint_status = verify_checkpoint(checkpoint) if checkpoint is not None else None
+    sat_checkpoint, sat_location = resolve_satellite_checkpoint()
+    sat_status = (
+        verify_checkpoint(sat_checkpoint, SAT_CHECKPOINT_SHA256)
+        if sat_checkpoint is not None
+        else None
+    )
     revision = upstream_revision()
     try:
         from depthwizard.backends.synthetic import SyntheticDepthBackend  # noqa: F401
@@ -230,8 +299,16 @@ def availability_report() -> dict[str, object]:
             "code": checkpoint_status.code if checkpoint_status else "CHECKPOINT_MISSING",
             "expected_sha256": CHECKPOINT_SHA256,
         },
+        "satellite_checkpoint": {
+            "location": sat_location,
+            "present": sat_checkpoint is not None,
+            "sha_match": bool(sat_status and sat_status.ok),
+            "code": sat_status.code if sat_status else "CHECKPOINT_MISSING",
+            "expected_sha256": SAT_CHECKPOINT_SHA256,
+        },
         "provenance": {
             "checkpoint_file": CHECKPOINT_FILE,
+            "satellite_checkpoint_file": SAT_CHECKPOINT_FILE,
             "upstream_url": UPSTREAM_URL,
             "upstream_revision_pin": UPSTREAM_REVISION,
         },

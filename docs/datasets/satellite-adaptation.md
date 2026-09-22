@@ -30,7 +30,8 @@ Where:
 ## Dataset: GAMUS
 
 - **Source**: Hugging Face `earthflow/GAMUS` (CC-BY-4.0)
-- **Tiles**: 1024×1024 RGB orthophoto (H5 key `image`) + nDSM/AGL height (H5 key `height`, float32 metres)
+- **Tiles**: 1024×1024 RGB orthophoto (H5 key `image`) + nDSM/AGL height
+  (H5 key `height` when present; GAMUS AGL tiles use float32 `image`)
 - **Reference semantic**: `HEIGHT_AGL_NDSM` (never absolute elevation)
 - **Alignment**: `native-pixel` (exact shape match, no resampling)
 - **Splits**: train/val/test per upstream manifest

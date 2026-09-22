@@ -259,6 +259,10 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       if (capabilities && capabilities.available_backends.length > 0) {
         if (capabilities.available_backends.includes("depth-anything-v2-large")) {
           selectedBackend = "depth-anything-v2-large";
+        } else if (
+          capabilities.available_backends.includes("depth-anything-v2-satellite")
+        ) {
+          selectedBackend = "depth-anything-v2-satellite";
         } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
           selectedBackend = "depth-anything-v2-small";
         } else if (capabilities.available_backends.includes("m17-geonrw-struct")) {

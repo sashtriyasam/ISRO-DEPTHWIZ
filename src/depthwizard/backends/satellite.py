@@ -30,7 +30,7 @@ ENCODER = "vits"
 ENCODER_CONFIG = {"encoder": "vits", "features": 64, "out_channels": [48, 96, 192, 384]}
 CHECKPOINT_FILE = "depth_anything_v2_satellite.pth"
 CHECKPOINT_HF_ID = "depth-anything/Depth-Anything-V2-Small"
-CHECKPOINT_SHA256 = "0" * 64
+CHECKPOINT_SHA256 = "41520832bbc5c865490a9f84880a3997902a4ae15f5864e026c3d8eae89d14d6"
 UPSTREAM_REVISION = "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
 UPSTREAM_URL = "https://github.com/DepthAnything/Depth-Anything-V2"
 DEFAULT_INPUT_SIZE = 518
@@ -227,6 +227,8 @@ class SatelliteDepthBackend:
         model_cls = self._import_model_class()
         model = model_cls(**ENCODER_CONFIG)
         state = torch.load(str(self._checkpoint), map_location="cpu")
+        if isinstance(state, dict) and "model" in state:
+            state = state["model"]
         model.load_state_dict(state)
         model = model.to(self._device).eval()
         self._model = model

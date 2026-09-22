@@ -46,6 +46,8 @@ let activeServiceReject = null;
 // Registry of staged temp directories so they can be cleaned up on crash/quit.
 const stagedDirs = new Set();
 const SERVICE_SCRIPT = "depthwiz_service.py";
+const DAV2_CHECKPOINT_FILE = "depth_anything_v2_vits.pth";
+const SAT_CHECKPOINT_FILE = "depth_anything_v2_satellite.pth";
 const EXPECTED_CHECKPOINT_HASH = "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378";
 // ---------------------------------------------------------------------------
 // IPC sender validation
@@ -113,28 +115,50 @@ function getScriptsDir() {
 // Checkpoint resolution (external provision policy)
 //
 // Production:
-//   1. DW_DAV2_CKPT env (explicit override)
+//   1. DW_DAV2_CKPT / DW_DAV2_SAT_CKPT env (explicit override)
 //   2. %APPDATA%/DepthWizard/checkpoints/ (canonical user data location)
 //   3. <resourcesPath>/checkpoints/ (bundled, if present)
+//   4. repo-dev checkpoints/ (unpackaged checkout only)
 //
 // The renderer cannot specify arbitrary checkpoint locations.
 // Checkpoint verification is handled by the Python backend.
 // ---------------------------------------------------------------------------
-function getCheckpointPath() {
-    const explicit = process.env.DW_DAV2_CKPT;
+function resolveNamedCheckpoint(envName, fileName) {
+    const explicit = process.env[envName];
     if (explicit)
         return explicit;
-    // Canonical user-data location
     const userData = electron_1.app.getPath("userData");
-    const userDataCheckpoint = path.join(userData, "checkpoints", "depth_anything_v2_vits.pth");
+    const userDataCheckpoint = path.join(userData, "checkpoints", fileName);
     if (fs.existsSync(userDataCheckpoint))
         return userDataCheckpoint;
-    // Bundled resources fallback (may not exist)
-    const bundled = path.join(process.resourcesPath, "checkpoints", "depth_anything_v2_vits.pth");
+    const bundled = path.join(process.resourcesPath, "checkpoints", fileName);
     if (fs.existsSync(bundled))
         return bundled;
+    if (!electron_1.app.isPackaged) {
+        const repoDev = path.join(__dirname, "..", "checkpoints", fileName);
+        if (fs.existsSync(repoDev))
+            return repoDev;
+    }
     // Return canonical path even if missing — service will report error
     return userDataCheckpoint;
+}
+function getCheckpointPath() {
+    return resolveNamedCheckpoint("DW_DAV2_CKPT", DAV2_CHECKPOINT_FILE);
+}
+function getSatelliteCheckpointPath() {
+    return resolveNamedCheckpoint("DW_DAV2_SAT_CKPT", SAT_CHECKPOINT_FILE);
+}
+function withCheckpointEnv(base = process.env) {
+    const env = { ...base };
+    const dav2 = getCheckpointPath();
+    if (fs.existsSync(dav2)) {
+        env.DW_DAV2_CKPT = dav2;
+    }
+    const satellite = getSatelliteCheckpointPath();
+    if (fs.existsSync(satellite)) {
+        env.DW_DAV2_SAT_CKPT = satellite;
+    }
+    return env;
 }
 function getCheckpointStatus() {
     const resolved = getCheckpointPath();
@@ -289,7 +313,7 @@ function registerIpcHandlers() {
             // Robust buffer construction:
             // Context bridge structured clone may convert Uint8Array to a plain
             // object with numeric string keys {"0":1,"1":2,...} on some Electron
-            // builds. We normalise to a Buffer regardless of what arrives.
+            // builds. We normalize to a Buffer regardless of what arrives.
             let buffer;
             if (Buffer.isBuffer(args.bytes)) {
                 buffer = args.bytes;
@@ -397,7 +421,7 @@ function registerIpcHandlers() {
         if (!fs.existsSync(script)) {
             return { error: `Service script not found: ${script}` };
         }
-        const env = { ...process.env };
+        const env = withCheckpointEnv();
         if (args.targetMode) {
             env.DW_TARGET_MODE = args.targetMode;
         }
@@ -501,7 +525,7 @@ function registerIpcHandlers() {
                     : ["pipe", "pipe", "pipe"];
                 proc = (0, child_process_1.spawn)(python, spawnArgs, {
                     stdio: stdioMode,
-                    env: { ...process.env },
+                    env: withCheckpointEnv(),
                     windowsHide: true,
                 });
             }
@@ -658,10 +682,10 @@ function createWindow() {
     });
     // Load content
     if (isDevMode() && process.env.VITE_DEV_SERVER_URL) {
-        mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+        void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     }
     else {
-        mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+        void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
     }
     mainWindow.on("closed", () => {
         mainWindow = null;

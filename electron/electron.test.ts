@@ -158,6 +158,7 @@ describe("Electron security audit", () => {
 
   it("checkpoint resolution has deterministic priority", () => {
     expect(mainSource).toContain("DW_DAV2_CKPT");
+    expect(mainSource).toContain("DW_DAV2_SAT_CKPT");
     expect(mainSource).toContain("userData");
     expect(mainSource).toContain("resourcesPath");
   });
