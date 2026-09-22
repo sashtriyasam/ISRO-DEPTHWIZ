@@ -103,6 +103,7 @@ except ImportError as exc:
 SYNTHETIC_BACKEND_NAME = "synthetic-depth"
 DAV2_BACKEND_NAME = "depth-anything-v2-small"
 DAV2_LARGE_BACKEND_NAME = "depth-anything-v2-large"
+DA_V2_SAT_BACKEND_NAME = "depth-anything-v2-satellite"
 
 DEV_REFERENCE_ID = "synthetic-dev-ref"
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
@@ -160,8 +161,19 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 f"backend {name!r} unavailable: {exc}. "
                 "Set DW_DAV2_LARGE_CKPT to an external checkpoint; weights are never committed."
             ) from exc
+    if name == DA_V2_SAT_BACKEND_NAME:
+        try:
+            from depthwizard.backends.satellite import SatelliteDepthBackend
+        except ImportError as exc:
+            raise RuntimeError(f"backend {name!r} unavailable: satellite backend not importable ({exc}). Install the 'dav2' extra and provide the upstream source.") from exc
+        checkpoint = os.environ.get("DW_DAV2_SAT_CKPT")
+        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        try:
+            return SatelliteDepthBackend(checkpoint=Path(checkpoint) if checkpoint else None, device=backend_device)  # type: ignore[arg-type]
+        except Exception as exc:
+            raise RuntimeError(f"backend {name!r} unavailable: {exc}. Set DW_DAV2_SAT_CKPT to an external checkpoint; weights are never committed.") from exc
     raise ValueError(
-        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME})"
+        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME}, {DA_V2_SAT_BACKEND_NAME})"
     )
 
 
@@ -564,13 +576,20 @@ def main() -> None:
                     and isinstance(checkpoint, dict)
                     and bool(checkpoint.get("sha_match"))
                 ):
-                    # Prefer DA-V2 Large when its checkpoint is present, then
-                    # Small, otherwise keep the deterministic synthetic backend.
+                    # Prefer Large, then satellite-adapted (SIH orthophoto),
+                    # then Small; otherwise keep the deterministic synthetic
+                    # backend (caller-provided --backend always wins).
                     large_ckpt = os.environ.get("DW_DAV2_LARGE_CKPT")
+                    sat_ckpt = os.environ.get("DW_DAV2_SAT_CKPT")
+                    repo_root = Path(__file__).resolve().parent.parent
                     if large_ckpt and Path(large_ckpt).is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME
-                    elif (Path(__file__).resolve().parent / "checkpoints" / "depth_anything_v2_vitl.pth").is_file():
+                    elif (repo_root / "checkpoints" / "depth_anything_v2_vitl.pth").is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME
+                    elif sat_ckpt and Path(sat_ckpt).is_file():
+                        backend_name = DA_V2_SAT_BACKEND_NAME
+                    elif (repo_root / "checkpoints" / "depth_anything_v2_satellite.pth").is_file():
+                        backend_name = DA_V2_SAT_BACKEND_NAME
                     else:
                         backend_name = DAV2_BACKEND_NAME
             if mode == "relative":

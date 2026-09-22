@@ -69,6 +69,10 @@ DEV_REFERENCE_ID = "synthetic-dev-ref"
 #: M17 checkpoint file name (canonical candidate, never committed).
 _M17_CHECKPOINT_FILE = "m17_geonrw_struct_best.pt"
 
+#: Satellite DA-V2 checkpoint file name (never committed).
+_SAT_CHECKPOINT_FILE = "depth_anything_v2_satellite.pth"
+_SAT_CHECKPOINT_ENV = "DW_DAV2_SAT_CKPT"
+
 
 def _m17_checkpoint_present() -> bool:
     """Whether an M17 checkpoint resolves (discovery only, no loading)."""
@@ -79,6 +83,17 @@ def _m17_checkpoint_present() -> bool:
         return Path(override).is_file()
     root = Path(__file__).resolve().parent.parent
     return (root / "checkpoints" / _M17_CHECKPOINT_FILE).is_file()
+
+
+def _sat_checkpoint_present() -> bool:
+    """Whether a satellite DA-V2 checkpoint resolves (discovery only, no loading)."""
+    import os
+
+    override = os.environ.get(_SAT_CHECKPOINT_ENV)
+    if override:
+        return Path(override).is_file()
+    root = Path(__file__).resolve().parent.parent
+    return (root / "checkpoints" / _SAT_CHECKPOINT_FILE).is_file()
 
 
 def build_backends() -> dict[str, Any]:
@@ -111,6 +126,10 @@ def build_backends() -> dict[str, Any]:
         from depthwizard.backends.m17 import M17DepthBackend
 
         backends["m17-geonrw-struct"] = M17DepthBackend()
+    if _sat_checkpoint_present():
+        from depthwizard.backends.satellite import SatelliteDepthBackend
+
+        backends["depth-anything-v2-satellite"] = SatelliteDepthBackend()
     return backends
 
 

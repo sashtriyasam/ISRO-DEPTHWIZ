@@ -1,19 +1,19 @@
 # DepthWizard — ISRO SIH 26175
 
-[![Release](https://img.shields.io/badge/Release-v1.2.0-success.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.2.0)
+[![Release](https://img.shields.io/badge/Release-v1.3.1-success.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/tag/v1.3.1)
 [![Build & Test](https://img.shields.io/badge/CI-Passed_100%25-brightgreen.svg)](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/actions)
-[![Python](https://img.shields.io/badge/Python-3.12_|_685_Tests_Passed-success.svg)](#python-scientific-engine)
+[![Python](https://img.shields.io/badge/Python-3.12_|_714_Tests_Passed-success.svg)](#python-scientific-engine)
 [![Frontend](https://img.shields.io/badge/Desktop-Electron_+_React_19_+_Three.js_|_631_Tests_Passed-success.svg)](#interactive-3d-visualization--flythrough)
 
 > **Single-View Height Estimation and 3D Flythrough**  
 > **Problem Statement ID:** 26175  
 > **Organization:** Indian Space Research Organisation (ISRO), Department of Space / SAC  
 > **Theme:** Disaster Management / Urban Planning / Reconnaissance  
-> **Canonical Main Commit SHA:** `093eef8`
+> **Canonical Main Commit SHA:** `11d964a`
 
 ---
 
-## 🌟 Executive Summary
+## Executive Summary
 
 **DepthWizard** is an end-to-end scientific software suite designed for the Indian Space Research Organisation (ISRO) to convert single-view optical RGB satellite imagery into high-precision Digital Elevation Models (DEMs), Digital Surface Models (DSMs), and interactive 3D terrain flythrough assets.
 
@@ -21,35 +21,40 @@
 - **Path B (Georeferenced GeoTIFF)**: Converts relative depth maps into an **Absolute Metric Digital Surface Model (`DSMGrid`)** with height in metres ($m$) using low-resolution reference DEMs (e.g., SRTM 30m) or Ground Control Points (GCPs), strictly preserving spatial CRS and affine transformation.
 - **3D Texture Projection & Interactive Flythrough**: Projects original optical RGB textures onto generated 3D terrain meshes rendered via React 19 + Three.js + Electron, supporting Orbit, First-Person aerial controls, Waypoint Flythrough playback, slope degree calculation (`SlopeGrid`), and height inspection.
 
-### 🆕 Recent Enhancements (v1.2.0)
-- **Calibration Method Selection**: Users can now choose between OLS (`scale_offset`), robust Huber (`scale_offset_huber`), and piecewise-linear (`piecewise_linear`) calibration methods via the UI and service API.
-- **FileBasedCalibrationProvider**: File-backed calibration provider for loading calibration parameters from external files, enabling persistent and reusable calibration profiles.
-- **Mesh LOD Control**: Selectable mesh detail levels (`1`, `1,4,16`, `1,2,4,8,16`) enable performance-optimized terrain rendering. The pipeline now supports adaptive mesh decimation via vertex clustering.
-- **Semantic Preprocessing**: Optional semantic-aware depth refinement can be injected into the pipeline. Implementations include rule-based terrain classification and bilateral/SAM refinement stubs.
-- **DepthAnything V2 Large**: The scientific engine now supports the DA-V2 Large backbone (`depth-anything-v2-large`) when its checkpoint is available, with automatic fallback to smaller backends.
+### Recent Enhancements (v1.3.1)
+- **Satellite / Orthophoto Backend**: `SatelliteDepthBackend` (`depth-anything-v2-satellite`) — DA-V2 Small fine-tuned for orthophoto/satellite imagery with tiled inference (512px tiles, overlap blending). Checkpoint-gated via `DW_DAV2_SAT_CKPT`; output remains **relative** depth only.
+- **Flat-Depth Variance Check**: Pipeline warns when depth output variance is near zero (std/mean ratio below 1e-6), catching model failures on uniform imagery (e.g. map screenshots).
+- **Satellite Training Pipeline**: `scripts/train_satellite_adaptation.py` — Scale-Invariant + Gradient loss fine-tuning on GAMUS orthophoto + nDSM/AGL.
 
-> **Scope & Compliance Policy:** All implemented PS capabilities in the defined acceptance matrix were verified; scientific generalization/accuracy beyond the tested evidence is not claimed.
+### Prior Highlights (v1.2.0)
+- **Calibration Method Selection**: OLS (`scale_offset`), robust Huber (`scale_offset_huber`), and piecewise-linear (`piecewise_linear`) via UI and service API.
+- **FileBasedCalibrationProvider**: File-backed calibration profiles.
+- **Mesh LOD Control**: Selectable mesh detail levels with adaptive vertex-clustering decimation.
+- **Semantic Preprocessing**: Optional semantic-aware depth refinement stubs.
+- **DepthAnything V2 Large**: Available when checkpoint present, with fallback to smaller backends.
+
+> **Scope & Compliance Policy:** All implemented PS capabilities in the defined acceptance matrix were verified; scientific generalization/accuracy beyond the tested evidence is not claimed. Relative depth is not metric DSM without calibration evidence.
 
 ---
 
-## 🌟 ISRO Problem Statement 26175 Matrix & Verification
+## ISRO Problem Statement 26175 Matrix & Verification
 
 | Requirement | Implementation Component | Status & Verification Evidence |
 | :--- | :--- | :--- |
-| **1. Single-View Optical RGB Input** | `InputInspection` ([src/depthwizard/ingestion/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/ingestion)) | **PASS** — Accepts PNG, JPG, and GeoTIFF. Validates checksums & georeferencing. |
-| **2. Non-Georeferenced Relative DSM (rDSM)** | `RelativeSurfaceGrid` ([src/depthwizard/rdsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/rdsm)) | **PASS** — Relative height model (`units=None`, `LOCAL` frame). Zero fabricated CRS or metres. |
-| **3. Georeferenced Metric DSM (DSM)** | `ScientificHeightProduct` ([src/depthwizard/dsm/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm)) | **PASS** — Calibrated metric DSM in metres ($m$), preserving original CRS and affine bounds. |
-| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend` & `M17DepthBackend` | **PASS** — Canonical `DepthBackend` protocol (DA-V2 Small shipped; DA-V2 Large available when checkpoint present; M17 research candidate). |
-| **5. Scale Calibration Module** | `ScaleOffsetCalibrator`, `HuberScaleOffsetCalibrator`, `PiecewiseLinearCalibrator` ([src/depthwizard/calibration/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/calibration)) | **PASS** — Calibrates depth via DEM (SRTM 30m) or GCP reference controls with selectable robust methods. |
-| **6. Optical Texture Projection** | `TextureProjection` ([src/depthwizard/texture/](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/texture)) | **PASS** — Binds optical RGB texture to 3D terrain mesh UVs. |
+| **1. Single-View Optical RGB Input** | `InputInspection` ([src/depthwizard/ingestion/](src/depthwizard/ingestion)) | **PASS** — Accepts PNG, JPG, and GeoTIFF. Validates checksums & georeferencing. |
+| **2. Non-Georeferenced Relative DSM (rDSM)** | `RelativeSurfaceGrid` ([src/depthwizard/rdsm/](src/depthwizard/rdsm)) | **PASS** — Relative height model (`units=None`, `LOCAL` frame). Zero fabricated CRS or metres. |
+| **3. Georeferenced Metric DSM (DSM)** | `ScientificHeightProduct` ([src/depthwizard/dsm/](src/depthwizard/dsm)) | **PASS** — Calibrated metric DSM in metres ($m$), preserving original CRS and affine bounds. |
+| **4. Pretrained Monocular Depth Engine** | `DepthAnythingV2Backend`, `SatelliteDepthBackend` & `M17DepthBackend` | **PASS** — Canonical `DepthBackend` protocol (DA-V2 Small shipped; Large / satellite when checkpoint present; M17 research candidate). |
+| **5. Scale Calibration Module** | `ScaleOffsetCalibrator`, `HuberScaleOffsetCalibrator`, `PiecewiseLinearCalibrator` ([src/depthwizard/calibration/](src/depthwizard/calibration)) | **PASS** — Calibrates depth via DEM (SRTM 30m) or GCP reference controls with selectable robust methods. |
+| **6. Optical Texture Projection** | `TextureProjection` ([src/depthwizard/texture/](src/depthwizard/texture)) | **PASS** — Binds optical RGB texture to 3D terrain mesh UVs. |
 | **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 631 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
-| **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | electron-builder.yml & provision_runtime.py | **PASS** — Unsigned NSIS Installer (orceCodeSigning: false); clean machine physical witness trial passed. |
+| **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
+| **10. Standalone Application Deployment** | electron-builder.yml & provision_runtime.py | **PASS** — Unsigned NSIS Installer (`forceCodeSigning: false`); clean machine physical witness trial passed. |
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -64,12 +69,12 @@
 │       ↓                                                                         │
 │  Managed Python Scientific Service (depthwiz_service.py)                        │
 │  ├── Ingestion & Geospatial: InputInspection, CRS & Affine Preservation         │
-│  ├── Depth Backends: DepthAnythingV2Backend (Small + Large), M17DepthBackend    │
+│  ├── Depth Backends: DA-V2 (Small/Large), SatelliteDepthBackend, M17            │
 │  ├── Calibration Engine: ScaleOffsetCalibrator, HuberScaleOffsetCalibrator,     │
 │  │   PiecewiseLinearCalibrator                                                  │
 │  ├── Semantic Preprocessing: Optional RGB-guided depth refinement               │
 │  ├── Products: RelativeSurfaceGrid (Path A) / ScientificHeightProduct (Path B)   │
-│  ├── Analytics: SlopeGrid (degree computation)                                  │
+│  ├── Analytics: SlopeGrid (degree computation), flat-depth variance warning     │
 │  ├── Mesh & Texture: TerrainMesh generation, adaptive LOD decimation,           │
 │  │   TextureProjection mapping                                                  │
 │  └── Export: GeoTIFF export (prepare-only, zero CRS invention)                  │
@@ -78,22 +83,22 @@
 
 ---
 
-## 🚀 Download & Installation
+## Download & Installation
 
 ### Standalone Windows Installer
 Download the standalone installer directly from the GitHub release:
-- **Download Installer**: [DepthWizard Setup v1.2.0.exe](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/download/v1.2.0/DepthWizard.Setup.1.2.0.exe)
-- **Installer SHA-256**: e10691c38d2c6bc2c9a3d6d40904bfbd3cec7cd07fb58e4001e8dafec222729
-- **Authenticode Signature**: Not signed (orceCodeSigning: false)
-- **Clean Machine Physical Witness**: `PASSED` (Verification items verified)
+- **Download Installer**: [DepthWizard Setup v1.3.1.exe](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/download/v1.3.1/DepthWizard.Setup.1.3.1.exe)
+- **Installer SHA-256**: `b858dc52d5d8bcd17a24b4f5b1d1ff9a0eccab738c6bb3d7cad53136cf5bcf40`
+- **Authenticode Signature**: Not signed (`forceCodeSigning: false`)
+- **Clean Machine Physical Witness**: Pending install verification for `v1.3.1`
 
 ---
 
-## 🧪 Testing & Scientific Verification
+## Testing & Scientific Verification
 
 ### Python Core Engine
 ```bash
-# Execute all 685 Python tests (7 skipped opt-in heavy models)
+# Execute all 714 Python tests (opt-in heavy models skipped by default)
 python -m pytest tests/
 
 # Code quality & typing checks
@@ -111,7 +116,9 @@ npm run typecheck
 npm run test
 ```
 
-### Key Test Files Added in rc2
+### Key Test Areas
+- `tests/backends/test_satellite.py` — Satellite backend contract, tiling, provenance
+- `tests/pipeline/test_flat_detection.py` — Flat-depth variance warning
 - `tests/semantics/test_classifier.py` — Semantic classifier unit tests
 - `tests/pipeline/test_chain.py` — Semantic preprocessing integration tests
 - `tests/service/test_execute.py` — LOD mesh and calibration method service tests
@@ -119,7 +126,7 @@ npm run test
 
 ---
 
-## 📈 Evaluation Metrics (ISRO PS 26175 Criteria)
+## Evaluation Metrics (ISRO PS 26175 Criteria)
 
 1. **DSM Estimation Accuracy (50%)**:
    - Automated benchmark harness (`src/depthwizard/evaluation/`) evaluates **RMSE**, **MAE**, and **$R^2$ correlation** against reference LiDAR/DEM ground truth across urban, sparse, hilly, and forested landscapes.
@@ -133,7 +140,7 @@ npm run test
 
 ---
 
-## 📄 License & Team Ownership
+## License & Team Ownership
 
 - **Lead Architecture & Release Authority**: Shivam Shelatkar
 - **ML & Depth Backbone Engineering**: Shravan

@@ -77,7 +77,11 @@ def test_service_registry_degrades_without_checkpoint() -> None:
         "from depthwiz_service import build_backends;"
         "print(sorted(build_backends()))"
     )
-    merged = dict(os.environ, DW_DAV2_CKPT="definitely/missing.pth")
+    merged = dict(
+        os.environ,
+        DW_DAV2_CKPT="definitely/missing.pth",
+        DW_DAV2_SAT_CKPT="definitely/missing_sat.pth",
+    )
     # Hide the upstream runtime if it happens to be on PYTHONPATH.
     merged["PYTHONPATH"] = "src"
     proc = subprocess.run(
