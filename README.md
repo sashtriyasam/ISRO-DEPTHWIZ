@@ -88,7 +88,7 @@
 ### Standalone Windows Installer
 Download the standalone installer directly from the GitHub release:
 - **Download Installer**: [DepthWizard Setup v1.3.1.exe](https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/download/v1.3.1/DepthWizard.Setup.1.3.1.exe)
-- **Installer SHA-256**: *(published with the `v1.3.1` GitHub Release asset after build)*
+- **Installer SHA-256**: `b858dc52d5d8bcd17a24b4f5b1d1ff9a0eccab738c6bb3d7cad53136cf5bcf40`
 - **Authenticode Signature**: Not signed (`forceCodeSigning: false`)
 - **Clean Machine Physical Witness**: Pending install verification for `v1.3.1`
 
