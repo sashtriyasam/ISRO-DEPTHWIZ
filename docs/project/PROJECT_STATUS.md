@@ -1,23 +1,23 @@
-# DepthWizard — Project Status (v1.3.1, 2026-09-22)
+# DepthWizard ï¿½ Project Status (v1.3.1, 2026-09-22)
 
 Source: protected `main`, `docs/project/RELEASE_GATES.md`, `docs/project/RESEARCH_VS_PRODUCT.md`.
 Engineering, integration, satellite-backend wiring, and release packaging are under **Shivam**.
 
-| Area | Status | Evidence / Note |
-| :--- | :--- | :--- |
-| **Repository Foundation & CI** | `PASSED` | `pyproject` (pytest/ruff/mypy), TS tooling, protected `main` with 6 required CI checks |
-| **Core Geospatial & Pipeline** | `PASSED` | `depthwizard.geospatial/dem/export/ingestion` + flat-depth variance warning |
-| **Shipped Depth Model** | `LOCKED` | **Depth Anything V2 Small** (`depth-anything-v2-small`) |
-| **Satellite Adaptation Backend** | `WIRED` | `depth-anything-v2-satellite` advertised when `DW_DAV2_SAT_CKPT` / repo checkpoint present; relative depth only |
-| **Research Model Track** | `FROZEN` | **M17** frozen in research track per `RESEARCH_VS_PRODUCT.md` |
-| **Calibration & Height Semantics** | `PASSED` | Selectable calibrators + `FileBasedCalibrationProvider`; SolarShadowPanel UI |
-| **DSM / rDSM & GeoTIFF Export** | `PASSED` | Path A (rDSM relative) and Path B (metric DSM) with preserved CRS & transform |
-| **Mesh & Three.js 3D Flythrough** | `PASSED` | Texture projection, Orbit / First-Person / waypoint flythrough |
-| **Desktop Application & IPC** | `PASSED` | Electron injects `DW_DAV2_CKPT` + `DW_DAV2_SAT_CKPT` into service spawns |
-| **Standalone Installer Package** | `IN PROGRESS` | Windows NSIS installer for `v1.3.1` (unsigned, `forceCodeSigning: false`) |
-| **Physical Windows Witness** | `PENDING` | Installer install/check after `v1.3.1` publish |
-| **Code Signing** | `SKIPPED` | `forceCodeSigning: false` for this cut |
-| **Git Release Tag** | `PENDING` | `v1.3.1` to be tagged on merge tip after CI |
+| Area                               | Status    | Evidence / Note                                                                                                 |
+| :--------------------------------- | :-------- | :-------------------------------------------------------------------------------------------------------------- |
+| **Repository Foundation & CI**     | `PASSED`  | `pyproject` (pytest/ruff/mypy), TS tooling, protected `main` with 6 required CI checks                          |
+| **Core Geospatial & Pipeline**     | `PASSED`  | `depthwizard.geospatial/dem/export/ingestion` + flat-depth variance warning                                     |
+| **Shipped Depth Model**            | `LOCKED`  | **Depth Anything V2 Small** (`depth-anything-v2-small`)                                                         |
+| **Satellite Adaptation Backend**   | `WIRED`   | `depth-anything-v2-satellite` advertised when `DW_DAV2_SAT_CKPT` / repo checkpoint present; relative depth only |
+| **Research Model Track**           | `FROZEN`  | **M17** frozen in research track per `RESEARCH_VS_PRODUCT.md`                                                   |
+| **Calibration & Height Semantics** | `PASSED`  | Selectable calibrators + `FileBasedCalibrationProvider`; SolarShadowPanel UI                                    |
+| **DSM / rDSM & GeoTIFF Export**    | `PASSED`  | Path A (rDSM relative) and Path B (metric DSM) with preserved CRS & transform                                   |
+| **Mesh & Three.js 3D Flythrough**  | `PASSED`  | Texture projection, Orbit / First-Person / waypoint flythrough                                                  |
+| **Desktop Application & IPC**      | `PASSED`  | Electron injects `DW_DAV2_CKPT` + `DW_DAV2_SAT_CKPT` into service spawns                                        |
+| **Standalone Installer Package**   | `DONE`    | `DepthWizard.Setup.1.3.1.exe` published on `v1.3.1` release (unsigned NSIS); SHA-256 `B858DC52â€¦CF40`            |
+| **Physical Windows Witness**       | `PENDING` | Installer install/check after `v1.3.1` publish                                                                  |
+| **Code Signing**                   | `SKIPPED` | `forceCodeSigning: false` for this cut                                                                          |
+| **Git Release Tag**                | `DONE`    | `v1.3.1` tagged on merge tip and published as Latest release with installer                                     |
 
 ---
 
@@ -30,19 +30,19 @@ Engineering, integration, satellite-backend wiring, and release packaging are un
 
 ---
 
-## DepthWizard — Final Release Control Board
+## DepthWizard ï¿½ Final Release Control Board
 
-| Area                     | Owner      | Current status                            | Final action                                          |
-| ------------------------ | ---------- | ----------------------------------------- | ----------------------------------------------------- |
-| Repository governance    | **Shivam** | Protected main + CI                       | Maintained                                            |
-| Scientific core          | **Shivam** | Complete                                  | Frozen protocol                                       |
-| DA-V2 product backend    | **Shivam** | Locked                                    | Canonical shipped backend                             |
-| Satellite adaptation     | **Shivam** | Wired + smoke-trained                     | Relative only; metric requires calibration evidence   |
-| M17 research candidate   | **Shivam** | Frozen research candidate                 | Research track                                        |
-| Calibration / DEM / DSM  | **Shivam** | Complete                                  | Verified                                              |
-| Desktop / Electron       | **Shivam** | Satellite env injection complete          | Installer cut for v1.3.1                              |
-| Release artifact         | **Shivam** | v1.3.1 packaging                          | Publish after merge + installer build                 |
-| SIH submission package   | **Shivam** | Active                                    | Controlled under Shivam                               |
+| Area                    | Owner      | Current status                   | Final action                                        |
+| ----------------------- | ---------- | -------------------------------- | --------------------------------------------------- |
+| Repository governance   | **Shivam** | Protected main + CI              | Maintained                                          |
+| Scientific core         | **Shivam** | Complete                         | Frozen protocol                                     |
+| DA-V2 product backend   | **Shivam** | Locked                           | Canonical shipped backend                           |
+| Satellite adaptation    | **Shivam** | Wired + smoke-trained            | Relative only; metric requires calibration evidence |
+| M17 research candidate  | **Shivam** | Frozen research candidate        | Research track                                      |
+| Calibration / DEM / DSM | **Shivam** | Complete                         | Verified                                            |
+| Desktop / Electron      | **Shivam** | Satellite env injection complete | Installer cut for v1.3.1                            |
+| Release artifact        | **Shivam** | v1.3.1 packaging                 | Publish after merge + installer build               |
+| SIH submission package  | **Shivam** | Active                           | Controlled under Shivam                             |
 
 ---
 
@@ -51,7 +51,7 @@ Engineering, integration, satellite-backend wiring, and release packaging are un
 ```text
                   DEPTHWIZARD
                        |
-               SHIVAM — OWNER
+               SHIVAM ï¿½ OWNER
                        |
          +-------------+-------------+
          |             |             |
