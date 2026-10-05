@@ -373,6 +373,8 @@ export function adaptTerrainProduct(
   }
 
   const { dsm, mesh, depth_result } = product;
+  // Metric only when the product says so: never upgrade units in the UI.
+  const metric = /^(m|meters|metres)$/i.test(dsm.units);
 
   const grid = new Float32Array(dsm.values.length);
   for (let i = 0; i < dsm.values.length; i++) {
@@ -385,7 +387,7 @@ export function adaptTerrainProduct(
     width: dsm.width,
     height: dsm.height,
     cellSize: Math.abs(displayGrid.stepX),
-    unit: "meters",
+    unit: metric ? "meters" : "relative",
     displayGrid,
     ...(dsm.invalid_count > 0 ? { noDataValue: NaN } : {}),
   };
@@ -412,7 +414,7 @@ export function adaptTerrainProduct(
 
   const backend: SceneMetadata["backend"] = {
     model_name: mesh.depth_model_name,
-    depth_scale: "metric",
+    depth_scale: metric ? "metric" : "relative",
     elevation_semantics: mesh.semantics,
     georeferencing: mesh.georeferencing,
     calibration_method: mesh.calibration_method,
@@ -428,7 +430,7 @@ export function adaptTerrainProduct(
     source: "backend",
     units: {
       spatial: mesh.frame === "georeferenced_local" ? "meters" : "pixels",
-      elevation: "meters",
+      elevation: metric ? "meters" : "relative",
     },
     backend,
     bounds,

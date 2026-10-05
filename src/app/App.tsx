@@ -28,7 +28,8 @@ import { InspectorPanel } from "../components/InspectorPanel/InspectorPanel";
 import { MeasurementPanel } from "../components/MeasurementPanel/MeasurementPanel";
 import { ProfilePanel } from "../components/ProfilePanel/ProfilePanel";
 import { MetadataPanel } from "../components/MetadataPanel/MetadataPanel";
-import { sourceStatusLabel } from "../metadata/metadata";
+import { scientificNote, sourceStatusLabel } from "../metadata/metadata";
+import { APP_VERSION } from "../version";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
 import { SolarShadowPanel } from "../components/SolarShadowPanel/SolarShadowPanel";
@@ -881,6 +882,7 @@ export function App() {
             />
             <ProfilePanel
               state={profileState}
+              note={scientificNote(artifact?.metadata)}
               onStartProfile={handleStartProfile}
               onClear={handleClearProfile}
               startDisabled={
@@ -906,7 +908,12 @@ export function App() {
             />
           </SidePanel>
         }
-        statusbar={<StatusBar />}
+        statusbar={
+          <StatusBar
+            sourceLabel={artifact ? sourceStatusLabel(artifact.metadata) : "No input selected"}
+            note={scientificNote(artifact?.metadata)}
+          />
+        }
       />
     </StrictMode>
   );
@@ -931,7 +938,7 @@ function Header() {
           fontSize: "var(--font-size-xs)",
         }}
       >
-        v0.1.0-dev
+        v{APP_VERSION}
       </span>
     </div>
   );

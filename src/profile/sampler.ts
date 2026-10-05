@@ -7,6 +7,7 @@ const DEFAULT_SAMPLE_COUNT = 64;
 export interface ProfileSamplerOptions {
   sampleCount?: number;
   units?: "meters" | "relative" | string;
+  horizontalUnits?: "meters" | "pixels" | string;
   source?: "fixture-coordinate-system" | "backend";
   elevationSemantics?: string;
 }
@@ -143,6 +144,7 @@ export function generateProfile(
     maxElevation,
     sampleCount,
     units: options?.units ?? "meters",
+    horizontalUnits: options?.horizontalUnits ?? "meters",
     source: options?.source ?? "fixture-coordinate-system",
     elevationSemantics: options?.elevationSemantics,
   };

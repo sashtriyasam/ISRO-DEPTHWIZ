@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pytest
 
 from depthwizard.backends.ndsm import HEIGHT_UNITS, HEIGHT_UNITS_KEY, NdsmBackend, tiled_predict
 from depthwizard.contracts.semantics import DepthScale
@@ -36,3 +37,21 @@ def test_backend_declares_height_units_without_metric_claim(tmp_path: Path) -> N
     assert result.units is None
     assert result.preprocessing[HEIGHT_UNITS_KEY] == HEIGHT_UNITS
     assert set(result.depth_values) == {7.5}
+
+
+def test_checkpoint_usable_requires_pinned_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from depthwizard.backends import ndsm
+
+    monkeypatch.delenv("DW_ALLOW_UNPINNED_CHECKPOINT", raising=False)
+    missing = tmp_path / "missing.pth"
+    assert not ndsm.checkpoint_usable(missing)
+    ckpt = tmp_path / "model.pth"
+    ckpt.write_bytes(b"not the pinned checkpoint")
+    assert not ndsm.checkpoint_usable(ckpt)
+    monkeypatch.setenv("DW_ALLOW_UNPINNED_CHECKPOINT", "1")
+    assert ndsm.checkpoint_usable(ckpt)
+    monkeypatch.delenv("DW_ALLOW_UNPINNED_CHECKPOINT")
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", ndsm.file_sha256(ckpt))
+    assert ndsm.checkpoint_usable(ckpt)

@@ -24,7 +24,12 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from depthwizard.backends.checkpoints import INJECTED, load_checkpoint_state
+from depthwizard.backends.checkpoints import (
+    INJECTED,
+    UNPINNED_OVERRIDE_ENV,
+    file_sha256,
+    load_checkpoint_state,
+)
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
@@ -59,6 +64,20 @@ def default_checkpoint_path() -> Path:
     if provisioned.is_file():
         return provisioned
     return Path(__file__).resolve().parents[3] / "checkpoints" / CHECKPOINT_FILE
+
+
+def checkpoint_usable(path: Path | None = None) -> bool:
+    """True when the checkpoint exists and would pass verification at load.
+
+    Used to decide whether to advertise/auto-select the backend, so an
+    unpinned or tampered file never becomes the default model silently.
+    """
+    path = path or default_checkpoint_path()
+    if not path.is_file():
+        return False
+    if os.environ.get(UNPINNED_OVERRIDE_ENV) == "1":
+        return True
+    return file_sha256(path).lower() == CHECKPOINT_SHA256.lower()
 
 
 def _starts(length: int, tile: int, stride: int) -> list[int]:

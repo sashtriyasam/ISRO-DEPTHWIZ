@@ -120,9 +120,9 @@ def build_backends() -> dict[str, Any]:
     # M17 is a frozen research candidate whose head is not in this repository
     # (M17DepthBackend.load() always refuses without an injected factory), so
     # it is never advertised as an available backend.
-    from depthwizard.backends.ndsm import default_checkpoint_path
+    from depthwizard.backends.ndsm import checkpoint_usable
 
-    if module_available("torch") and default_checkpoint_path().is_file():
+    if module_available("torch") and checkpoint_usable():
         from depthwizard.backends.ndsm import NdsmBackend
 
         backends["depthwizard-ndsm-vits"] = NdsmBackend(device=_device())

@@ -74,11 +74,11 @@ export function MeasurementPanel({ state, mode, onModeChange, onStartMeasurement
             <StatusRow label="Mode" value={MEASUREMENT_LABELS[state.result.mode]} />
             <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
             <DataRow label="Value" value={formatMeasurementValue(mode, state.result)} />
-            <DataRow label="Source" value="Fixture coordinate system" />
+            <DataRow label="Source" value={state.result.source === "backend" ? "Generated product" : "Development fixture"} />
             <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
-            <DataRow label="Horizontal" value={`${state.result.horizontalDistance.toFixed(3)} m`} />
-            <DataRow label="Vertical" value={`${state.result.verticalDifference.toFixed(3)} m`} />
-            <DataRow label="3D" value={`${state.result.distance3D.toFixed(3)} m`} />
+            <DataRow label="Horizontal" value={formatMeasurementValue("distance", state.result)} />
+            <DataRow label="Vertical" value={formatMeasurementValue("vertical", state.result)} />
+            <DataRow label="3D" value={formatMeasurementValue("distance-3d", state.result)} />
             <button style={clearButtonStyle} onClick={onClear} aria-label="Clear measurement">
               Clear
             </button>

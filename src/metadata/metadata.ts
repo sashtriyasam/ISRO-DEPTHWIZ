@@ -67,6 +67,21 @@ export function sourceStatusLabel(metadata: SceneMetadata): string {
   return model ? `Backend model (${model})` : "Backend";
 }
 
+/** One-line statement of what the loaded product scientifically is. */
+export function scientificNote(metadata: SceneMetadata | undefined): string {
+  if (!metadata) {
+    return "No product loaded";
+  }
+  if (metadata.source === "deterministic-fixture" || metadata.backend?.model_name === "synthetic-depth") {
+    return "Synthetic development data — not scientific output";
+  }
+  if (metadata.units.elevation === "meters") {
+    const ref = metadata.backend?.calibration_reference;
+    return ref ? `Metric heights (m) · calibrated against ${ref}` : "Metric heights (m)";
+  }
+  return "Relative surface — shape only, not metric heights";
+}
+
 export function formatScalar(value: number | undefined | null): string {
   if (value === undefined || value === null) {
     return NOT_AVAILABLE;

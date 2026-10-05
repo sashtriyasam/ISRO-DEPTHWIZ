@@ -642,9 +642,9 @@ def main() -> None:
                     # explicitly via --backend (caller-provided always wins).
                     large_ckpt = os.environ.get("DW_DAV2_LARGE_CKPT")
                     repo_root = Path(__file__).resolve().parent.parent
-                    from depthwizard.backends.ndsm import default_checkpoint_path
+                    from depthwizard.backends.ndsm import checkpoint_usable
 
-                    if default_checkpoint_path().is_file():
+                    if checkpoint_usable():
                         backend_name = NDSM_BACKEND_NAME
                     elif large_ckpt and Path(large_ckpt).is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME

@@ -5,6 +5,7 @@ export {
   unitLabel,
   georeferencingLabel,
   sourceStatusLabel,
+  scientificNote,
   formatScalar,
   formatChecksum,
   formatAffine,
