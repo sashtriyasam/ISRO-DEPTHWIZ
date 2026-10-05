@@ -610,20 +610,16 @@ def main() -> None:
                     and isinstance(checkpoint, dict)
                     and bool(checkpoint.get("sha_match"))
                 ):
-                    # Prefer Large, then satellite-adapted (SIH orthophoto),
-                    # then Small; otherwise keep the deterministic synthetic
-                    # backend (caller-provided --backend always wins).
+                    # Prefer Large, then the shipped Small (verified checkpoint,
+                    # checked above). The smoke-trained satellite fine-tune has
+                    # no accuracy evidence yet, so it is used only when passed
+                    # explicitly via --backend (caller-provided always wins).
                     large_ckpt = os.environ.get("DW_DAV2_LARGE_CKPT")
-                    sat_ckpt = os.environ.get("DW_DAV2_SAT_CKPT")
                     repo_root = Path(__file__).resolve().parent.parent
                     if large_ckpt and Path(large_ckpt).is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME
                     elif (repo_root / "checkpoints" / "depth_anything_v2_vitl.pth").is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME
-                    elif sat_ckpt and Path(sat_ckpt).is_file():
-                        backend_name = DA_V2_SAT_BACKEND_NAME
-                    elif (repo_root / "checkpoints" / "depth_anything_v2_satellite.pth").is_file():
-                        backend_name = DA_V2_SAT_BACKEND_NAME
                     else:
                         backend_name = DAV2_BACKEND_NAME
             if mode == "relative":

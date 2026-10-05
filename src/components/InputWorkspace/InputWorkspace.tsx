@@ -308,14 +308,16 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     if (inputState.stagedPath) {
       let selectedBackend: string | undefined = undefined;
       if (capabilities && capabilities.available_backends.length > 0) {
+        // Released backends first. The satellite fine-tune is smoke-trained with
+        // no accuracy evidence yet, so it is only a fallback until promoted.
         if (capabilities.available_backends.includes("depth-anything-v2-large")) {
           selectedBackend = "depth-anything-v2-large";
+        } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
+          selectedBackend = "depth-anything-v2-small";
         } else if (
           capabilities.available_backends.includes("depth-anything-v2-satellite")
         ) {
           selectedBackend = "depth-anything-v2-satellite";
-        } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
-          selectedBackend = "depth-anything-v2-small";
         }
       }
 
