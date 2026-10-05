@@ -153,6 +153,10 @@ class ServiceResponse(BaseModel):
     failure: ServiceError | None = None
     artifacts: list[ArtifactDescriptor] = Field(default_factory=list)
     summary: RunSummary
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Non-fatal findings (weak calibration fit, flat depth, ...).",
+    )
 
 
 class ServiceCapabilities(BaseModel):

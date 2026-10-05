@@ -14,6 +14,11 @@ export function MetadataPanel({ artifact, activeLayerId }: MetadataPanelProps) {
       {!artifact && (
         <div style={mutedStyle}>No artifact loaded. Metadata appears after terrain generation.</div>
       )}
+      {artifact?.metadata.warnings?.map((warning) => (
+        <div key={warning} role="alert" style={warningStyle}>
+          {warning}
+        </div>
+      ))}
       {artifact &&
         describeArtifact(artifact, activeLayerId).map((section, index) => (
           <details key={section.id} open={index === 0} style={detailsStyle}>
@@ -71,4 +76,12 @@ const summaryStyle: React.CSSProperties = {
   fontSize: "var(--font-size-xs)",
   color: "var(--color-text-secondary)",
   cursor: "pointer",
+};
+
+const warningStyle: React.CSSProperties = {
+  fontSize: "var(--font-size-xs)",
+  color: "var(--color-status-warning, var(--color-status-error))",
+  border: "1px solid var(--color-border-subtle)",
+  borderRadius: "var(--radius-sm)",
+  padding: "var(--spacing-xs) var(--spacing-sm)",
 };

@@ -89,6 +89,13 @@ class FileBasedCalibrationProvider:
 
     def _calibrate_from_dem(self, depth_result: DepthResult, path: Path) -> CalibrationResult:
         """Align DEM to depth grid and fit calibration from terrain samples."""
+        if self._target is not ElevationSemantics.ABSOLUTE_ELEVATION_DSM:
+            raise CalibrationError(
+                "a DEM reference holds absolute terrain elevations, so it can only "
+                f"calibrate '{ElevationSemantics.ABSOLUTE_ELEVATION_DSM.value}'; "
+                f"'{self._target.value}' needs height-above-ground references "
+                "(e.g. a GCP CSV with a height_agl column)"
+            )
         if self._inspection is None or self._inspection.spatial.details is None:
             raise CalibrationError("DEM calibration requires a georeferenced input inspection")
 
@@ -138,7 +145,13 @@ class FileBasedCalibrationProvider:
         if self._inspection is None or self._inspection.spatial.details is None:
             raise CalibrationError("GCP calibration requires a georeferenced input inspection")
 
-        gcps = self._read_gcps(path)
+        gcps, column = self._read_gcps(path)
+        expected = _GCP_COLUMN_FOR_TARGET.get(self._target)
+        if column != expected:
+            raise CalibrationError(
+                f"GCP file provides '{column}' values but the target "
+                f"'{self._target.value}' needs a '{expected}' column"
+            )
         if len(gcps) < MIN_VALID_SAMPLES:
             raise InsufficientGCPsError(
                 f"Too few GCPs for calibration: {len(gcps)} (need >= {MIN_VALID_SAMPLES})"
@@ -160,7 +173,7 @@ class FileBasedCalibrationProvider:
             in_bounds = 0 <= row < depth_array.shape[0] and 0 <= col < depth_array.shape[1]
             if in_bounds and depth_valid[row, col]:
                 predicted.append(float(depth_array[row, col]))
-                reference.append(gcp["elevation"])
+                reference.append(gcp["value"])
 
         if len(predicted) < MIN_VALID_SAMPLES:
             raise InsufficientGCPsError(
@@ -179,19 +192,45 @@ class FileBasedCalibrationProvider:
         return self._calibrator.calibrate(samples)
 
     @staticmethod
-    def _read_gcps(path: str | Path) -> list[dict[str, float]]:
-        """Read GCP CSV with columns: pixel_col, pixel_row, elevation."""
+    def _read_gcps(path: str | Path) -> tuple[list[dict[str, float]], str]:
+        """Read a GCP CSV: ``pixel_col, pixel_row`` plus ``elevation`` or ``height_agl``.
+
+        Returns the control points and which value column was used. Malformed
+        files raise :class:`CalibrationError` naming the problem and row.
+        """
         import csv
 
-        gcps: list[dict[str, float]] = []
-        with open(path, newline="") as handle:
-            reader = csv.DictReader(handle)
-            for row in reader:
-                gcps.append(
-                    {
-                        "col": float(row["pixel_col"]),
-                        "row": float(row["pixel_row"]),
-                        "elevation": float(row["elevation"]),
-                    }
-                )
-        return gcps
+        try:
+            with open(path, newline="", encoding="utf-8-sig") as handle:
+                reader = csv.DictReader(handle)
+                fields = {name.strip().lower(): name for name in (reader.fieldnames or [])}
+                value_columns = [c for c in ("elevation", "height_agl") if c in fields]
+                missing = [c for c in ("pixel_col", "pixel_row") if c not in fields]
+                if missing or len(value_columns) != 1:
+                    raise CalibrationError(
+                        "GCP CSV needs columns pixel_col, pixel_row and exactly one of "
+                        f"elevation / height_agl; got {sorted(fields)}"
+                    )
+                column = value_columns[0]
+                gcps: list[dict[str, float]] = []
+                for line, row in enumerate(reader, start=2):
+                    try:
+                        gcps.append(
+                            {
+                                "col": float(row[fields["pixel_col"]]),
+                                "row": float(row[fields["pixel_row"]]),
+                                "value": float(row[fields[column]]),
+                            }
+                        )
+                    except (TypeError, ValueError) as exc:
+                        raise CalibrationError(f"GCP CSV row {line} is not numeric: {exc}") from exc
+        except (OSError, UnicodeDecodeError, csv.Error) as exc:
+            raise CalibrationError(f"GCP CSV unreadable: {exc}") from exc
+        return gcps, column
+
+
+#: Which GCP value column backs each metric target.
+_GCP_COLUMN_FOR_TARGET = {
+    ElevationSemantics.ABSOLUTE_ELEVATION_DSM: "elevation",
+    ElevationSemantics.HEIGHT_AGL_NDSM: "height_agl",
+}

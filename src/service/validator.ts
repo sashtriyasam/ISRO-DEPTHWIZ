@@ -168,6 +168,12 @@ export function validateServiceResponse(data: unknown): ServiceResponseWire {
   }
   const artifacts = data.artifacts.map(validateDescriptor);
   const summary = validateSummary(data.summary);
+  if (
+    data.warnings !== undefined &&
+    !(Array.isArray(data.warnings) && data.warnings.every((w) => typeof w === "string"))
+  ) {
+    throw new ServiceWireError("Service response warnings must be an array of strings");
+  }
   return {
     contract_version: data.contract_version,
     success: data.success,
@@ -176,6 +182,7 @@ export function validateServiceResponse(data: unknown): ServiceResponseWire {
     failure: (data.failure as ServiceFailureWire | null) ?? null,
     artifacts,
     summary,
+    warnings: (data.warnings as string[] | undefined) ?? [],
   };
 }
 

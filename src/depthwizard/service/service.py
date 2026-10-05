@@ -141,6 +141,7 @@ def build_response(result: PipelineResult) -> ServiceResponse:
             geotiff_path=result.geotiff_path,
             engine_version=result.engine_version,
         ),
+        warnings=list(result.warnings),
     )
 
 

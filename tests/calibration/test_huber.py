@@ -105,3 +105,23 @@ def test_huber_with_mask():
     result = HuberScaleOffsetCalibrator().calibrate(samples)
     assert result.valid_samples == 3
     assert result.total_samples == 6
+
+
+def test_huber_r_squared_uses_plain_mean():
+    predicted = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
+    reference = (1.0, 3.1, 4.9, 7.0, 9.1, 11.0, 13.0, 40.0)
+    samples = CalibrationSamples(
+        predicted_values=predicted,
+        reference_values=reference,
+        reference_id="ref-huber-r2",
+        reference_units="meters",
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+    )
+    result = HuberScaleOffsetCalibrator().calibrate(samples)
+    mean = sum(reference) / len(reference)
+    preds = [result.scale * x + result.offset for x in predicted]
+    ss_res = sum((y - p) ** 2 for y, p in zip(reference, preds, strict=True))
+    ss_tot = sum((y - mean) ** 2 for y in reference)
+    assert result.r_squared == pytest.approx(1.0 - ss_res / ss_tot)
+    # The outlier is down-weighted: the fit stays near the clean slope of 2.
+    assert result.scale == pytest.approx(2.0, abs=0.15)

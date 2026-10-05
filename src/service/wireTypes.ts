@@ -118,6 +118,8 @@ export interface ServiceResponseWire {
   failure: ServiceFailureWire | null;
   artifacts: ArtifactDescriptorWire[];
   summary: RunSummaryWire;
+  /** Non-fatal findings, e.g. a weak calibration fit (absent on older engines). */
+  warnings?: string[];
 }
 
 export interface ServiceCapabilitiesWire {

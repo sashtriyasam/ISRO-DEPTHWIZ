@@ -114,3 +114,78 @@ def test_gcp_reference_refuses_non_georeferenced_input(
     provider = select_calibration_provider(str(_write_gcps(tmp_path / "gcps.csv")), TARGET)
     with pytest.raises(CalibrationError):
         calibrate_with(provider, inspection, depth)
+
+
+def _depth_on_geotiff(tmp_path: Path):  # type: ignore[no-untyped-def]
+    inspection = inspect_input(make_geotiff(tmp_path / "scene.tif"))
+    return inspection, SyntheticDepthBackend().estimate_depth(inspection)
+
+
+def test_dem_reference_cannot_back_agl_target(tmp_path: Path) -> None:
+    inspection, depth = _depth_on_geotiff(tmp_path)
+    provider = FileBasedCalibrationProvider(
+        reference_path=str(tmp_path / "dem.tif"), target=ElevationSemantics.HEIGHT_AGL_NDSM
+    )
+    with pytest.raises(CalibrationError, match="absolute terrain elevations"):
+        calibrate_with(provider, inspection, depth)
+
+
+def test_gcp_column_must_match_target(tmp_path: Path) -> None:
+    inspection, depth = _depth_on_geotiff(tmp_path)
+    gcps = _write_gcps(tmp_path / "gcps.csv")  # 'elevation' column
+    provider = FileBasedCalibrationProvider(
+        reference_path=str(gcps), target=ElevationSemantics.HEIGHT_AGL_NDSM
+    )
+    with pytest.raises(CalibrationError, match="needs a 'height_agl' column"):
+        calibrate_with(provider, inspection, depth)
+
+
+def test_gcp_height_agl_column_backs_agl_target(tmp_path: Path) -> None:
+    inspection, depth = _depth_on_geotiff(tmp_path)
+    path = tmp_path / "agl.csv"
+    path.write_text("pixel_col,pixel_row,height_agl\n0,0,1\n4,0,4\n0,3,7\n4,3,12\n2,1,5.5\n")
+    provider = FileBasedCalibrationProvider(
+        reference_path=str(path), target=ElevationSemantics.HEIGHT_AGL_NDSM
+    )
+    result = calibrate_with(provider, inspection, depth)
+    assert result.target_semantics is ElevationSemantics.HEIGHT_AGL_NDSM
+    assert result.valid_samples == 5
+
+
+def test_gcp_csv_with_excel_bom_is_read(tmp_path: Path) -> None:
+    inspection, depth = _depth_on_geotiff(tmp_path)
+    path = tmp_path / "bom.csv"
+    path.write_bytes("﻿pixel_col,pixel_row,elevation\n0,0,1\n4,0,4\n0,3,7\n".encode())
+    provider = select_calibration_provider(str(path), TARGET)
+    assert calibrate_with(provider, inspection, depth).valid_samples == 3
+
+
+def test_malformed_gcp_csv_is_a_calibration_error(tmp_path: Path) -> None:
+    inspection, depth = _depth_on_geotiff(tmp_path)
+    path = tmp_path / "bad.csv"
+    path.write_text("pixel_col,pixel_row,elevation\n0,0,abc\n")
+    with pytest.raises(CalibrationError, match="row 2 is not numeric"):
+        calibrate_with(select_calibration_provider(str(path), TARGET), inspection, depth)
+    path.write_text("x,y,z\n0,0,1\n")
+    with pytest.raises(CalibrationError, match="GCP CSV needs columns"):
+        calibrate_with(select_calibration_provider(str(path), TARGET), inspection, depth)
+
+
+def test_weak_fit_is_flagged_and_good_fit_is_not() -> None:
+    from depthwizard.calibration import CalibrationSamples, ScaleOffsetCalibrator
+    from depthwizard.calibration.selection import fit_quality_warnings
+
+    def fit(reference: tuple[float, ...]):  # type: ignore[no-untyped-def]
+        return ScaleOffsetCalibrator().calibrate(
+            CalibrationSamples(
+                predicted_values=(0.0, 1.0, 2.0, 3.0, 4.0, 5.0),
+                reference_values=reference,
+                reference_id="r",
+                reference_units="meters",
+                target_semantics=TARGET,
+            )
+        )
+
+    assert fit_quality_warnings(fit((1.0, 3.0, 5.0, 7.0, 9.0, 11.0))) == []
+    weak = fit_quality_warnings(fit((5.0, 1.0, 9.0, 0.0, 8.0, 2.0)))
+    assert len(weak) == 1 and "Weak calibration" in weak[0]

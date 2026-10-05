@@ -79,6 +79,7 @@ try:
         MISSING_REFERENCE_MESSAGE,
         MissingReferenceProvider,
         calibrate_with,
+        fit_quality_warnings,
     )
     from depthwizard.contracts.semantics import ElevationSemantics
     from depthwizard.dsm.rasterize import rasterize_height_product
@@ -320,6 +321,7 @@ def run_terrain_on_path(
     emit_stage("inference_running")
 
     calibration = calibrate_with(provider, inspection, depth)
+    warnings = fit_quality_warnings(calibration)
 
     emit_stage("calibrating")
     product = create_scientific_height_product(depth, calibration, target)
@@ -343,6 +345,7 @@ def run_terrain_on_path(
         "dsm_generation",
         "mesh_generation",
     ]
+    payload["warnings"] = warnings
     return payload
 
 

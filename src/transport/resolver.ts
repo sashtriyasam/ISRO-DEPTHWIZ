@@ -18,7 +18,7 @@ export function resolveTerrainArtifact(bundle: TerrainBundle): SceneArtifact {
       detail: result.errors.map((e) => e.message).join("; "),
     });
   }
-  return result.artifact;
+  return withWarnings(result.artifact, bundle.response.warnings);
 }
 
 export function resolveRelativeArtifact(bundle: RelativeBundle): SceneArtifact {
@@ -32,5 +32,10 @@ export function resolveRelativeArtifact(bundle: RelativeBundle): SceneArtifact {
       detail: result.errors.map((e) => e.message).join("; "),
     });
   }
-  return result.artifact;
+  return withWarnings(result.artifact, bundle.response.warnings);
+}
+
+function withWarnings(artifact: SceneArtifact, warnings: string[] | undefined): SceneArtifact {
+  if (!warnings || warnings.length === 0) return artifact;
+  return { ...artifact, metadata: { ...artifact.metadata, warnings: [...warnings] } };
 }

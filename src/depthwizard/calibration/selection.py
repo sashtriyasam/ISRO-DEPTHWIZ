@@ -114,6 +114,23 @@ class MissingReferenceProvider:
 CalibrationSource = FileBasedCalibrationProvider | DevCalibrationProvider | MissingReferenceProvider
 
 
+#: Below this R² the reference explains too little variance for the metric
+#: heights to be trusted; results are still produced but flagged.
+LOW_FIT_R_SQUARED = 0.25
+
+
+def fit_quality_warnings(result: CalibrationResult) -> list[str]:
+    """Human-readable warnings for weak calibration fits (empty when fine)."""
+    if result.r_squared >= LOW_FIT_R_SQUARED:
+        return []
+    explained = max(result.r_squared, 0.0) * 100.0
+    return [
+        f"Weak calibration: the depth model explains {explained:.0f}% of the "
+        f"reference variance (R² {result.r_squared:.2f}, RMSE {result.rmse:.2f} m over "
+        f"{result.valid_samples} samples). Metric heights are unreliable."
+    ]
+
+
 def select_calibration_provider(
     reference_path: str | None,
     target: ElevationSemantics,

@@ -78,6 +78,8 @@ export interface SceneMetadata {
   description?: string;
   backend?: BackendOrigin;
   spatialDetails?: SpatialDetails;
+  /** Non-fatal backend findings shown to the user (e.g. weak calibration). */
+  warnings?: string[];
 }
 
 export interface GeoTransform {

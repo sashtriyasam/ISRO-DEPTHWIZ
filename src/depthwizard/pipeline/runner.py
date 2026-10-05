@@ -16,6 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from depthwizard.calibration.models import CalibrationResult
+from depthwizard.calibration.selection import fit_quality_warnings
 from depthwizard.contracts.artifacts import METRIC_UNIT, DepthResult
 from depthwizard.contracts.pipeline import PipelineState
 from depthwizard.contracts.semantics import ElevationSemantics
@@ -328,6 +329,7 @@ class _Engine:
                 prepare(self._inspection)
             calibration = request.calibration_provider.calibrate(depth)
             self._check_calibration(calibration)
+            self._warnings.extend(fit_quality_warnings(calibration))
             product = create_scientific_height_product(depth, calibration, request.target_semantics)
         except Exception as exc:
             return self._fail(PipelineState.CALIBRATING, exc)

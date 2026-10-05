@@ -396,7 +396,9 @@ export function adaptTerrainProduct(
     `Backend terrain mesh: ${mesh.vertex_count} vertices, ${mesh.triangle_count} triangles (frame: ${mesh.frame})`,
   );
   warnings.push(
-    `Calibrated via ${mesh.calibration_method}: scale=${mesh.calibration_scale}, offset=${mesh.calibration_offset} (reference: ${mesh.calibration_reference})`,
+    mesh.calibration_method === "piecewise_linear"
+      ? `Calibrated via piecewise_linear (continuous spline; overall line scale=${mesh.calibration_scale}, offset=${mesh.calibration_offset} shown for reference only) (reference: ${mesh.calibration_reference})`
+      : `Calibrated via ${mesh.calibration_method}: scale=${mesh.calibration_scale}, offset=${mesh.calibration_offset} (reference: ${mesh.calibration_reference})`,
   );
   if (dsm.invalid_count > 0) {
     warnings.push(
