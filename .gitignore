@@ -45,3 +45,7 @@ sample_test_data/
 scratch/
 sih_satellite_data/
 fix.js
+
+# IDE and static-analysis output
+.idea/
+P1/
