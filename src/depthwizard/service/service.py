@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from depthwizard.backends.synthetic import SyntheticDepthBackend
@@ -43,10 +44,74 @@ from depthwizard.version import __version__
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+    from depthwizard.dsm.grid import DSMGrid
+
 
 def _georeferenced(georeferencing: GeoreferencingLevel) -> bool:
     """Whether a level carries CRS-backed spatial referencing."""
     return georeferencing is not GeoreferencingLevel.NON_GEOREFERENCED
+
+
+#: Longest side of the RGB texture written for the desktop (GPU texture limits).
+MAX_TEXTURE_SIDE = 4096
+
+
+def _desktop_dir(request: ServiceRequest) -> Path | None:
+    """Folder holding the staged input (where desktop extras are written)."""
+    parent = Path(request.input_path).parent
+    return parent if parent.is_dir() else None
+
+
+def _desktop_geotiff_path(request: ServiceRequest) -> str | None:
+    """Export the DSM next to the staged input when the desktop asks for it."""
+    if not request.include_payload:
+        return None
+    folder = _desktop_dir(request)
+    return str(folder / "dsm.tif") if folder is not None else None
+
+
+def _slope_payload(dsm: DSMGrid) -> dict[str, object]:
+    """Canonical slope (degrees) for display, or why it is unavailable."""
+    import math as _math
+
+    from depthwizard.dsm.slope import compute_slope
+    from depthwizard.errors import InvalidInputError
+
+    try:
+        slope = compute_slope(dsm)
+    except InvalidInputError as exc:
+        return {"units": "degrees", "values": None, "unavailable_reason": str(exc)}
+    values = [
+        round(float(v), 2) if valid and _math.isfinite(float(v)) else None
+        for v, valid in zip(slope.array.ravel(), slope.valid_mask.ravel(), strict=True)
+    ]
+    return {"units": "degrees", "values": values, "unavailable_reason": None}
+
+
+def _write_texture(input_path: str) -> tuple[str | None, str | None]:
+    """Write the model-input RGB as an 8-bit PNG texture next to the input.
+
+    Uses the same pixels the depth model saw (band order, 16-bit stretch),
+    downsampled to at most MAX_TEXTURE_SIDE. Returns (path, warning).
+    """
+    from PIL import Image
+
+    from depthwizard.ingestion.api import inspect_input
+    from depthwizard.ingestion.pixels import load_model_rgb
+
+    target = Path(input_path).parent / "texture.png"
+    try:
+        loaded = load_model_rgb(inspect_input(input_path))
+        image = Image.fromarray(loaded.rgb, "RGB")
+        longest = max(image.size)
+        if longest > MAX_TEXTURE_SIDE:
+            scale = MAX_TEXTURE_SIDE / longest
+            size = (max(1, round(image.size[0] * scale)), max(1, round(image.size[1] * scale)))
+            image = image.resize(size, Image.Resampling.LANCZOS)
+        image.save(target, format="PNG")
+    except Exception as exc:
+        return None, f"RGB texture unavailable: {type(exc).__name__}: {exc}"
+    return str(target), None
 
 
 #: Mesh vertices shipped to the desktop as JSON; larger scenes get a coarser
@@ -223,9 +288,9 @@ class LocalService:
             calibration_provider=calibration_provider,
             target_semantics=request.target_semantics,
             build_mesh=request.build_mesh,
-            geotiff_path=request.geotiff_path,
+            geotiff_path=request.geotiff_path or _desktop_geotiff_path(request),
             export_options=ExportOptions(
-                overwrite=request.export_overwrite,
+                overwrite=request.export_overwrite or request.geotiff_path is None,
                 compression=Compression(request.export_compression),
             ),
             cancellation=cancellation,
@@ -246,7 +311,14 @@ class LocalService:
 
             payload = _payload(terrain_product(result.depth, result.dsm, result.mesh))
             payload["stages"] = [state.value for state in result.states]
-            response = response.model_copy(update={"payload": payload})
+            payload["geotiff_path"] = result.export.path if result.export else None
+            payload["slope"] = _slope_payload(result.dsm)
+            texture_path, texture_warning = _write_texture(request.input_path)
+            payload["texture_path"] = texture_path
+            warnings = list(response.warnings)
+            if texture_warning:
+                warnings.append(texture_warning)
+            response = response.model_copy(update={"payload": payload, "warnings": warnings})
         return response
 
     def _execute_relative(self, request: ServiceRequest, backend: DepthBackend) -> ServiceResponse:
@@ -267,6 +339,7 @@ class LocalService:
 
             payload = _payload(relative_product(depth, grid, mesh))
             payload["stages"] = ["completed"]
+            payload["texture_path"], _texture_warning = _write_texture(request.input_path)
         return ServiceResponse(
             payload=payload,
             contract_version=SERVICE_CONTRACT_VERSION,

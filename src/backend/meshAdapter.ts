@@ -327,6 +327,29 @@ export function validateTerrainProduct(
  * GDAL-order affine (x = b·(col+½), z = f·(row+½) for unrotated rasters);
  * local-frame vertices are plain pixel indices.
  */
+/** Slope degrees (canonical Python computation) as a colourable layer. */
+function slopeLayer(
+  product: BackendTerrainProduct,
+  elevation: ElevationData,
+): ElevationData | undefined {
+  const values = product.slope?.values;
+  if (!values || values.length !== elevation.width * elevation.height) return undefined;
+  const grid = new Float32Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    grid[i] = v === null ? NaN : v;
+  }
+  return {
+    grid,
+    width: elevation.width,
+    height: elevation.height,
+    cellSize: elevation.cellSize,
+    unit: "degrees",
+    noDataValue: NaN,
+    displayGrid: elevation.displayGrid,
+  };
+}
+
 function terrainDisplayGrid(mesh: BackendTerrainProduct["mesh"]): DisplayGrid {
   const transform = mesh.spatial.kind === "present" ? mesh.spatial.details?.transform : undefined;
   if (mesh.frame === "georeferenced_local" && transform) {
@@ -441,9 +464,15 @@ export function adaptTerrainProduct(
       uvs,
       vertexCount: mesh.vertex_count,
       indexCount: mesh.indices.length,
+      sourceIndices: new Uint32Array(mesh.vertex_source_indices),
     },
     elevation,
-    metadata,
+    metadata: {
+      ...metadata,
+      ...(product.geotiff_path ? { exportPath: product.geotiff_path } : {}),
+      ...(product.texture_path ? { texturePath: product.texture_path } : {}),
+    },
+    ...(slopeLayer(product, elevation) ? { layers: { slope: slopeLayer(product, elevation) } } : {}),
   };
 
   void depth_result;
@@ -759,6 +788,7 @@ export function adaptRelativeProduct(
       uvs,
       vertexCount: mesh.vertex_count,
       indexCount: mesh.indices.length,
+      sourceIndices: new Uint32Array(mesh.vertex_source_indices),
     },
     elevation,
     metadata,

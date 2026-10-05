@@ -200,6 +200,17 @@ describe("Electron security audit", () => {
     expect(mainSource).not.toContain('"launch-service"');
   });
 
+  it("staged products are read/saved only inside staged dirs", () => {
+    for (const channel of ["read-staged-file", "save-staged-file"]) {
+      const start = mainSource.indexOf(`"${channel}"`);
+      expect(start).toBeGreaterThan(-1);
+      const body = mainSource.slice(start, start + 600);
+      expect(body).toContain("validateRendererPath");
+    }
+    expect(preloadSource).toContain('"read-staged-file"');
+    expect(preloadSource).toContain('"save-staged-file"');
+  });
+
   it("captured output is bounded", () => {
     expect(mainSource).toContain("MAX_OUTPUT_CHARS");
   });

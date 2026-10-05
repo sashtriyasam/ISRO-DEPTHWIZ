@@ -10,6 +10,7 @@ import {
 } from "../transport";
 import type { MetricTargetSemantics } from "../service/wireTypes";
 import type { InputMetadata } from "./types";
+import { attachStagedTexture } from "../artifact/stagedTexture";
 
 export interface FileInputSourceOptions {
   stagedPath: string;
@@ -87,7 +88,7 @@ export class FileInputSource implements ArtifactSource {
           },
           loadOptions,
         );
-        return resolveRelativeArtifact(bundle);
+        return attachStagedTexture(resolveRelativeArtifact(bundle));
       }
       const bundle = await this.transport.fetchTerrain(
         {
@@ -100,7 +101,7 @@ export class FileInputSource implements ArtifactSource {
         },
         loadOptions,
       );
-      return resolveTerrainArtifact(bundle);
+      return attachStagedTexture(resolveTerrainArtifact(bundle));
     } catch (err) {
       if (err instanceof ArtifactTransportFailure) {
         throw new BackendOperationError(err.toBridgeErrors());

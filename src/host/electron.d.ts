@@ -28,6 +28,13 @@ export interface DepthWizardElectron {
     requestId?: string;
   }): Promise<unknown>;
   cancelService(args: { requestId: string }): Promise<{ cancelled: boolean }>;
+  /** Read a product written beside a staged input (staged dirs only). */
+  readStagedFile?(args: { path: string }): Promise<{ bytes: Uint8Array } | { error: string }>;
+  /** Copy a staged product to a user-chosen location via a save dialog. */
+  saveStagedFile?(args: {
+    path: string;
+    defaultName?: string;
+  }): Promise<{ saved: boolean; path?: string } | { error: string }>;
   stageInputBytes(args: {
     bytes: Uint8Array;
     filename: string;

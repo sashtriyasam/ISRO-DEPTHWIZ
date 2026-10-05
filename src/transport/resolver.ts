@@ -18,7 +18,10 @@ export function resolveTerrainArtifact(bundle: TerrainBundle): SceneArtifact {
       detail: result.errors.map((e) => e.message).join("; "),
     });
   }
-  return withWarnings(result.artifact, bundle.response.warnings);
+  return withPayloadExtras(
+    withWarnings(result.artifact, bundle.response.warnings),
+    bundle.response.payload,
+  );
 }
 
 export function resolveRelativeArtifact(bundle: RelativeBundle): SceneArtifact {
@@ -32,10 +35,27 @@ export function resolveRelativeArtifact(bundle: RelativeBundle): SceneArtifact {
       detail: result.errors.map((e) => e.message).join("; "),
     });
   }
-  return withWarnings(result.artifact, bundle.response.warnings);
+  return withPayloadExtras(
+    withWarnings(result.artifact, bundle.response.warnings),
+    bundle.response.payload,
+  );
 }
 
 function withWarnings(artifact: SceneArtifact, warnings: string[] | undefined): SceneArtifact {
   if (!warnings || warnings.length === 0) return artifact;
   return { ...artifact, metadata: { ...artifact.metadata, warnings: [...warnings] } };
+}
+
+/** Staged extras of the service run (texture for relative runs too). */
+function withPayloadExtras(artifact: SceneArtifact, payload: unknown): SceneArtifact {
+  if (typeof payload !== "object" || payload === null) return artifact;
+  const extras = payload as { texture_path?: unknown; geotiff_path?: unknown };
+  const metadata = { ...artifact.metadata };
+  if (typeof extras.texture_path === "string" && !metadata.texturePath) {
+    metadata.texturePath = extras.texture_path;
+  }
+  if (typeof extras.geotiff_path === "string" && !metadata.exportPath) {
+    metadata.exportPath = extras.geotiff_path;
+  }
+  return { ...artifact, metadata };
 }

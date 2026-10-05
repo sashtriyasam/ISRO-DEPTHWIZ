@@ -141,11 +141,21 @@ export interface BackendTerrainMeshTransport {
   provenance?: BackendProductProvenance;
 }
 
+export interface BackendSlopeTransport {
+  units: "degrees";
+  values: (number | null)[] | null;
+  unavailable_reason: string | null;
+}
+
 export interface BackendTerrainProduct {
   kind: "terrain";
   depth_result: BackendDepthResult;
   dsm: BackendDsmTransport;
   mesh: BackendTerrainMeshTransport;
+  /** Desktop extras written by the service run (absent from the bridge). */
+  slope?: BackendSlopeTransport;
+  geotiff_path?: string | null;
+  texture_path?: string | null;
 }
 
 export interface BackendRelativeSurfaceTransport {

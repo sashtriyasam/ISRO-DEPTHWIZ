@@ -21,6 +21,9 @@ const runningExecutions = new Map<string, ChildProcess>();
 // string anyway; the run is stopped with an actionable error instead.
 const MAX_OUTPUT_CHARS = 400 * 1024 * 1024;
 
+// Largest staged product the renderer may read back (e.g. texture.png).
+const MAX_STAGED_READ_BYTES = 200 * 1024 * 1024;
+
 // Staged temp dirs older than this are swept at startup (crash leftovers).
 const STALE_STAGED_MS = 24 * 60 * 60 * 1000;
 
@@ -473,6 +476,57 @@ function registerIpcHandlers(): void {
         /* noop */
       }
       return { cleaned: false };
+    },
+  );
+
+  // Products written beside a staged input (texture.png, dsm.tif) are read or
+  // saved only through these two channels, and only inside staged dirs.
+  ipcMain.handle("read-staged-file", async (event, args: { path?: unknown }) => {
+    if (rejectUnauthorized(event, "read-staged-file")) {
+      return { error: "unauthorized" };
+    }
+    const pathError = validateRendererPath(args?.path, "path");
+    if (pathError) return { error: pathError };
+    try {
+      const filePath = args.path as string;
+      const size = fs.statSync(filePath).size;
+      if (size > MAX_STAGED_READ_BYTES) {
+        return { error: `Staged file too large to read (${size} bytes)` };
+      }
+      return { bytes: new Uint8Array(fs.readFileSync(filePath)) };
+    } catch (err) {
+      return { error: `Failed to read staged file: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  });
+
+  ipcMain.handle(
+    "save-staged-file",
+    async (event, args: { path?: unknown; defaultName?: unknown }) => {
+      if (rejectUnauthorized(event, "save-staged-file")) {
+        return { error: "unauthorized" };
+      }
+      const pathError = validateRendererPath(args?.path, "path");
+      if (pathError) return { error: pathError };
+      const source = args.path as string;
+      const defaultName =
+        typeof args.defaultName === "string" && args.defaultName.trim()
+          ? path.basename(args.defaultName)
+          : path.basename(source);
+      const { dialog } = require("electron") as typeof import("electron");
+      const choice = await dialog.showSaveDialog({
+        title: "Export DSM",
+        defaultPath: defaultName,
+        filters: [{ name: "GeoTIFF", extensions: ["tif", "tiff"] }],
+      });
+      if (choice.canceled || !choice.filePath) {
+        return { saved: false };
+      }
+      try {
+        fs.copyFileSync(source, choice.filePath);
+        return { saved: true, path: choice.filePath };
+      } catch (err) {
+        return { error: `Export failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
     },
   );
 

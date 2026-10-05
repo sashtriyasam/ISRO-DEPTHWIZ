@@ -326,3 +326,45 @@ def test_relative_payload(tmp_path: Path) -> None:
     response = LocalService().execute(request, SyntheticCalibrationProvider())
     assert response.payload is not None
     assert response.payload["kind"] == "relative-terrain"
+
+
+def test_payload_extras_for_png(tmp_path: Path) -> None:
+    """Texture and GeoTIFF are written beside the staged input; slope explains why not."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    payload = response.payload
+    assert payload is not None
+    assert Path(str(payload["texture_path"])).is_file()
+    assert Path(str(payload["geotiff_path"])).is_file()
+    slope = payload["slope"]
+    assert isinstance(slope, dict)
+    assert slope["values"] is None
+    assert slope["unavailable_reason"]
+
+
+def test_payload_slope_for_projected_geotiff(tmp_path: Path) -> None:
+    from tests.pipeline.support import geotiff_input
+
+    request = ServiceRequest(
+        input_path=geotiff_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.success, response.failure
+    payload = response.payload
+    assert payload is not None
+    slope = payload["slope"]
+    assert isinstance(slope, dict)
+    values = slope["values"]
+    assert (
+        isinstance(values, list)
+        and len(values) == response.artifacts[3].width * response.artifacts[3].height
+    )  # type: ignore[operator]
+    assert any(v is not None for v in values)

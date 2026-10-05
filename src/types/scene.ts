@@ -15,10 +15,12 @@ export interface MeshData {
   uvs?: Float32Array;
   vertexCount: number;
   indexCount: number;
+  /** Row-major grid pixel each vertex was built from (backend meshes). */
+  sourceIndices?: Uint32Array;
 }
 
 export interface TextureData {
-  image: ImageData | HTMLImageElement;
+  image: ImageData | HTMLImageElement | ImageBitmap;
   width: number;
   height: number;
 }
@@ -50,6 +52,8 @@ export interface ElevationData {
 export interface LayerPayloads {
   rdsm?: ElevationData;
   agl?: ElevationData;
+  /** Slope in degrees from the canonical Python computation. */
+  slope?: ElevationData;
 }
 
 export interface BackendOrigin {
@@ -94,6 +98,10 @@ export interface SceneMetadata {
   spatialDetails?: SpatialDetails;
   /** Non-fatal backend findings shown to the user (e.g. weak calibration). */
   warnings?: string[];
+  /** Staged, verified DSM GeoTIFF of this run (exportable via a save dialog). */
+  exportPath?: string;
+  /** Staged RGB texture of this run (model-input pixels). */
+  texturePath?: string;
 }
 
 export interface GeoTransform {
