@@ -87,7 +87,7 @@ try:
     from depthwizard.height import create_scientific_height_product
     from depthwizard.ingestion.api import inspect_input
     from depthwizard.integration import terrain_product, to_json_text
-    from depthwizard.mesh.build import build_terrain_mesh, build_lod_meshes
+    from depthwizard.mesh.build import build_lod_meshes, build_terrain_mesh
 except ImportError as exc:
     print(
         json.dumps(
@@ -140,7 +140,7 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
         try:
             return DepthAnythingV2Backend(
                 checkpoint=Path(checkpoint) if checkpoint else None,
-                device=backend_device,  # type: ignore[arg-type]
+                device=backend_device,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -173,15 +173,24 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
         try:
             from depthwizard.backends.satellite import SatelliteDepthBackend
         except ImportError as exc:
-            raise RuntimeError(f"backend {name!r} unavailable: satellite backend not importable ({exc}). Install the 'dav2' extra and provide the upstream source.") from exc
+            raise RuntimeError(
+                f"backend {name!r} unavailable: satellite backend not importable ({exc}). "
+                "Install the 'dav2' extra and provide the upstream source."
+            ) from exc
         checkpoint = os.environ.get("DW_DAV2_SAT_CKPT")
         backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
         try:
-            return SatelliteDepthBackend(checkpoint=Path(checkpoint) if checkpoint else None, device=backend_device)  # type: ignore[arg-type]
+            return SatelliteDepthBackend(
+                checkpoint=Path(checkpoint) if checkpoint else None, device=backend_device
+            )
         except Exception as exc:
-            raise RuntimeError(f"backend {name!r} unavailable: {exc}. Set DW_DAV2_SAT_CKPT to an external checkpoint; weights are never committed.") from exc
+            raise RuntimeError(
+                f"backend {name!r} unavailable: {exc}. "
+                "Set DW_DAV2_SAT_CKPT to an external checkpoint; weights are never committed."
+            ) from exc
     raise ValueError(
-        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, {DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME}, {DA_V2_SAT_BACKEND_NAME})"
+        f"unknown backend {name!r} (supported: {SYNTHETIC_BACKEND_NAME}, "
+        f"{DAV2_BACKEND_NAME}, {DAV2_LARGE_BACKEND_NAME}, {DA_V2_SAT_BACKEND_NAME})"
     )
 
 
@@ -257,7 +266,8 @@ _USAGE = (
     "<input_path> | --synthetic <w> <h> "
     "| --terrain <w> <h> | --terrain-file <path> [target] "
     "| --inspect <path> | --capabilities | --diagnostics "
-    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>] [--assume-north-up] "
+    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] "
+    "[--min-area <px>] [--gsd <m/px>] [--assume-north-up] "
     "[--mesh-levels <int> [<int> ...]] "
     "[--calibration-method <scale_offset|scale_offset_huber|piecewise_linear>] "
     "[--reference <dem.tif|gcps.csv>]"
@@ -625,6 +635,7 @@ def main() -> None:
             print(json.dumps(run_capabilities()))
         elif positional[0] == "--diagnostics":
             from depthwizard.runtime.diagnostics import availability_report
+
             print(json.dumps(availability_report()))
         elif positional[0] == "--synthetic":
             width = int(positional[1]) if len(positional) > 1 else 8

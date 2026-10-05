@@ -51,10 +51,11 @@ jobs:
         run: python -m pytest tests/ -q
 
       - name: Run ruff check
-        run: python -m ruff check src tests
+        # scripts/ ships in the installer (bridge, service, provisioning).
+        run: python -m ruff check src tests scripts
 
       - name: Run ruff format check
-        run: python -m ruff format --check src tests
+        run: python -m ruff format --check src tests scripts
 
       - name: Run mypy (source only)
         # Policy: mypy must be clean on src/. tests/ carries pre-existing
@@ -62,6 +63,11 @@ jobs:
         # separately — excluding it here by explicit policy, not by shell
         # hack. See docs/final-release-gate.md G1 evidence.
         run: python -m mypy --python-version 3.12 src
+
+      - name: Run mypy (shipped scripts)
+        run: >-
+          python -m mypy --python-version 3.12
+          scripts/backend_bridge.py scripts/depthwiz_service.py scripts/provision_runtime.py
 
   frontend:
     name: Frontend (typecheck, test, build)
@@ -104,6 +110,63 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  windows:
+    # The product is Windows-first: path handling, Python discovery, CRLF
+    # batch files and the NSIS layout are only exercised here.
+    name: Windows (pytest, vitest, packaged layout)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python stack (torch CPU, no checkpoints/models)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -e ".[dev,dav2]"
+
+      - name: Run pytest
+        run: python -m pytest tests/ -q
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Vitest
+        env:
+          DEPTHWIZARD_PYTHON: python
+        run: npm run test
+
+      - name: Build unpacked Windows app
+        run: |
+          npm run build:electron
+          npx electron-builder --config electron-builder.yml --win --dir
+
+      - name: Verify packaged backend layout
+        shell: pwsh
+        run: |
+          $resources = "release/win-unpacked/resources"
+          foreach ($f in @(
+            "scripts/setup_backend.bat", "scripts/provision_runtime.py",
+            "scripts/backend_bridge.py", "scripts/depthwiz_service.py",
+            "pyproject.toml", "README.md", "src/depthwizard/__init__.py")) {
+            if (-not (Test-Path (Join-Path $resources $f))) { throw "missing $f" }
+          }
+          if (Get-ChildItem -Recurse "$resources/src" -Filter __pycache__ -Directory) {
+            throw "__pycache__ shipped"
+          }
 
   electron-config:
     name: Electron configuration validation
