@@ -52,6 +52,18 @@ def _repository_sha() -> str | None:
     return sha if proc.returncode == 0 and sha else None
 
 
+def _backend_fact(backend: DepthBackend, key: str) -> str | None:
+    """Provenance fact reported by a backend's ``config_dict()`` (if any)."""
+    config = getattr(backend, "config_dict", None)
+    if not callable(config):
+        return None
+    try:
+        value = config().get(key)
+    except Exception:
+        return None
+    return str(value).lower() if isinstance(value, str) and value else None
+
+
 def _write_temp_png(rgb: np.ndarray, directory: Path) -> Path:
     """Materialize HWC uint8 RGB as a PNG for file-based inspection."""
     from PIL import Image
@@ -186,8 +198,8 @@ def run_sample(
         model_name=depth.model_name,
         model_version=depth.model_version,
         checkpoint_id=depth.checkpoint_id,
-        checkpoint_sha256=None,
-        upstream_revision=None,
+        checkpoint_sha256=_backend_fact(backend, "checkpoint_sha256"),
+        upstream_revision=_backend_fact(backend, "upstream_revision"),
         input_checksum=depth.provenance.input_checksum,
         reference_id=calibration.reference_id,
         reference_checksum=ref_checksum,

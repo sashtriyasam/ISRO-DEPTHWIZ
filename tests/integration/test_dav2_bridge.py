@@ -310,3 +310,10 @@ def test_service_dev_calibration_is_explicit_and_labelled(tmp_path: Path) -> Non
     assert isinstance(response, dict)
     assert response["success"] is True
     assert response["summary"]["calibration_reference"] == "synthetic-dev-ref"
+
+
+def test_misspelt_option_is_rejected() -> None:
+    """A typo such as --calibraton-method must not become a positional value."""
+    proc = run_bridge("--calibraton-method", "piecewise_linear", "--terrain", "4", "4")
+    assert proc.returncode != 0
+    assert "unknown option '--calibraton-method'" in json.loads(proc.stdout)["error"]

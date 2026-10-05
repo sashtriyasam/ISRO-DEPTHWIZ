@@ -62,6 +62,9 @@ def test_tags_serialized(tmp_path: Path) -> None:
     assert tags["calibration_method"] == "scale_offset"
     assert tags["calibration_reference"] == "ref-s10"
     assert tags["source_checksum"] == grid.source_checksum
+    assert float(tags["calibration_scale"]) == grid.calibration_scale
+    assert float(tags["calibration_offset"]) == grid.calibration_offset
+    assert int(tags["calibration_valid_samples"]) == grid.calibration_valid_samples
 
 
 def test_rejects_non_grid() -> None:

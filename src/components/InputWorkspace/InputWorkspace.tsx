@@ -127,15 +127,15 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     try {
       const result = await fetchServiceCapabilities(serviceClientRef.current ?? undefined);
       setCapabilities(result);
-      if (
-        !result.supported_target_semantics.includes(targetSemantics) &&
-        result.supported_target_semantics.length > 0
-      ) {
+      // Functional update: this callback is memoised once, so reading
+      // `targetSemantics` directly would see only its initial value.
+      setTargetSemantics((current) => {
+        if (result.supported_target_semantics.includes(current)) return current;
         const fallback = result.supported_target_semantics[0];
-        if (fallback === "absolute_elevation_dsm" || fallback === "height_agl_ndsm") {
-          setTargetSemantics(fallback);
-        }
-      }
+        return fallback === "absolute_elevation_dsm" || fallback === "height_agl_ndsm"
+          ? fallback
+          : current;
+      });
     } catch (err) {
       setCapabilitiesError(err instanceof Error ? err.message : String(err));
       setCapabilities(null);

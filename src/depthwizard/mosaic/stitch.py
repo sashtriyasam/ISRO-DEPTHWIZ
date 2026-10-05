@@ -24,6 +24,16 @@ from depthwizard.mosaic.models import MosaicResult, MosaicTileInfo
 from depthwizard.version import __version__
 
 
+def _require_transform(grid: DSMGrid) -> AffineTransform:
+    """Mosaicking needs each grid's affine transform (explicit, not an assert)."""
+    details = grid.spatial.details
+    if details is None or details.transform is None:
+        raise InvalidInputError(
+            f"mosaic requires a georeferenced transform for {grid.source_input_id or 'a grid'}"
+        )
+    return details.transform
+
+
 def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     """Stitch multiple georeferenced DSM grids into a continuous mosaic.
 
@@ -57,9 +67,7 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     base_crs = require_crs(first.spatial, "mosaic stitching")
     base_semantics = first.semantics
 
-    assert first.spatial.details is not None
-    assert first.spatial.details.transform is not None
-    base_t = first.spatial.details.transform
+    base_t = _require_transform(first)
     res_x = abs(float(base_t.b))
     res_y = abs(float(base_t.f))
 
@@ -76,9 +84,7 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
                 f"grid {i} CRS '{crs_i}' differs from base CRS '{base_crs}'; "
                 "mosaic requires matching CRS"
             )
-        assert g.spatial.details is not None
-        assert g.spatial.details.transform is not None
-        t_i = g.spatial.details.transform
+        t_i = _require_transform(g)
         gx = abs(float(t_i.b))
         gy = abs(float(t_i.f))
         if not (math.isclose(res_x, gx, rel_tol=0.01) and math.isclose(res_y, gy, rel_tol=0.01)):
@@ -93,9 +99,7 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     tile_infos: list[MosaicTileInfo] = []
 
     for g in grids:
-        assert g.spatial.details is not None
-        assert g.spatial.details.transform is not None
-        t = g.spatial.details.transform
+        t = _require_transform(g)
         w, h = g.width, g.height
 
         x0 = float(t.a)
@@ -144,9 +148,7 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     accum_count: np.ndarray = np.zeros((mosaic_h, mosaic_w), dtype=np.int32)
 
     for g in grids:
-        assert g.spatial.details is not None
-        assert g.spatial.details.transform is not None
-        t = g.spatial.details.transform
+        t = _require_transform(g)
         g_x0 = float(t.a)
         g_y0 = float(t.d)
 

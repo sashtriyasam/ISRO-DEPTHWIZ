@@ -261,6 +261,19 @@ def run_terrain(
 
 METRIC_TARGETS = ("height_agl_ndsm", "absolute_elevation_dsm")
 
+#: Mode selectors that are parsed positionally (everything else with "--" is an option).
+_MODE_TOKENS = frozenset(
+    {
+        "--synthetic",
+        "--terrain",
+        "--terrain-file",
+        "--inspect",
+        "--capabilities",
+        "--diagnostics",
+        "--solar",
+    }
+)
+
 _USAGE = (
     "Usage: backend_bridge.py [--backend <name>] [--device <device>] [--mode metric|relative] "
     "<input_path> | --synthetic <w> <h> "
@@ -548,6 +561,10 @@ def main() -> None:
         elif args[i] == "--reference" and i + 1 < len(args):
             reference_path = args[i + 1]
             i += 2
+        elif args[i].startswith("--") and args[i] not in _MODE_TOKENS:
+            # A misspelt option must not silently become a positional value.
+            print(json.dumps({"error": f"unknown option {args[i]!r}. {_USAGE}"}))
+            sys.exit(1)
         else:
             positional.append(args[i])
             i += 1

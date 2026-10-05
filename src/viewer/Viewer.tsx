@@ -687,7 +687,7 @@ export function updateMeasurementGraphics(
       ),
     ];
     const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffaa44, linewidth: 2 });
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffaa44 }) // WebGL ignores linewidth;
     state.measurementLine = new THREE.Line(lineGeometry, lineMaterial);
     state.threeScene.add(state.measurementLine);
   }
@@ -744,7 +744,7 @@ export function updateProfileGraphics(
       ),
     ];
     const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xdd44dd, linewidth: 2 });
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xdd44dd }) // WebGL ignores linewidth;
     state.profileLine = new THREE.Line(lineGeometry, lineMaterial);
     state.threeScene.add(state.profileLine);
   }
