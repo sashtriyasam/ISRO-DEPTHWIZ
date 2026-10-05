@@ -34,6 +34,7 @@ from depthwizard.evaluation.protocols import (
     CalibrationPlan,
     control_stride_split,
     fit_controls,
+    sparse_control_split,
 )
 from depthwizard.evaluation.results import EvaluationResult, EvaluationRun
 from depthwizard.pipeline.protocols import CalibrationProvider
@@ -84,6 +85,7 @@ def run_sample(
     dataset_release: str | None = None,
     manifest_checksum: str | None = None,
     device: str | None = None,
+    controls: int | None = None,
 ) -> tuple[EvaluationResult, np.ndarray, np.ndarray]:
     """Score one sample; also return held-out (calibrated, reference) pairs."""
     from depthwizard.ingestion import inspect_input
@@ -141,7 +143,10 @@ def run_sample(
     base_valid = valid_evaluation_mask(
         predicted, reference_values, np.asarray(reference.valid_mask, dtype=bool)
     )
-    control_mask, evaluation_mask = control_stride_split((height, width), base_valid, stride)
+    if controls is not None:
+        control_mask, evaluation_mask = sparse_control_split((height, width), base_valid, controls)
+    else:
+        control_mask, evaluation_mask = control_stride_split((height, width), base_valid, stride)
     dataset_name = getattr(sample, "dataset_name", "stratified-benchmark")
     split_name = getattr(sample, "split", "evaluation")
     ref_checksum = getattr(sample, "reference_checksum", None)
@@ -175,8 +180,9 @@ def run_sample(
     metrics = compute_metrics(calibrated_full, reference_values, evaluation_mask, units="meters")
     sample_timings["metric_seconds"] = time.perf_counter() - metric_start
     plan = CalibrationPlan(
-        protocol="control-stride",
-        stride=stride,
+        protocol="sparse-controls" if controls is not None else "control-stride",
+        stride=None if controls is not None else stride,
+        control_count=controls,
         offset=0,
         reference_id=calibration.reference_id,
         target_semantics=target,
@@ -239,10 +245,11 @@ def evaluate_sample(
     dataset_release: str | None = None,
     manifest_checksum: str | None = None,
     device: str | None = None,
+    controls: int | None = None,
 ) -> EvaluationResult:
     """Score one sample end to end (summary only)."""
     result, _, _ = run_sample(
-        loaded, backend, target, stride, dataset_release, manifest_checksum, device
+        loaded, backend, target, stride, dataset_release, manifest_checksum, device, controls
     )
     return result
 

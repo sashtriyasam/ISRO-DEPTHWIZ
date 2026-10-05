@@ -148,6 +148,12 @@ def _attach_significance(run, seed, resamples, confidence):
     )
 
 
+def _protocol(args) -> str:  # type: ignore[no-untyped-def]
+    """Calibration protocol label recorded in run identity and results."""
+    controls = getattr(args, "controls", None)
+    return f"sparse-controls-{controls}" if controls else "control-stride"
+
+
 def _aggregate_resume(args):
     """Build a run document purely from resume records (no inference)."""
     from depthwizard.evaluation.datasets import EvaluationSample
@@ -190,7 +196,7 @@ def _aggregate_resume(args):
         manifest_checksum,
         args.backend,
         checkpoint_sha256,
-        "control-stride",
+        _protocol(args),
         "native-pixel",
         repository_sha,
         args.dataset,
@@ -236,6 +242,7 @@ def _aggregate_resume(args):
     run = evaluate_run(
         results,
         None,
+        calibration_protocol=_protocol(args),
         pooled=accumulator.summary(),
         requested_samples=len(samples),
         failures=failures,
@@ -266,6 +273,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend", default="depth-anything-v2-small")
     parser.add_argument("--gamus-root", default=None)
     parser.add_argument("--stride", type=int, default=8)
+    parser.add_argument(
+        "--controls",
+        type=int,
+        default=None,
+        help="Calibrate on K evenly spaced ground-truth points per tile (GCP-like, "
+        "realistic) instead of every --stride-th pixel (dense, near in-sample)",
+    )
     parser.add_argument("--target", default="height_agl_ndsm")
     parser.add_argument("--max-samples", type=int, default=None)
     parser.add_argument("--sample-offset", type=int, default=0)
@@ -396,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest_checksum,
         args.backend,
         checkpoint_sha256,
-        "control-stride",
+        _protocol(args),
         "native-pixel",
         repository_sha,
         args.dataset,
@@ -443,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
                     backend,
                     target=target,
                     stride=args.stride,
+                    controls=args.controls,
                     dataset_release=document.get("release"),
                     manifest_checksum=manifest_checksum,
                     device=device,
@@ -489,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         run = evaluate_run(
             results,
             None,
+            calibration_protocol=_protocol(args),
             pooled=pooled,
             requested_samples=len(selected),
             failures=failures,
