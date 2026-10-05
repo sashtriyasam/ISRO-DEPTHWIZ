@@ -29,6 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from depthwizard.backends.checkpoints import INJECTED, load_checkpoint_state
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
@@ -119,6 +120,7 @@ class DepthAnythingV2LargeBackend:
         self._seed = int(seed)
         self._factory = model_factory
         self._model: Any = None
+        self._checkpoint_status = INJECTED if model_factory is not None else "not loaded"
 
     @property
     def model_name(self) -> str:
@@ -192,7 +194,9 @@ class DepthAnythingV2LargeBackend:
         torch.manual_seed(self._seed)
         model_cls = self._import_model_class()
         model = model_cls(**ENCODER_CONFIG)
-        state = torch.load(str(self._checkpoint), map_location="cpu")
+        state, self._checkpoint_status = load_checkpoint_state(
+            torch, self._checkpoint, CHECKPOINT_SHA256, self.model_name
+        )
         model.load_state_dict(state)
         model = model.to(self._device).eval()
         self._model = model
@@ -272,7 +276,11 @@ class DepthAnythingV2LargeBackend:
             depth_values=depth_values,
             valid_mask=loaded.valid_mask_tuple(),
             confidence_values=None,
-            preprocessing={**PREPROCESSING_RECORD, **loaded.preprocessing_record()},
+            preprocessing={
+                **PREPROCESSING_RECORD,
+                **loaded.preprocessing_record(),
+                "checkpoint_verification": self._checkpoint_status,
+            },
             units=None,
             spatial=inspection.spatial,
             provenance=ProductProvenance(

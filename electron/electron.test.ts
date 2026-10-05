@@ -81,6 +81,13 @@ describe("Electron security audit", () => {
     expect(prodCspIdx).toBeGreaterThan(-1);
   });
 
+  it("production build injects a CSP meta (file:// has no response headers)", () => {
+    const viteConfig = readFileSync(resolve(ROOT, "vite.config.ts"), "utf-8");
+    expect(viteConfig).toContain('apply: "build"');
+    expect(viteConfig).toContain('http-equiv="Content-Security-Policy"');
+    expect(viteConfig).toContain("\"script-src 'self'\"");
+  });
+
   it("no unsafe-inline script-src in CSP", () => {
     const cspStart = mainSource.indexOf("Content-Security-Policy");
     const cspEnd = mainSource.indexOf("];", cspStart);
@@ -172,8 +179,33 @@ describe("Electron security audit", () => {
     expect(mainSource).toContain("resourcesPath");
   });
 
-  it("input path validation rejects traversal without platform-dependent normalization", () => {
-    expect(mainSource).toContain('segments.includes("..")');
+  it("renderer-supplied paths must be files staged by this session", () => {
+    expect(mainSource).toContain("function validateRendererPath");
+    expect(mainSource).toContain("isWithinStagedDir(candidate)");
+    for (const flag of ["--terrain-file", "--reference", "--solar", "--inspect"]) {
+      expect(mainSource).toContain(`"${flag}"`);
+    }
+    expect(mainSource).toContain('validateRendererPath(request.input_path, "input_path")');
+  });
+
+  it("checkpoint status reports the real hash, not the pinned constant", () => {
+    expect(mainSource).toContain("sha256OfFile(resolved)");
+    expect(mainSource).not.toContain("hash: exists ? EXPECTED_CHECKPOINT_HASH");
+  });
+
+  it("running executions can be cancelled and are killed on quit", () => {
+    expect(mainSource).toContain('ipcMain.handle("cancel-service"');
+    expect(mainSource).toContain("runningExecutions.set(requestId, proc)");
+    expect(mainSource).toContain("function killAllExecutions");
+    expect(mainSource).not.toContain('"launch-service"');
+  });
+
+  it("captured output is bounded", () => {
+    expect(mainSource).toContain("MAX_OUTPUT_CHARS");
+  });
+
+  it("stale staged temp dirs are swept at startup", () => {
+    expect(mainSource).toContain("sweepStaleStagedDirs();");
   });
 
   it("execute-service timeout is capped", () => {
@@ -212,9 +244,9 @@ describe("Electron API shape", () => {
     expect(typesSource).toContain("resolveCheckpointPath");
     expect(typesSource).toContain("getCheckpointStatus");
     expect(typesSource).toContain("getScriptsDir");
-    expect(typesSource).toContain("launchService");
-    expect(typesSource).toContain("terminateService");
     expect(typesSource).toContain("executeService");
+    expect(typesSource).toContain("cancelService");
+    expect(typesSource).not.toContain("launchService");
   });
 
   it("getHostCapabilities can return null (auth rejection)", () => {

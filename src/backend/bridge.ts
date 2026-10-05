@@ -191,6 +191,61 @@ export class OperationCancelledError extends Error {
   }
 }
 
+function newRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Run one Python execution through the Electron main process.
+ *
+ * Aborting the signal asks main to kill that run's process (previously the
+ * process kept running until its timeout). A main-process `{error}` result
+ * is thrown as an Error so callers see the real cause, e.g. "Python not
+ * found", instead of a generic malformed-envelope message.
+ */
+export async function invokeElectronExecution(
+  payload: unknown,
+  timeoutMs: number,
+  hooks: BridgeExecutionHooks = {},
+): Promise<unknown> {
+  const host = window.depthwizard;
+  if (!host?.executeService) {
+    throw new Error("Electron host is not available");
+  }
+  if (hooks.signal?.aborted) {
+    throw new OperationCancelledError();
+  }
+  const requestId = newRequestId();
+  const onAbort = () => {
+    void host.cancelService?.({ requestId });
+  };
+  hooks.signal?.addEventListener("abort", onAbort, { once: true });
+  const unsub = hooks.onStage
+    ? host.onStageUpdate?.((stage) => hooks.onStage?.(stage))
+    : undefined;
+  try {
+    const result = await host.executeService({ payload, timeoutMs, requestId });
+    if (hooks.signal?.aborted) {
+      throw new OperationCancelledError();
+    }
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "error" in result &&
+      typeof (result as { error: unknown }).error === "string"
+    ) {
+      throw new Error((result as { error: string }).error);
+    }
+    return result;
+  } finally {
+    hooks.signal?.removeEventListener("abort", onAbort);
+    unsub?.();
+  }
+}
+
 function defaultPythonExecutable(): string {
   if (typeof process !== "undefined") {
     if (process.env.DEPTHWIZARD_PYTHON) {
@@ -791,29 +846,7 @@ export class BackendBridge {
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
     if (typeof window !== "undefined" && window.depthwizard?.executeService) {
-      if (hooks.signal?.aborted) {
-        throw new OperationCancelledError();
-      }
-      const unsub = hooks.onStage
-        ? window.depthwizard.onStageUpdate?.((stage) => hooks.onStage?.(stage))
-        : undefined;
-      try {
-        const result = await window.depthwizard.executeService({
-          payload: { bridgeArgs: args },
-          timeoutMs: this.timeoutMs,
-        });
-        if (
-          typeof result === "object" &&
-          result !== null &&
-          "error" in result &&
-          typeof (result as { error: unknown }).error === "string"
-        ) {
-          throw new Error((result as { error: string }).error);
-        }
-        return result;
-      } finally {
-        unsub?.();
-      }
+      return invokeElectronExecution({ bridgeArgs: args }, this.timeoutMs, hooks);
     }
     const { spawn } = await import("child_process");
 

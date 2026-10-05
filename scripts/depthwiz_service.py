@@ -58,23 +58,9 @@ except ImportError as exc:
     sys.exit(1)
 
 
-#: M17 checkpoint file name (canonical candidate, never committed).
-_M17_CHECKPOINT_FILE = "m17_geonrw_struct_best.pt"
-
 #: Satellite DA-V2 checkpoint file name (never committed).
 _SAT_CHECKPOINT_FILE = "depth_anything_v2_satellite.pth"
 _SAT_CHECKPOINT_ENV = "DW_DAV2_SAT_CKPT"
-
-
-def _m17_checkpoint_present() -> bool:
-    """Whether an M17 checkpoint resolves (discovery only, no loading)."""
-    import os
-
-    override = os.environ.get("DW_M17_CKPT")
-    if override:
-        return Path(override).is_file()
-    root = Path(__file__).resolve().parent.parent
-    return (root / "checkpoints" / _M17_CHECKPOINT_FILE).is_file()
 
 
 def _sat_checkpoint_present() -> bool:
@@ -114,10 +100,9 @@ def build_backends() -> dict[str, Any]:
         from depthwizard.backends.depth_anything_v2 import DepthAnythingV2Backend
 
         backends["depth-anything-v2-small"] = DepthAnythingV2Backend()
-    if _m17_checkpoint_present():
-        from depthwizard.backends.m17 import M17DepthBackend
-
-        backends["m17-geonrw-struct"] = M17DepthBackend()
+    # M17 is a frozen research candidate whose head is not in this repository
+    # (M17DepthBackend.load() always refuses without an injected factory), so
+    # it is never advertised as an available backend.
     if _sat_checkpoint_present():
         from depthwizard.backends.satellite import SatelliteDepthBackend
 

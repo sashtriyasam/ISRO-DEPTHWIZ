@@ -6,8 +6,7 @@ const ALLOWED_CHANNELS = new Set([
   "resolve-checkpoint-path",
   "get-checkpoint-status",
   "get-scripts-dir",
-  "launch-service",
-  "terminate-service",
+  "cancel-service",
   "execute-service",
   "stage-input-bytes",
   "cleanup-staged-input",
@@ -27,11 +26,9 @@ contextBridge.exposeInMainWorld("depthwizard", {
   resolveCheckpointPath: () => safeInvoke("resolve-checkpoint-path"),
   getCheckpointStatus: () => safeInvoke("get-checkpoint-status"),
   getScriptsDir: () => safeInvoke("get-scripts-dir"),
-  launchService: (args: { inputPath?: string; targetMode?: string }) =>
-    safeInvoke("launch-service", args),
-  terminateService: () => safeInvoke("terminate-service"),
-  executeService: (args: { payload: unknown; timeoutMs?: number }) =>
+  executeService: (args: { payload: unknown; timeoutMs?: number; requestId?: string }) =>
     safeInvoke("execute-service", args),
+  cancelService: (args: { requestId: string }) => safeInvoke("cancel-service", args),
   stageInputBytes: (args: { bytes: Uint8Array; filename: string }) =>
     safeInvoke("stage-input-bytes", args),
   cleanupStagedInput: (args: { stagedPath: string }) =>

@@ -1,5 +1,5 @@
 import type { BridgeExecutionHooks } from "../backend/bridge";
-import { OperationCancelledError } from "../backend/bridge";
+import { OperationCancelledError, invokeElectronExecution } from "../backend/bridge";
 import {
   detectHost,
   type HostCapabilities,
@@ -65,13 +65,7 @@ export class SubprocessServiceTransport implements ServiceTransport {
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
     if (typeof window !== "undefined" && window.depthwizard?.executeService) {
-      if (hooks.signal?.aborted) {
-        throw new OperationCancelledError();
-      }
-      return await window.depthwizard.executeService({
-        payload,
-        timeoutMs: this.timeoutMs,
-      });
+      return invokeElectronExecution(payload, this.timeoutMs, hooks);
     }
     if (!this.host.processSpawning) {
       throw new Error(

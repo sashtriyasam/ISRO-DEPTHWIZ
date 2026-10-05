@@ -120,3 +120,13 @@ The installer ships `scripts/setup_backend.bat`, `provision_runtime.py`,
 The desktop app prefers that managed interpreter automatically
 (`DEPTHWIZARD_PYTHON` still overrides it), and every backend discovers
 the provisioned source through `ensure_dav2_source_on_path()`.
+
+## Checkpoint verification at load
+
+Every torch backend checks its checkpoint against the pinned SHA-256
+before loading and loads tensors only (`torch.load(..., weights_only=True)`).
+A different file (for example a freshly trained satellite checkpoint) is
+refused unless `DW_ALLOW_UNPINNED_CHECKPOINT=1` is set; the outcome is
+recorded as `checkpoint_verification` in each depth result's
+preprocessing record. Update the pin in the backend module when promoting
+a new checkpoint.

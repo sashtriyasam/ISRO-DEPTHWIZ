@@ -7,15 +7,22 @@ import {
   type WebContents,
 } from "electron";
 import * as path from "path";
+import * as crypto from "crypto";
 import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
 
 let mainWindow: BrowserWindow | null = null;
-let serviceProcess: ChildProcess | null = null;
-let serviceStdout = "";
-let serviceStderr = "";
-let activeServiceResolve: ((result: unknown) => void) | null = null;
-let activeServiceReject: ((err: Error) => void) | null = null;
+
+// Python processes started by execute-service, keyed by renderer request id,
+// so Cancel and app quit can terminate them (they were previously orphaned).
+const runningExecutions = new Map<string, ChildProcess>();
+
+// Cap on captured stdout: beyond this the JSON could not be held as one V8
+// string anyway; the run is stopped with an actionable error instead.
+const MAX_OUTPUT_CHARS = 400 * 1024 * 1024;
+
+// Staged temp dirs older than this are swept at startup (crash leftovers).
+const STALE_STAGED_MS = 24 * 60 * 60 * 1000;
 
 // Registry of staged temp directories so they can be cleaned up on crash/quit.
 const stagedDirs = new Set<string>();
@@ -191,18 +198,29 @@ function withCheckpointEnv(
   return env;
 }
 
-function getCheckpointStatus(): {
+async function sha256OfFile(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    fs.createReadStream(filePath)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("end", () => resolve(hash.digest("hex")))
+      .on("error", reject);
+  });
+}
+
+async function getCheckpointStatus(): Promise<{
   exists: boolean;
   path: string;
   hash: string;
-} {
+  verified: boolean;
+}> {
   const resolved = getCheckpointPath();
-  const exists = fs.existsSync(resolved);
-  return {
-    exists,
-    path: resolved,
-    hash: exists ? EXPECTED_CHECKPOINT_HASH : "",
-  };
+  if (!fs.existsSync(resolved)) {
+    return { exists: false, path: resolved, hash: "", verified: false };
+  }
+  // Report the file's actual digest; "verified" only when it matches the pin.
+  const hash = await sha256OfFile(resolved);
+  return { exists: true, path: resolved, hash, verified: hash === EXPECTED_CHECKPOINT_HASH };
 }
 
 function isDevMode(): boolean {
@@ -232,95 +250,50 @@ function resolveCapabilities(): HostCapabilities {
 }
 
 // ---------------------------------------------------------------------------
-// Service process lifecycle
+// Execution tracking (cancel + quit cleanup)
 // ---------------------------------------------------------------------------
 
-function killServiceProcess(): void {
-  if (serviceProcess) {
-    try {
-      serviceProcess.kill();
-    } catch {
-      // Process already exited or access denied
-    }
-    serviceProcess = null;
-    serviceStdout = "";
-    serviceStderr = "";
-    activeServiceResolve = null;
-    activeServiceReject = null;
+function killExecution(requestId: string): boolean {
+  const proc = runningExecutions.get(requestId);
+  if (!proc) return false;
+  try {
+    proc.kill();
+  } catch {
+    // Process already exited or access denied
   }
+  runningExecutions.delete(requestId);
+  return true;
 }
 
-function setupServiceListeners(proc: ChildProcess): void {
-  serviceStdout = "";
-  serviceStderr = "";
-
-  proc.stdout?.on("data", (chunk: Buffer) => {
-    serviceStdout += chunk.toString();
-  });
-
-  proc.stderr?.on("data", (chunk: Buffer) => {
-    serviceStderr += chunk.toString();
-  });
-
-  proc.on("close", (code) => {
-    if (activeServiceResolve && activeServiceReject) {
-      if (code === 0) {
-        try {
-          activeServiceResolve(JSON.parse(serviceStdout));
-        } catch {
-          activeServiceReject(
-            new Error(
-              `Malformed service output: ${serviceStdout.slice(0, 500)}`,
-            ),
-          );
-        }
-      } else {
-        activeServiceReject(
-          new Error(
-            `Service exited with code ${code}: ${serviceStderr.slice(0, 500)}`,
-          ),
-        );
-      }
-    }
-    serviceProcess = null;
-    serviceStdout = "";
-    serviceStderr = "";
-    activeServiceResolve = null;
-    activeServiceReject = null;
-  });
-
-  proc.on("error", (err) => {
-    if (activeServiceReject) {
-      activeServiceReject(err);
-    }
-    serviceProcess = null;
-    serviceStdout = "";
-    serviceStderr = "";
-    activeServiceResolve = null;
-    activeServiceReject = null;
-  });
+function killAllExecutions(): void {
+  for (const requestId of [...runningExecutions.keys()]) {
+    killExecution(requestId);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Input path validation
 // ---------------------------------------------------------------------------
 
-function validateInputPath(inputPath: string): string | null {
-  if (!inputPath || typeof inputPath !== "string") {
-    return "inputPath must be a non-empty string";
+function isWithinStagedDir(candidate: string): boolean {
+  const resolved = path.resolve(candidate);
+  for (const dir of stagedDirs) {
+    if (resolved.startsWith(dir + path.sep)) return true;
   }
-  const trimmed = inputPath.trim();
-  if (trimmed.length === 0) {
-    return "inputPath must not be empty";
+  return false;
+}
+
+/**
+ * Every file the renderer asks Python to read must be one it staged through
+ * stage-input-bytes. An extension blocklist was meaningless (Python never
+ * executes inputs) and absolute paths elsewhere on disk were allowed.
+ */
+function validateRendererPath(candidate: unknown, label: string): string | null {
+  if (typeof candidate !== "string" || candidate.trim().length === 0) {
+    return `${label} must be a non-empty string`;
   }
-  const segments = trimmed.split(/[\\/]/);
-  if (segments.includes("..")) {
-    return "inputPath must not contain .. segments";
-  }
-  const ext = path.extname(trimmed).toLowerCase();
-  const dangerous = [".exe", ".bat", ".cmd", ".com", ".ps1", ".sh", ".vbs"];
-  if (dangerous.includes(ext)) {
-    return `inputPath must not be an executable (${ext})`;
+  if (!isWithinStagedDir(candidate)) {
+    return `${label} must be a file staged by this app session`;
   }
   return null;
 }
@@ -328,6 +301,28 @@ function validateInputPath(inputPath: string): string | null {
 // ---------------------------------------------------------------------------
 // Staged-dir emergency cleanup (renderer crash / app quit)
 // ---------------------------------------------------------------------------
+
+function sweepStaleStagedDirs(): void {
+  const osTmp = app.getPath("temp");
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(osTmp);
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - STALE_STAGED_MS;
+  for (const entry of entries) {
+    if (!entry.startsWith("depthwiz-")) continue;
+    const dir = path.join(osTmp, entry);
+    try {
+      if (fs.statSync(dir).mtimeMs < cutoff) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    } catch {
+      /* noop */
+    }
+  }
+}
 
 function cleanAllStagedDirs(): void {
   for (const dir of stagedDirs) {
@@ -360,7 +355,7 @@ function registerIpcHandlers(): void {
     return getCheckpointPath();
   });
 
-  ipcMain.handle("get-checkpoint-status", (event) => {
+  ipcMain.handle("get-checkpoint-status", async (event) => {
     if (rejectUnauthorized(event, "get-checkpoint-status")) return null;
     return getCheckpointStatus();
   });
@@ -422,7 +417,7 @@ function registerIpcHandlers(): void {
         const tempDir = fs.mkdtempSync(path.join(osTmp, "depthwiz-"));
         const targetPath = path.join(tempDir, trimmed);
         fs.writeFileSync(targetPath, buffer);
-        stagedDirs.add(tempDir);
+        stagedDirs.add(path.resolve(tempDir));
         return { path: targetPath };
       } catch (err) {
         return {
@@ -481,64 +476,14 @@ function registerIpcHandlers(): void {
     },
   );
 
-  ipcMain.handle(
-    "launch-service",
-    async (event, args: { inputPath?: string; targetMode?: string }) => {
-      if (rejectUnauthorized(event, "launch-service")) {
-        return { error: "unauthorized" };
-      }
-      if (serviceProcess) {
-        return { error: "Service already running" };
-      }
-
-      if (args.inputPath) {
-        const validationError = validateInputPath(args.inputPath);
-        if (validationError) {
-          return { error: validationError };
-        }
-      }
-
-      const python = getPythonPath();
-      const script = path.join(getScriptsDir(), SERVICE_SCRIPT);
-
-      if (!fs.existsSync(script)) {
-        return { error: `Service script not found: ${script}` };
-      }
-
-      const env = withCheckpointEnv();
-      if (args.targetMode) {
-        env.DW_TARGET_MODE = args.targetMode;
-      }
-
-      try {
-        serviceProcess = spawn(python, [script], {
-          stdio: ["pipe", "pipe", "pipe"],
-          env,
-          windowsHide: true,
-        });
-        setupServiceListeners(serviceProcess);
-        return { pid: serviceProcess.pid };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("ENOENT") || msg.includes("not found")) {
-          return {
-            error: `Python not found at "${python}". Install Python 3.11+ and run setup_backend.bat, or set the DEPTHWIZARD_PYTHON environment variable.`,
-          };
-        }
-        return { error: `Failed to spawn service: ${msg}` };
-      }
-    },
-  );
-
-  ipcMain.handle("terminate-service", (event) => {
-    if (rejectUnauthorized(event, "terminate-service")) {
-      return { terminated: false };
+  ipcMain.handle("cancel-service", (event, args: { requestId?: unknown }) => {
+    if (rejectUnauthorized(event, "cancel-service")) {
+      return { cancelled: false };
     }
-    if (serviceProcess) {
-      killServiceProcess();
-      return { terminated: true };
+    if (typeof args?.requestId !== "string") {
+      return { cancelled: false };
     }
-    return { terminated: false };
+    return { cancelled: killExecution(args.requestId) };
   });
 
   ipcMain.handle(
@@ -548,14 +493,16 @@ function registerIpcHandlers(): void {
       args: {
         payload: unknown;
         timeoutMs?: number;
+        requestId?: string;
       },
     ) => {
       if (rejectUnauthorized(event, "execute-service")) {
         return { error: "unauthorized" };
       }
-      if (serviceProcess) {
-        return { error: "Service already running" };
-      }
+      const requestId =
+        typeof args.requestId === "string" && args.requestId.length > 0
+          ? args.requestId
+          : crypto.randomUUID();
 
       const python = getPythonPath();
 
@@ -569,7 +516,8 @@ function registerIpcHandlers(): void {
         "--diagnostics", "--solar", "--sun-elevation", "--sun-azimuth",
         "--min-area", "--gsd", "--assume-north-up",
       ]);
-      const DANGEROUS_EXT = /\.(exe|bat|cmd|com|ps1|sh|vbs)$/i;
+      // Flags whose next argument is a file the renderer staged.
+      const PATH_FLAGS = new Set(["--terrain-file", "--reference", "--solar", "--inspect"]);
 
       const isBridgeArgs =
         typeof args.payload === "object" &&
@@ -579,15 +527,33 @@ function registerIpcHandlers(): void {
 
       if (isBridgeArgs) {
         const bridgeArgs = (args.payload as { bridgeArgs: unknown[] }).bridgeArgs;
-        for (const arg of bridgeArgs) {
+        for (let i = 0; i < bridgeArgs.length; i++) {
+          const arg = bridgeArgs[i];
           if (typeof arg !== "string") {
             return { error: "bridgeArgs must be an array of strings" };
           }
           if (arg.startsWith("--") && !ALLOWED_FLAGS.has(arg)) {
             return { error: `Disallowed bridgeArgs flag: ${arg}` };
           }
-          if (arg.includes("..") || DANGEROUS_EXT.test(arg)) {
-            return { error: `Unsafe bridgeArg value: ${arg}` };
+          if (PATH_FLAGS.has(arg)) {
+            const pathError = validateRendererPath(bridgeArgs[i + 1], `${arg} path`);
+            if (pathError) return { error: pathError };
+          }
+        }
+      } else if (typeof args.payload === "object" && args.payload !== null) {
+        const request = (args.payload as { request?: Record<string, unknown> }).request;
+        if (request) {
+          const inputError = validateRendererPath(request.input_path, "input_path");
+          if (inputError) return { error: inputError };
+          if (request.calibration_reference_path != null) {
+            const refError = validateRendererPath(
+              request.calibration_reference_path,
+              "calibration_reference_path",
+            );
+            if (refError) return { error: refError };
+          }
+          if (request.geotiff_path != null) {
+            return { error: "geotiff_path must be chosen through the export dialog" };
           }
         }
       }
@@ -638,6 +604,7 @@ function registerIpcHandlers(): void {
             env: withCheckpointEnv(),
             windowsHide: true,
           });
+          runningExecutions.set(requestId, proc);
         } catch (err) {
           clearTimeout(timer);
           const msg = err instanceof Error ? err.message : String(err);
@@ -655,12 +622,22 @@ function registerIpcHandlers(): void {
 
         proc.stdout?.on("data", (chunk: Buffer) => {
           stdout += chunk.toString();
+          if (stdout.length > MAX_OUTPUT_CHARS) {
+            killExecution(requestId);
+            settle(() =>
+              resolve({
+                error:
+                  "Backend output exceeded the desktop transfer limit; use a smaller " +
+                  "input or a coarser mesh LOD.",
+              }),
+            );
+          }
         });
 
         let stderrBuffer = "";
         proc.stderr?.on("data", (chunk: Buffer) => {
           const text = chunk.toString();
-          stderr += text;
+          stderr = (stderr + text).slice(-64 * 1024);
           stderrBuffer += text;
           const lines = stderrBuffer.split(/\r?\n/);
           stderrBuffer = lines.pop() ?? "";
@@ -676,8 +653,13 @@ function registerIpcHandlers(): void {
           }
         });
 
-        proc.on("close", (code) => {
+        proc.on("close", (code, signal) => {
           clearTimeout(timer);
+          runningExecutions.delete(requestId);
+          if (signal !== null) {
+            settle(() => resolve({ error: "Operation cancelled" }));
+            return;
+          }
           if (code === 0) {
             settle(() => {
               try {
@@ -699,6 +681,7 @@ function registerIpcHandlers(): void {
 
         proc.on("error", (err) => {
           clearTimeout(timer);
+          runningExecutions.delete(requestId);
           settle(() => {
             resolve({ error: `Service process error: ${err.message}` });
           });
@@ -814,7 +797,7 @@ function createWindow(): void {
 
   mainWindow.webContents.on("render-process-gone", () => {
     console.error("[depthwizard] Renderer process crashed");
-    killServiceProcess();
+    killAllExecutions();
     // Clean up any staged temp files so they don't leak if the renderer
     // crashes before it can call cleanup-staged-input.
     cleanAllStagedDirs();
@@ -826,6 +809,7 @@ function createWindow(): void {
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
+  sweepStaleStagedDirs();
   registerIpcHandlers();
   createWindow();
 
@@ -837,7 +821,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  killServiceProcess();
+  killAllExecutions();
   cleanAllStagedDirs();
   if (process.platform !== "darwin") {
     app.quit();
@@ -845,11 +829,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  killServiceProcess();
+  killAllExecutions();
   cleanAllStagedDirs();
 });
 
 app.on("will-quit", () => {
-  killServiceProcess();
+  killAllExecutions();
   cleanAllStagedDirs();
 });
