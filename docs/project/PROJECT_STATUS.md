@@ -1,4 +1,4 @@
-# DepthWizard — Project Status (v1.3.1, 2026-09-22)
+# DepthWizard â€” Project Status (v1.3.1, 2026-09-22)
 
 Source: protected `main`, `docs/project/RELEASE_GATES.md`, `docs/project/RESEARCH_VS_PRODUCT.md`.
 Engineering, integration, satellite-backend wiring, and release packaging are under **Shivam**.
@@ -30,7 +30,7 @@ Engineering, integration, satellite-backend wiring, and release packaging are un
 
 ---
 
-## DepthWizard — Final Release Control Board
+## DepthWizard â€” Final Release Control Board
 
 | Area                     | Owner      | Current status                            | Final action                                          |
 | ------------------------ | ---------- | ----------------------------------------- | ----------------------------------------------------- |
@@ -51,7 +51,7 @@ Engineering, integration, satellite-backend wiring, and release packaging are un
 ```text
                   DEPTHWIZARD
                        |
-               SHIVAM — OWNER
+               SHIVAM â€” OWNER
                        |
          +-------------+-------------+
          |             |             |
@@ -68,4 +68,4 @@ Engineering, integration, satellite-backend wiring, and release packaging are un
 
 > **Project owner: Shivam. All remaining engineering, integration, scientific acceptance, packaging, verification, and release activities are controlled and executed under Shivam.**
 
-> **Scientific truthfulness:** relative depth ? metric DSM. The satellite backend remains `metric=false` until calibration / reference evidence is attached.
+> **Scientific truthfulness:** relative depth â‰  metric DSM. The satellite backend remains `metric=false` until calibration / reference evidence is attached.

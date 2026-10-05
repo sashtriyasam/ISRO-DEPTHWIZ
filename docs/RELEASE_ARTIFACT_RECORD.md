@@ -5,6 +5,12 @@
 **Git Tag:** `v0.1.0-sih-26175-rc1`  
 **Date:** 2026-09-07  
 
+> **Historical snapshot.** This record documents the signed RC1 installer
+> (tag `v0.1.0-sih-26175-rc1`, `DepthWizard Setup 1.0.0.exe`). It does not
+> describe the current release: `v1.3.1` ships an **unsigned** installer and
+> its clean-machine witness is **pending**. Current state:
+> [docs/project/PROJECT_STATUS.md](project/PROJECT_STATUS.md).
+
 ---
 
 ## 1. Release Identity & Head State

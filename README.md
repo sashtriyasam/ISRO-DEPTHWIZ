@@ -9,13 +9,13 @@
 > **Problem Statement ID:** 26175  
 > **Organization:** Indian Space Research Organisation (ISRO), Department of Space / SAC  
 > **Theme:** Disaster Management / Urban Planning / Reconnaissance  
-> **Canonical Main Commit SHA:** `11d964a`
+> **Release tag:** `v1.3.1` (`63a41f6`)
 
 ---
 
 ## Executive Summary
 
-**DepthWizard** is an end-to-end scientific software suite designed for the Indian Space Research Organisation (ISRO) to convert single-view optical RGB satellite imagery into high-precision Digital Elevation Models (DEMs), Digital Surface Models (DSMs), and interactive 3D terrain flythrough assets.
+**DepthWizard** is an end-to-end scientific software suite designed for the Indian Space Research Organisation (ISRO) to convert single-view optical RGB satellite imagery into relative surface models, reference-calibrated Digital Surface Models (DSMs), and interactive 3D terrain flythrough assets. Measured accuracy is reported in [Evaluation Metrics](#evaluation-metrics-isro-ps-26175-criteria); it is a research baseline, not a validated precision claim.
 
 - **Path A (Non-Georeferenced PNG/JPG)**: Converts raw optical images into a **Relative Digital Surface Model (`rDSM`)** in the local coordinate frame (`units=None`) without fabricating spatial metadata, CRS, or metric units.
 - **Path B (Georeferenced GeoTIFF)**: Converts relative depth maps into an **Absolute Metric Digital Surface Model (`DSMGrid`)** with height in metres ($m$) using low-resolution reference DEMs (e.g., SRTM 30m) or Ground Control Points (GCPs), strictly preserving spatial CRS and affine transformation.
@@ -50,7 +50,7 @@
 | **7. Real-Time 3D Rendering** | Three.js 0.177 + React 19 + Electron 44.2.0 | **PASS** — Clean TypeScript compilation & 631 passing Vitest tests. |
 | **8. First-Person & Aerial Flythrough** | `src/camera/` & `src/flythrough/` | **PASS** — Orbit, First-Person aerial camera, waypoint trajectory player. |
 | **9. Height & Slope Analysis** | `SlopeGrid` ([src/depthwizard/dsm/slope.py](src/depthwizard/dsm/slope.py)) | **PASS** — Point inspector, profile sampler, slope degree calculation, height exaggeration. |
-| **10. Standalone Application Deployment** | electron-builder.yml & provision_runtime.py | **PASS** — Unsigned NSIS Installer (`forceCodeSigning: false`); clean machine physical witness trial passed. |
+| **10. Standalone Application Deployment** | electron-builder.yml & provision_runtime.py | **PASS (installer)** — Unsigned NSIS Installer (`forceCodeSigning: false`). Clean-machine witness passed for the signed RC1 installer (`v0.1.0-sih-26175-rc1`, see [docs/RELEASE_ARTIFACT_RECORD.md](docs/RELEASE_ARTIFACT_RECORD.md)); the v1.3.1 witness is **pending**. |
 
 ---
 
@@ -130,6 +130,7 @@ npm run test
 
 1. **DSM Estimation Accuracy (50%)**:
    - Automated benchmark harness (`src/depthwizard/evaluation/`) evaluates **RMSE**, **MAE**, and **$R^2$ correlation** against reference LiDAR/DEM ground truth across urban, sparse, hilly, and forested landscapes.
+   - **Measured so far (DA-V2 Small, calibrated):** 32-tile GAMUS pooled MAE 4.40 m, RMSE 5.86 m, $R^2$ 0.23; cross-city macro $R^2$ ≈ 0.09 ([docs/gamus-cross-city-expanded.md](docs/gamus-cross-city-expanded.md)). Formal external test-city scoring is **pending**. The satellite fine-tune has no accuracy evaluation yet.
    - Reference Dataset: Compatible with [ISRO SAC SIH Reference Dataset](https://github.com/IMG-PROCESS-SAC/SIH2026/).
 
 2. **Visualization & UX (50%)**:
