@@ -335,6 +335,9 @@ class _Engine:
             calibration = request.calibration_provider.calibrate(depth)
             self._check_calibration(calibration)
             self._warnings.extend(fit_quality_warnings(calibration))
+            provider_notes = getattr(request.calibration_provider, "warnings", None)
+            if isinstance(provider_notes, list):
+                self._warnings.extend(str(note) for note in provider_notes)
             product = create_scientific_height_product(depth, calibration, request.target_semantics)
         except Exception as exc:
             return self._fail(PipelineState.CALIBRATING, exc)

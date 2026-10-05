@@ -77,6 +77,8 @@ export interface ServiceRequestWire {
   mesh_levels?: number[];
   calibration_method?: string;
   calibration_reference_path?: string;
+  /** Fetch the Copernicus DEM for georeferenced inputs without a reference file. */
+  auto_reference?: boolean;
   /** Return this run's terrain/relative product (no second inference pass). */
   include_payload?: boolean;
   solar_config: SolarConfigWire | null;

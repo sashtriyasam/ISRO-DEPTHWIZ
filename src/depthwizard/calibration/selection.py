@@ -111,9 +111,6 @@ class MissingReferenceProvider:
         raise CalibrationError(MISSING_REFERENCE_MESSAGE)
 
 
-CalibrationSource = FileBasedCalibrationProvider | DevCalibrationProvider | MissingReferenceProvider
-
-
 #: Below this R² the reference explains too little variance for the metric
 #: heights to be trusted; results are still produced but flagged.
 LOW_FIT_R_SQUARED = 0.25
@@ -121,6 +118,8 @@ LOW_FIT_R_SQUARED = 0.25
 
 def fit_quality_warnings(result: CalibrationResult) -> list[str]:
     """Human-readable warnings for weak calibration fits (empty when fine)."""
+    if result.method is CalibrationMethod.DEM_ANCHORED:
+        return []  # anchored to the DEM by construction; fusion reports its own fit
     if result.r_squared >= LOW_FIT_R_SQUARED:
         return []
     explained = max(result.r_squared, 0.0) * 100.0
@@ -131,17 +130,97 @@ def fit_quality_warnings(result: CalibrationResult) -> list[str]:
     ]
 
 
+class AutoDemProvider:
+    """Fetches the Copernicus GLO-30 reference for a georeferenced input.
+
+    The DEM is resolved in ``prepare`` (the input footprint is known there)
+    and calibration is delegated to the file-based provider.
+    """
+
+    def __init__(
+        self,
+        target: ElevationSemantics,
+        method: CalibrationMethod | str = CalibrationMethod.DEM_ANCHORED,
+    ) -> None:
+        self._target = target
+        self._method = CalibrationMethod(method)
+        self._delegate: FileBasedCalibrationProvider | None = None
+        self.notes: list[str] = []
+
+    @property
+    def name(self) -> str:
+        """Stable provider name for run metadata."""
+        return "auto-dem:copernicus-glo30"
+
+    def prepare(self, inspection: InputInspection | None = None) -> None:
+        """Resolve the reference DEM for this footprint (download or cache)."""
+        from depthwizard.dem.auto import fetch_reference_dem
+        from depthwizard.errors import DemMismatchError, GeospatialProcessingError
+
+        if inspection is None or inspection.spatial.details is None:
+            raise CalibrationError(
+                "automatic DEM reference needs a georeferenced input (GeoTIFF with CRS)"
+            )
+        try:
+            dem = fetch_reference_dem(inspection)
+        except (DemMismatchError, GeospatialProcessingError) as exc:
+            raise CalibrationError(f"automatic reference DEM unavailable: {exc}") from exc
+        if dem.ocean_tiles:
+            self.notes.append(
+                f"{len(dem.ocean_tiles)} reference tile(s) are open ocean (0 m sea level)."
+            )
+        self._delegate = FileBasedCalibrationProvider(
+            reference_path=str(dem.path),
+            target=self._target,
+            calibrator=make_calibrator(self._method),
+            method=self._method,
+            reference_label=dem.source,
+        )
+        self._delegate.prepare(inspection)
+
+    def calibrate(self, depth_result: DepthResult) -> CalibrationResult:
+        """Calibrate against the fetched DEM."""
+        if self._delegate is None:
+            raise CalibrationError("automatic DEM provider used before prepare()")
+        return self._delegate.calibrate(depth_result)
+
+    @property
+    def warnings(self) -> list[str]:
+        """Findings from DEM resolution and fusion."""
+        delegate = self._delegate.warnings if self._delegate is not None else []
+        return [*self.notes, *delegate]
+
+
+CalibrationSource = (
+    FileBasedCalibrationProvider
+    | DevCalibrationProvider
+    | MissingReferenceProvider
+    | AutoDemProvider
+)
+
+
 def select_calibration_provider(
     reference_path: str | None,
     target: ElevationSemantics,
     method: CalibrationMethod | str = CalibrationMethod.SCALE_OFFSET,
+    auto_reference: bool = False,
 ) -> CalibrationSource:
-    """Pick the calibration source for one metric run (see module doc)."""
+    """Pick the calibration source for one metric run (see module doc).
+
+    Order: an explicit reference file, then the automatic Copernicus DEM
+    (when requested, for georeferenced inputs), then the explicit dev
+    calibration, else refusal.
+    """
     calibrator = make_calibrator(method)
     if reference_path:
         return FileBasedCalibrationProvider(
-            reference_path=reference_path, target=target, calibrator=calibrator
+            reference_path=reference_path,
+            target=target,
+            calibrator=calibrator,
+            method=CalibrationMethod(method),
         )
+    if auto_reference:
+        return AutoDemProvider(target, method)
     if dev_calibration_enabled():
         return DevCalibrationProvider(target, method)
     return MissingReferenceProvider()
@@ -153,6 +232,6 @@ def calibrate_with(
     depth_result: DepthResult,
 ) -> CalibrationResult:
     """Run ``prepare`` (when supported) then ``calibrate`` like the pipeline does."""
-    if isinstance(provider, FileBasedCalibrationProvider):
+    if isinstance(provider, FileBasedCalibrationProvider | AutoDemProvider):
         provider.prepare(inspection)
     return provider.calibrate(depth_result)

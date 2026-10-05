@@ -26,6 +26,8 @@ export interface ApplicationBackendOptions {
   calibrationMethod?: string;
   /** Staged DEM GeoTIFF or GCP CSV backing metric calibration. */
   calibrationReference?: string;
+  /** Fetch the Copernicus DEM automatically (georeferenced inputs). */
+  autoReference?: boolean;
   mode?: "metric" | "relative";
 }
 
@@ -38,6 +40,7 @@ export class ApplicationBackendSource implements ArtifactSource {
   readonly meshLevels: number[] | undefined;
   readonly calibrationMethod: string | undefined;
   readonly calibrationReference: string | undefined;
+  readonly autoReference: boolean;
   readonly mode: "metric" | "relative";
 
   private fileSource: FileInputSource | null;
@@ -54,6 +57,7 @@ export class ApplicationBackendSource implements ArtifactSource {
     this.meshLevels = options.meshLevels;
     this.calibrationMethod = options.calibrationMethod;
     this.calibrationReference = options.calibrationReference;
+    this.autoReference = options.autoReference ?? false;
     this.mode = options.mode ?? "metric";
     this.bridge =
       options.bridge ??
@@ -70,6 +74,7 @@ export class ApplicationBackendSource implements ArtifactSource {
         meshLevels: options.meshLevels,
         calibrationMethod: options.calibrationMethod,
         calibrationReference: options.calibrationReference,
+        autoReference: options.autoReference,
       });
       this.id = this.fileSource.id;
       this.label = this.fileSource.label;

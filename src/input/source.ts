@@ -23,6 +23,7 @@ export interface FileInputSourceOptions {
   calibrationMethod?: string;
   /** Staged DEM GeoTIFF or GCP CSV; metric output needs one outside tests. */
   calibrationReference?: string;
+  autoReference?: boolean;
 }
 
 function stableIdFor(metadata: InputMetadata): string {
@@ -50,6 +51,7 @@ export class FileInputSource implements ArtifactSource {
   private meshLevels?: number[];
   private calibrationMethod?: string;
   private calibrationReference?: string;
+  private autoReference?: boolean;
 
   constructor(options: FileInputSourceOptions) {
     this.stagedPath = options.stagedPath;
@@ -61,6 +63,7 @@ export class FileInputSource implements ArtifactSource {
     this.meshLevels = options.meshLevels;
     this.calibrationMethod = options.calibrationMethod;
     this.calibrationReference = options.calibrationReference;
+    this.autoReference = options.autoReference;
     this.id = stableIdFor(options.metadata);
     this.label = options.metadata.filename;
   }
@@ -98,6 +101,7 @@ export class FileInputSource implements ArtifactSource {
           meshLevels: this.meshLevels,
           calibrationMethod: this.calibrationMethod,
           calibrationReference: this.calibrationReference,
+          autoReference: this.autoReference,
         },
         loadOptions,
       );

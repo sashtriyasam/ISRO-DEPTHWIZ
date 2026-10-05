@@ -171,6 +171,7 @@ export interface TerrainPayloadOptions {
   meshLevels?: number[];
   calibrationMethod?: string;
   calibrationReference?: string;
+  autoReference?: boolean;
 }
 
 export interface SolarAnalysisResult {
@@ -506,6 +507,7 @@ export class BackendBridge {
       ...this.meshLevelsArgs(options.meshLevels),
       ...this.calibrationMethodArgs(options.calibrationMethod),
       ...this.calibrationReferenceArgs(options.calibrationReference),
+      ...(options.autoReference && !options.calibrationReference ? ["--auto-reference"] : []),
       "--terrain-file",
       stagedPath,
       ...(targetSemantics !== undefined ? [targetSemantics] : []),

@@ -283,7 +283,7 @@ _USAGE = (
     "[--min-area <px>] [--gsd <m/px>] [--assume-north-up] "
     "[--mesh-levels <int> [<int> ...]] "
     "[--calibration-method <scale_offset|scale_offset_huber|piecewise_linear>] "
-    "[--reference <dem.tif|gcps.csv>]"
+    "[--reference <dem.tif|gcps.csv>] [--auto-reference]"
 )
 
 
@@ -314,6 +314,7 @@ def run_terrain_on_path(
     calibration_method: str = "scale_offset",
     reference_path: str | None = None,
     synthetic_input: bool = False,
+    auto_reference: bool = False,
 ) -> dict[str, Any]:
     """Full terrain chain on a real input file using only real backend subsystems.
 
@@ -325,7 +326,9 @@ def run_terrain_on_path(
     provider = (
         DevCalibrationProvider(target, calibration_method)
         if synthetic_input
-        else select_calibration_provider(reference_path, target, calibration_method)
+        else select_calibration_provider(
+            reference_path, target, calibration_method, auto_reference=auto_reference
+        )
     )
     if isinstance(provider, MissingReferenceProvider):
         # Refuse before inference: no reference means no metres.
@@ -520,6 +523,7 @@ def main() -> None:
     mesh_levels: tuple[int, ...] | None = None
     calibration_method = "scale_offset"
     reference_path: str | None = None
+    auto_reference = False
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -561,6 +565,9 @@ def main() -> None:
         elif args[i] == "--reference" and i + 1 < len(args):
             reference_path = args[i + 1]
             i += 2
+        elif args[i] == "--auto-reference":
+            auto_reference = True
+            i += 1
         elif args[i].startswith("--") and args[i] not in _MODE_TOKENS:
             # A misspelt option must not silently become a positional value.
             print(json.dumps({"error": f"unknown option {args[i]!r}. {_USAGE}"}))
@@ -637,6 +644,7 @@ def main() -> None:
                     mesh_levels=mesh_levels,
                     calibration_method=calibration_method,
                     reference_path=reference_path,
+                    auto_reference=auto_reference,
                 )
             print(json.dumps(runner, allow_nan=False))
         elif positional[0] == "--inspect":

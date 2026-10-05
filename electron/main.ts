@@ -568,7 +568,7 @@ function registerIpcHandlers(): void {
         "--terrain-file", "--terrain", "--synthetic",
         "--mesh-levels", "--calibration-method", "--reference",
         "--diagnostics", "--solar", "--sun-elevation", "--sun-azimuth",
-        "--min-area", "--gsd", "--assume-north-up",
+        "--min-area", "--gsd", "--assume-north-up", "--auto-reference",
       ]);
       // Flags whose next argument is a file the renderer staged.
       const PATH_FLAGS = new Set(["--terrain-file", "--reference", "--solar", "--inspect"]);

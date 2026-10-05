@@ -135,6 +135,7 @@ def handle_request(payload: object) -> dict[str, Any]:
         request.calibration_reference_path,
         request.target_semantics,
         request.calibration_method,
+        auto_reference=request.auto_reference,
     )
     try:
         response = LocalService(backends=build_backends()).execute(

@@ -384,3 +384,57 @@ describe("InputWorkspace", () => {
     }, SLOW);
   });
 });
+
+describe("InputWorkspace georeferenced defaults", () => {
+  async function geotiffFile(): Promise<File> {
+    const { execFileSync } = await import("child_process");
+    const { mkdtempSync, readFileSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { join } = await import("path");
+    const dir = mkdtempSync(join(tmpdir(), "depthwiz-geo-ui-"));
+    const out = join(dir, "scene.tif");
+    const script = [
+      "import numpy as np, rasterio, sys",
+      "from rasterio.transform import Affine",
+      "p = sys.argv[1]",
+      "a = (np.arange(3*8*8) % 255).astype('uint8').reshape(3, 8, 8)",
+      "with rasterio.open(p, 'w', driver='GTiff', height=8, width=8, count=3, dtype='uint8',",
+      "    crs='EPSG:32643', transform=Affine(0.5, 0, 715000, 0, -0.5, 3160000)) as d: d.write(a)",
+    ].join("\n");
+    const python = process.env.DEPTHWIZARD_PYTHON ?? "python";
+    execFileSync(python, ["-c", script, out]);
+    return new File([readFileSync(out)], "scene.tif", { type: "image/tiff" });
+  }
+
+  it("defaults GeoTIFF input to metric output on the automatic Copernicus DEM", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />,
+    );
+    await waitForSupported(container);
+    await openFile(container, await geotiffFile());
+    await waitFor(() => expect(screen.getByText("Validated")).toBeInTheDocument(), SLOW);
+    expect(screen.getByRole("checkbox", { name: "Use Copernicus DEM automatically" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.mode).toBe("metric");
+    expect(source.autoReference).toBe(true);
+    expect(source.calibrationMethod).toBe("dem_anchored");
+    expect(source.targetSemantics).toBe("absolute_elevation_dsm");
+  }, 60000);
+
+  it("can opt out of the automatic DEM (relative output)", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />,
+    );
+    await waitForSupported(container);
+    await openFile(container, await geotiffFile());
+    await waitFor(() => expect(screen.getByText("Validated")).toBeInTheDocument(), SLOW);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use Copernicus DEM automatically" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.mode).toBe("relative");
+    expect(source.autoReference).toBe(false);
+  }, 60000);
+});

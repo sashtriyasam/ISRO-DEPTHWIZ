@@ -80,9 +80,16 @@ class ServiceRequest(BaseModel):
         "'relative' runs the calibration-free rDSM path (no metric output).",
     )
     build_mesh: bool = False
-    calibration_method: Literal["scale_offset", "scale_offset_huber", "piecewise_linear"] = Field(
+    calibration_method: Literal[
+        "scale_offset", "scale_offset_huber", "piecewise_linear", "dem_anchored"
+    ] = Field(
         default="scale_offset",
         description="Calibration fitting method for metric runs.",
+    )
+    auto_reference: bool = Field(
+        default=False,
+        description="Without a reference file, fetch the Copernicus GLO-30 DEM for a "
+        "georeferenced input's footprint (cached; DW_DEM_OFFLINE=1 forbids network).",
     )
     calibration_reference_path: str | None = Field(
         default=None,

@@ -23,6 +23,8 @@ class CalibrationMethod(str, Enum):
     SCALE_OFFSET = "scale_offset"
     SCALE_OFFSET_HUBER = "scale_offset_huber"
     PIECEWISE_LINEAR = "piecewise_linear"
+    #: DSM = DEM_up + s * (rel - lowpass(rel)): scale plus per-pixel offset field.
+    DEM_ANCHORED = "dem_anchored"
 
 
 _METRIC_TARGETS = frozenset(
@@ -152,6 +154,11 @@ class CalibrationResult(BaseModel):
     piecewise_params: tuple[tuple[float, float, float], ...] | None = Field(
         default=None,
         description="For PIECEWISE_LINEAR: each tuple is (knot_x, scale, offset).",
+    )
+    offset_field: tuple[float, ...] | None = Field(
+        default=None,
+        description="For DEM_ANCHORED: row-major per-pixel offsets (y_i = scale*x_i + "
+        "offset_i); `offset` then holds their mean for display.",
     )
 
     @property

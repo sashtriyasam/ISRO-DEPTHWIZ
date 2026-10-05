@@ -19,6 +19,8 @@ export interface TerrainFetchRequest {
   calibrationMethod?: string;
   /** Staged DEM GeoTIFF or GCP CSV backing metric calibration. */
   calibrationReference?: string;
+  /** Use the automatic Copernicus DEM when no reference file is attached. */
+  autoReference?: boolean;
 }
 
 export interface TerrainBundle {

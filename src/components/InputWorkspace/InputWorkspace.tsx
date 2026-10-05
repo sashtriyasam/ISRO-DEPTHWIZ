@@ -91,7 +91,8 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
   const [inputState, setInputState] = useState<InputState>({ status: "empty" });
   const [targetSemantics, setTargetSemantics] =
     useState<MetricTargetSemantics>(DEFAULT_TARGET_SEMANTICS);
-  const [calibrationMethod, setCalibrationMethod] = useState("scale_offset_huber");
+  const [calibrationMethod, setCalibrationMethod] = useState("dem_anchored");
+  const [useAutoDem, setUseAutoDem] = useState(true);
   const [meshLevels, setMeshLevels] = useState<string>("1,4,16");
   const [reference, setReference] = useState<CalibrationReference | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
@@ -301,6 +302,21 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
 
   const backendUnavailable = capabilities !== null && !backendRegistered;
 
+  // Georeferenced inputs get absolute heights from the Copernicus GLO-30 DEM
+  // automatically (the PS evaluation scores GeoTIFF output against SRTM/
+  // Copernicus-class DEMs); an attached DEM/GCP file always takes precedence.
+  const georeferenced = inputState.status === "validated" && inputState.metadata.crs != null;
+  const referenceIsDem = reference != null && /\.tiff?$/i.test(reference.name);
+  const autoDemActive = !reference && georeferenced && useAutoDem;
+  const metricSource = reference != null || autoDemActive;
+  const effectiveMethod =
+    autoDemActive || (referenceIsDem && calibrationMethod === "dem_anchored")
+      ? "dem_anchored"
+      : calibrationMethod === "dem_anchored"
+        ? "scale_offset_huber"
+        : calibrationMethod;
+  const demAnchored = effectiveMethod === "dem_anchored";
+
   const handleGenerate = useCallback(() => {
     if (inputState.status !== "validated" || processingRunning || backendUnavailable) {
       return;
@@ -324,19 +340,21 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       const source = new ApplicationBackendSource({
         stagedPath: inputState.stagedPath,
         metadata: inputState.metadata,
-        targetSemantics,
         backend: selectedBackend,
         meshLevels: MESH_LEVEL_PRESETS[meshLevels],
-        // Metric output only with a real reference; otherwise relative (no metres).
-        mode: reference ? "metric" : "relative",
-        calibrationMethod: reference ? calibrationMethod : undefined,
+        // Metric output only with a real reference (file or automatic DEM);
+        // otherwise relative (no metres).
+        mode: metricSource ? "metric" : "relative",
+        targetSemantics: demAnchored ? "absolute_elevation_dsm" : targetSemantics,
+        calibrationMethod: metricSource ? effectiveMethod : undefined,
         calibrationReference: reference?.stagedPath,
+        autoReference: autoDemActive,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, calibrationMethod, reference]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, metricSource, effectiveMethod, demAnchored, autoDemActive, reference]);
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
   return (
@@ -478,6 +496,24 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
                     Remove reference
                   </button>
                 </div>
+              ) : georeferenced ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", fontSize: "var(--font-size-xs)" }}>
+                    <input
+                      type="checkbox"
+                      checked={useAutoDem}
+                      onChange={(e) => setUseAutoDem(e.target.checked)}
+                      disabled={processingRunning}
+                      aria-label="Use Copernicus DEM automatically"
+                    />
+                    <span>Absolute heights from the Copernicus GLO-30 DEM (automatic)</span>
+                  </label>
+                  <div style={mutedStyle}>
+                    {useAutoDem
+                      ? "Output: metric DSM anchored to the DEM (downloaded once for this area, then cached). Attach your own DEM or GCP CSV to override."
+                      : "Output: relative surface (no metric units)."}
+                  </div>
+                </div>
               ) : (
                 <div style={mutedStyle}>
                   Output: relative surface (no metric units). Attach a DEM GeoTIFF or GCP CSV
@@ -489,7 +525,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               )}
             </div>
           )}
-          {reference && targetChoices.length > 1 && inputState.stagedPath !== "" && (
+          {reference && !demAnchored && targetChoices.length > 1 && inputState.stagedPath !== "" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
               <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
                 Output target
@@ -517,11 +553,23 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               Calibration method
             </span>
             <div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
+              {referenceIsDem && (
+                <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
+                  <input
+                    type="radio"
+                    name="calibration-method"
+                    checked={effectiveMethod === "dem_anchored"}
+                    onChange={() => setCalibrationMethod("dem_anchored")}
+                    disabled={processingRunning}
+                  />
+                  <span>DEM-anchored fusion (recommended)</span>
+                </label>
+              )}
               <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
                 <input
                   type="radio"
                   name="calibration-method"
-                  checked={calibrationMethod === "scale_offset"}
+                  checked={effectiveMethod === "scale_offset"}
                   onChange={() => setCalibrationMethod("scale_offset")}
                   disabled={processingRunning}
                 />
@@ -531,7 +579,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
                 <input
                   type="radio"
                   name="calibration-method"
-                  checked={calibrationMethod === "scale_offset_huber"}
+                  checked={effectiveMethod === "scale_offset_huber"}
                   onChange={() => setCalibrationMethod("scale_offset_huber")}
                   disabled={processingRunning}
                 />
@@ -541,7 +589,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
                 <input
                   type="radio"
                   name="calibration-method"
-                  checked={calibrationMethod === "piecewise_linear"}
+                  checked={effectiveMethod === "piecewise_linear"}
                   onChange={() => setCalibrationMethod("piecewise_linear")}
                   disabled={processingRunning}
                 />

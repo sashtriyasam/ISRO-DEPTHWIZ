@@ -8,6 +8,7 @@ subsystems can implement the same protocol.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -18,11 +19,17 @@ from depthwizard.calibration.calibrator import (
     Calibrator,
     ScaleOffsetCalibrator,
 )
-from depthwizard.calibration.models import CalibrationResult, CalibrationSamples
+from depthwizard.calibration.models import (
+    CalibrationMethod,
+    CalibrationResult,
+    CalibrationSamples,
+)
 from depthwizard.contracts.artifacts import DepthResult
 from depthwizard.contracts.semantics import ElevationSemantics
+from depthwizard.contracts.spatial import SpatialDetails
 from depthwizard.dem.build import build_terrain_reference
 from depthwizard.dem.inspect import inspect_dem
+from depthwizard.dem.models import DEMInspection
 from depthwizard.errors import CalibrationError, InsufficientGCPsError
 from depthwizard.geospatial.grids import TargetGrid
 from depthwizard.ingestion.models import InputInspection
@@ -37,6 +44,39 @@ def _depth_valid(depth_result: DepthResult, height: int, width: int) -> NDArray[
 
 #: Upper bound on DEM pixel pairs per fit (ample for an affine/spline fit).
 MAX_DEM_SAMPLES = 250_000
+
+
+def _pixel_size(details: SpatialDetails) -> float | None:
+    """Pixel size from the GDAL-order transform (b = width, f = height)."""
+    if details.transform is None:
+        return details.resolution_gsd
+    return math.sqrt(abs(details.transform.b * details.transform.f))
+
+
+def _ground_resolution(crs: str | None, resolution: float | None, details: SpatialDetails) -> float:
+    """Pixel size in metres (degrees converted at the scene's latitude)."""
+    from depthwizard.geospatial.crs import crs_is_projected_metric
+
+    if resolution is None or not math.isfinite(resolution) or resolution <= 0:
+        raise CalibrationError("raster resolution unknown; cannot size the DEM footprint")
+    if crs_is_projected_metric(crs):
+        return float(resolution)
+    # Geographic degrees: metres per degree at the scene centre latitude.
+    latitude = 0.0
+    if details.bounds is not None and details.crs is not None:
+        from rasterio.warp import transform_bounds
+
+        _, south, _, north = transform_bounds(
+            details.crs,
+            "EPSG:4326",
+            details.bounds.min_x,
+            details.bounds.min_y,
+            details.bounds.max_x,
+            details.bounds.max_y,
+        )
+        latitude = (south + north) / 2.0
+    metres_per_degree = 111_320.0 * math.sqrt(max(math.cos(math.radians(latitude)), 1e-6))
+    return float(float(resolution) * metres_per_degree)
 
 
 class FileBasedCalibrationProvider:
@@ -54,12 +94,21 @@ class FileBasedCalibrationProvider:
         reference_path: str | None = None,
         target: ElevationSemantics = ElevationSemantics.HEIGHT_AGL_NDSM,
         calibrator: Calibrator | None = None,
+        method: CalibrationMethod | None = None,
+        reference_label: str | None = None,
+        dem_vertical_units: str = "meters",
     ) -> None:
         """Configure reference source and target semantics."""
         self._reference_path = reference_path
         self._target = target
         self._calibrator = calibrator if calibrator is not None else ScaleOffsetCalibrator()
+        self._method = method
+        self._reference_label = reference_label
+        # GeoTIFF carries no trustworthy vertical-unit tag: DEM references are
+        # declared metres (true for SRTM, Copernicus and national DEMs).
+        self._dem_vertical_units = dem_vertical_units
         self._inspection: InputInspection | None = None
+        self.warnings: list[str] = []
 
     def prepare(self, inspection: InputInspection | None = None) -> None:
         """Store inspection for spatial alignment during calibration."""
@@ -117,7 +166,9 @@ class FileBasedCalibrationProvider:
             resolution=details.resolution_gsd,
         )
 
-        dem_inspection = inspect_dem(path)
+        dem_inspection = inspect_dem(path, vertical_units=self._dem_vertical_units)
+        if self._method is CalibrationMethod.DEM_ANCHORED:
+            return self._dem_anchored(depth_result, dem_inspection, target, details)
         terrain = build_terrain_reference(dem_inspection, target)
 
         depth_array: NDArray[np.float32] = np.asarray(
@@ -201,6 +252,40 @@ class FileBasedCalibrationProvider:
             source_checksum=depth_result.provenance.input_checksum,
         )
         return self._calibrator.calibrate(samples)
+
+    def _dem_anchored(
+        self,
+        depth_result: DepthResult,
+        dem_inspection: DEMInspection,
+        target: TargetGrid,
+        details: SpatialDetails,
+    ) -> CalibrationResult:
+        """Fuse the DEM (absolute terrain) with model detail (see calibration.fusion)."""
+        from depthwizard.calibration.fusion import dem_anchored_calibration, dem_pixels_in_image
+        from depthwizard.geospatial.warp import ResamplingMethod
+
+        terrain = build_terrain_reference(
+            dem_inspection, target, resampling=ResamplingMethod.BILINEAR
+        )
+        k = dem_pixels_in_image(
+            _ground_resolution(dem_inspection.crs, dem_inspection.resolution, details),
+            _ground_resolution(details.crs, _pixel_size(details), details),
+        )
+        relative: NDArray[np.float64] = np.asarray(
+            depth_result.depth_values, dtype=np.float64
+        ).reshape(target.height, target.width)
+        result, notes = dem_anchored_calibration(
+            relative,
+            _depth_valid(depth_result, target.height, target.width),
+            np.asarray(terrain.array, dtype=np.float64),
+            np.asarray(terrain.valid_mask, dtype=bool),
+            k,
+            reference_id=self._reference_label or terrain.source_dem_id,
+            target=self._target,
+            source_checksum=depth_result.provenance.input_checksum,
+        )
+        self.warnings.extend(notes)
+        return result
 
     @staticmethod
     def _read_gcps(path: str | Path) -> tuple[list[dict[str, float]], str]:

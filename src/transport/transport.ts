@@ -64,6 +64,7 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           outputMode: "metric",
           calibrationMethod: request.calibrationMethod,
           calibrationReference: request.calibrationReference,
+          autoReference: request.autoReference,
           meshLevels: request.meshLevels,
           includePayload: true,
         },
@@ -109,6 +110,7 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           meshLevels: request.meshLevels,
           calibrationMethod: request.calibrationMethod,
           calibrationReference: request.calibrationReference,
+          autoReference: request.autoReference,
         },
       );
       return { response, terrain };
