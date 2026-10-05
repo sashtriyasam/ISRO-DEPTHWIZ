@@ -202,11 +202,11 @@ class DepthAnythingV2Backend:
         torch = self._require_torch()
         self._check_device(torch)
         torch.manual_seed(self._seed)
-        model_cls = self._import_model_class()
-        model = model_cls(**ENCODER_CONFIG)
         state, self._checkpoint_status = load_checkpoint_state(
             torch, self._checkpoint, CHECKPOINT_SHA256, self.model_name
         )
+        model_cls = self._import_model_class()
+        model = model_cls(**ENCODER_CONFIG)
         model.load_state_dict(state)
         model = model.to(self._device).eval()
         self._model = DeviceBoundModel(model, self._device)
