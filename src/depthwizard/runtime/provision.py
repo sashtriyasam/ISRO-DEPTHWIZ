@@ -7,8 +7,9 @@ DA-V2 upstream source and the SHA-verified checkpoint, then reports a
 host-consumable JSON status (``provision`` → ``verify`` → launch
 readiness) without requiring the host to understand Python internals.
 
-Network policy: provisioning steps (pip, git clone, checkpoint fetch)
-may use the network. Runtime inference after provisioning must not.
+Network policy: provisioning steps (pip, git clone or the pinned
+revision archive when git is unavailable, checkpoint fetch) may use the
+network. Runtime inference after provisioning must not.
 Fixed identities only — no arbitrary URLs, packages, or modules.
 """
 
@@ -18,7 +19,9 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -45,6 +48,9 @@ FIXED_CHECKPOINT_SHA256 = CHECKPOINT_SHA256
 
 #: Upstream source layout inside a data directory.
 SOURCE_DIR_NAME = "dav2-upstream"
+
+#: Identity marker written when the source comes from the pinned archive.
+SOURCE_MARKER = ".depthwizard-source.json"
 
 #: Provisioning modes.
 CORE_MODE = "core"
@@ -79,6 +85,9 @@ class ProvisionRequest:
     checkpoint_src: Path | None = None
     fetch_checkpoint: bool = False
     skip_pip: bool = False
+    #: Editable installs write build metadata into the project tree; installed
+    #: apps (possibly read-only install dirs) use a regular install instead.
+    editable: bool = True
 
 
 def check_python_version(version: tuple[int, ...]) -> StepStatus:
@@ -201,17 +210,22 @@ def ensure_venv(runtime_dir: Path, base_python: Path) -> tuple[Path, StepStatus]
     return interpreter, StepStatus(name="venv", ok=True, code="OK", detail="created")
 
 
-def pip_install_args(interpreter: Path, project_root: Path, mode: str) -> list[str]:
+def pip_install_args(
+    interpreter: Path, project_root: Path, mode: str, editable: bool = True
+) -> list[str]:
     """Pip argv from project metadata (pure; dependency lists live in pyproject)."""
     target = str(project_root) + ("[dav2]" if mode == DAV2_MODE else "")
-    return [str(interpreter), "-m", "pip", "install", "-e", target]
+    flags = ["-e", target] if editable else [target]
+    return [str(interpreter), "-m", "pip", "install", *flags]
 
 
-def run_pip_install(interpreter: Path, project_root: Path, mode: str) -> StepStatus:
+def run_pip_install(
+    interpreter: Path, project_root: Path, mode: str, editable: bool = True
+) -> StepStatus:
     """Install the project into the managed environment."""
     try:
         proc = subprocess.run(
-            pip_install_args(interpreter, project_root, mode),
+            pip_install_args(interpreter, project_root, mode, editable),
             capture_output=True,
             text=True,
             timeout=_SUBPROCESS_TIMEOUT,
@@ -260,6 +274,8 @@ def verify_source_dir(
         return StepStatus(
             name="dav2-source", ok=False, code="UPSTREAM_SOURCE_MISSING", detail=path.name
         )
+    if not (path / ".git").exists() and (path / SOURCE_MARKER).is_file():
+        return _verify_archive_source(path, expected_url, expected_revision)
     if not (path / ".git").exists():
         return StepStatus(
             name="dav2-source", ok=False, code="UPSTREAM_NOT_A_REPO", detail=path.name
@@ -300,6 +316,91 @@ def verify_source_dir(
     )
 
 
+def _verify_archive_source(path: Path, expected_url: str, expected_revision: str) -> StepStatus:
+    """Verify a source tree extracted from the pinned revision archive."""
+    try:
+        marker = json.loads((path / SOURCE_MARKER).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return StepStatus(name="dav2-source", ok=False, code="UPSTREAM_NOT_A_REPO", detail=str(exc))
+    if normalize_git_url(str(marker.get("url", ""))) != normalize_git_url(expected_url):
+        return StepStatus(
+            name="dav2-source",
+            ok=False,
+            code="UPSTREAM_REPOSITORY_MISMATCH",
+            detail="archive marker is not the fixed upstream identity",
+        )
+    if marker.get("revision") != expected_revision:
+        return StepStatus(
+            name="dav2-source",
+            ok=False,
+            code="UPSTREAM_REVISION_MISMATCH",
+            detail="archive marker is not the pinned revision",
+        )
+    if not (path / "depth_anything_v2" / "dpt.py").is_file():
+        return StepStatus(
+            name="dav2-source", ok=False, code="UPSTREAM_SOURCE_MISSING", detail="dpt.py absent"
+        )
+    return StepStatus(
+        name="dav2-source",
+        ok=True,
+        code="OK",
+        detail=f"verified archive {expected_revision[:12]}",
+        reused=True,
+    )
+
+
+def source_archive_url(
+    url: str = FIXED_UPSTREAM_URL, revision: str = FIXED_UPSTREAM_REVISION
+) -> str:
+    """Pinned-revision archive URL for the fixed upstream (pure)."""
+    base = url.strip()
+    if base.endswith(".git"):
+        base = base[: -len(".git")]
+    return f"{base.rstrip('/')}/archive/{revision}.zip"
+
+
+def _fetch_source_archive(dest: Path) -> StepStatus:
+    """Download + extract the pinned revision archive (used when git is absent)."""
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=dest.parent) as tmp:
+            archive = Path(tmp) / "source.zip"
+            request = urllib.request.Request(
+                source_archive_url(), headers={"User-Agent": "DepthWizard-provision"}
+            )
+            with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT) as response:
+                with open(archive, "wb") as handle:
+                    shutil.copyfileobj(response, handle)
+            extract_source_archive(archive, Path(tmp) / "extract", dest)
+    except Exception as exc:
+        return StepStatus(
+            name="dav2-source", ok=False, code="UPSTREAM_ARCHIVE_FAILED", detail=str(exc)[-500:]
+        )
+    return verify_source_dir(dest)
+
+
+def extract_source_archive(archive: Path, workdir: Path, dest: Path) -> None:
+    """Extract a single-root source archive to ``dest`` with an identity marker.
+
+    Members escaping the extraction root are refused (zip-slip guard).
+    """
+    root = workdir.resolve()
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.namelist():
+            target = (workdir / member).resolve()
+            if target != root and root not in target.parents:
+                raise ValueError(f"unsafe archive member: {member}")
+        bundle.extractall(workdir)
+    tops = [entry for entry in workdir.iterdir() if entry.is_dir()]
+    if len(tops) != 1:
+        raise ValueError("unexpected archive layout (expected one top-level folder)")
+    (tops[0] / SOURCE_MARKER).write_text(
+        json.dumps({"url": FIXED_UPSTREAM_URL, "revision": FIXED_UPSTREAM_REVISION}),
+        encoding="utf-8",
+    )
+    shutil.move(str(tops[0]), str(dest))
+
+
 def ensure_source(dest: Path) -> StepStatus:
     """Clone + pin the fixed upstream source (or reuse a verified one)."""
     existing = verify_source_dir(dest)
@@ -316,9 +417,8 @@ def ensure_source(dest: Path) -> StepStatus:
             timeout=_CLONE_TIMEOUT,
         )
     except FileNotFoundError:
-        return StepStatus(
-            name="dav2-source", ok=False, code="UPSTREAM_GIT_UNAVAILABLE", detail="git not found"
-        )
+        # No git on this machine: fall back to the pinned revision archive.
+        return _fetch_source_archive(dest)
     except Exception as exc:
         return StepStatus(
             name="dav2-source", ok=False, code="UPSTREAM_CLONE_FAILED", detail=str(exc)
@@ -512,7 +612,7 @@ def provision(request: ProvisionRequest) -> ProvisionStatus:
         core_ready = True
     else:
         project_root = request.project_root or Path(__file__).resolve().parents[3]
-        pip_status = run_pip_install(interpreter, project_root, request.mode)
+        pip_status = run_pip_install(interpreter, project_root, request.mode, request.editable)
         steps.append(pip_status)
         core_ready = pip_status.ok
         if not pip_status.ok:

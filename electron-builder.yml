@@ -22,8 +22,18 @@ extraResources:
       - "backend_bridge.py"
       - "setup_backend.bat"
       - "requirements.txt"
+      - "provision_runtime.py"
+      - "runtime_check.py"
   - from: src/depthwizard/
     to: src/depthwizard/
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
+  # Packaging metadata so setup_backend.bat can pip-install the engine.
+  - from: pyproject.toml
+    to: pyproject.toml
+  - from: README.md
+    to: README.md
 
 win:
   target:

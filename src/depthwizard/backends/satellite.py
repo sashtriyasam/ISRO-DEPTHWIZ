@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -194,11 +193,9 @@ class SatelliteDepthBackend:
                 raise ModelInferenceError(f'device="mps" unavailable: {e}') from e
 
     def _import_model_class(self) -> Any:
-        for parent_dir in (Path(__file__).resolve().parents[3], Path.cwd()):
-            for sub in ("third_party", "deps", ".deps"):
-                cand = parent_dir / sub / "Depth-Anything-V2"
-                if cand.is_dir() and str(cand) not in sys.path:
-                    sys.path.insert(0, str(cand))
+        from depthwizard.runtime.diagnostics import ensure_dav2_source_on_path
+
+        ensure_dav2_source_on_path()
         try:
             from depth_anything_v2.dpt import DepthAnythingV2
         except Exception as e:

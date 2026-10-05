@@ -66,30 +66,59 @@ function rejectUnauthorized(event, channel) {
 // ---------------------------------------------------------------------------
 // Runtime resolution (main process authority)
 //
-// This application requires Python to be installed externally.
-// No Python runtime is bundled with the installer.
-//
 // Resolution priority:
 //   1. DEPTHWIZARD_PYTHON env (explicit override)
-//   2. python on PATH (system Python)
+//   2. Managed runtime created by scripts/setup_backend.bat in
+//      %LOCALAPPDATA%/DepthWizard/runtime (engine + torch + DA-V2 extra)
+//   3. python.org per-user installs (Python3XY): newest numeric version
+//      first, 3.11+ only
+//   4. py.exe launcher, then "python" on PATH
 //
 // The renderer cannot provide executable paths.
 // The main process decides which executable is allowed.
 // ---------------------------------------------------------------------------
+const MIN_PYTHON_MINOR = 11;
+function managedRuntimePython() {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (process.platform !== "win32" || !localAppData)
+        return null;
+    const candidate = path.join(localAppData, "DepthWizard", "runtime", "Scripts", "python.exe");
+    return fs.existsSync(candidate) ? candidate : null;
+}
+/**
+ * Newest python.org folder (e.g. "Python312") with minor >= 11. Sorted
+ * numerically: a string sort would rank "Python39" above "Python312".
+ */
+function pickNewestPythonDir(entries) {
+    let best = null;
+    for (const entry of entries) {
+        const match = entry.match(/^Python3(\d{1,2})$/i);
+        if (!match)
+            continue;
+        const minor = Number(match[1]);
+        if (minor < MIN_PYTHON_MINOR)
+            continue;
+        if (best === null || minor > best.minor)
+            best = { entry, minor };
+    }
+    return best ? best.entry : null;
+}
 function getPythonPath() {
     const explicit = process.env.DEPTHWIZARD_PYTHON;
     if (explicit)
         return explicit;
+    const managed = managedRuntimePython();
+    if (managed)
+        return managed;
     if (process.platform === "win32") {
         const localAppData = process.env.LOCALAPPDATA || "";
         if (localAppData) {
             const pyBase = path.join(localAppData, "Programs", "Python");
             if (fs.existsSync(pyBase)) {
                 try {
-                    const entries = fs.readdirSync(pyBase);
-                    // Prefer higher version numbers (e.g. Python312 > Python310)
-                    for (const entry of entries.reverse()) {
-                        const candidate = path.join(pyBase, entry, "python.exe");
+                    const newest = pickNewestPythonDir(fs.readdirSync(pyBase));
+                    if (newest) {
+                        const candidate = path.join(pyBase, newest, "python.exe");
                         if (fs.existsSync(candidate))
                             return candidate;
                     }
@@ -376,10 +405,9 @@ function registerIpcHandlers() {
             type: "info",
             title: "DepthWizard — Backend Setup Required",
             message: "Python backend dependencies are not installed.",
-            detail: `DepthWizard requires Python 3.11+ with these packages:\n` +
-                `  • pydantic\n  • Pillow\n  • rasterio\n  • numpy\n\n` +
-                `Install Python from https://python.org then run:\n` +
-                `  pip install pydantic Pillow rasterio numpy` +
+            detail: `DepthWizard needs Python 3.11+ (https://python.org) and a one-time ` +
+                `setup that creates a managed runtime with the depth model ` +
+                `(torch, Depth Anything V2 source and its SHA-verified checkpoint).` +
                 setupNote,
             buttons: ["OK"],
         });
@@ -443,7 +471,7 @@ function registerIpcHandlers() {
             const msg = err instanceof Error ? err.message : String(err);
             if (msg.includes("ENOENT") || msg.includes("not found")) {
                 return {
-                    error: `Python not found at "${python}". Install Python 3.10+ and ensure it is on PATH, or set the DEPTHWIZARD_PYTHON environment variable.`,
+                    error: `Python not found at "${python}". Install Python 3.11+ and run setup_backend.bat, or set the DEPTHWIZARD_PYTHON environment variable.`,
                 };
             }
             return { error: `Failed to spawn service: ${msg}` };
@@ -540,7 +568,7 @@ function registerIpcHandlers() {
                 const msg = err instanceof Error ? err.message : String(err);
                 if (msg.includes("ENOENT") || msg.includes("not found")) {
                     resolve({
-                        error: `Python not found at "${python}". Install Python 3.10+ and ensure it is on PATH, or set the DEPTHWIZARD_PYTHON environment variable.`,
+                        error: `Python not found at "${python}". Install Python 3.11+ and run setup_backend.bat, or set the DEPTHWIZARD_PYTHON environment variable.`,
                     });
                 }
                 else {

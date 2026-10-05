@@ -108,21 +108,41 @@ def _repo_dev_checkpoint() -> Path | None:
     return None
 
 
-def _ensure_repo_dev_dav2_source_on_path() -> None:
-    """Expose the pinned local DA-V2 clone in developer checkouts.
+#: Provisioned upstream source folder inside the host data directory.
+PROVISIONED_SOURCE_DIR = "dav2-upstream"
 
-    The inference backends support the repo-local ``third_party``/``deps``
-    layout. The runtime diagnostics need to use the same discovery path so
-    ``runtime_check.py --require-dav2`` reflects whether the app can actually
-    load the backend on this machine.
+
+def dav2_source_candidates() -> list[Path]:
+    """Directories that may hold the pinned DA-V2 source, in priority order.
+
+    Developer checkouts use ``third_party``/``deps``/``.deps`` under the repo
+    root or cwd; installed apps use the source provisioned into the host data
+    directory (``provision_runtime.py`` → ``<data-dir>/dav2-upstream``).
     """
     root = _repo_root()
     roots = (Path.cwd(),) if root is None else (root, Path.cwd())
-    for parent in roots:
-        for subdir in ("third_party", "deps", ".deps"):
-            candidate = parent / subdir / "Depth-Anything-V2"
-            if (candidate / DAV2_SOURCE).is_dir() and str(candidate) not in sys.path:
-                sys.path.insert(0, str(candidate))
+    candidates = [
+        parent / subdir / "Depth-Anything-V2"
+        for parent in roots
+        for subdir in ("third_party", "deps", ".deps")
+    ]
+    candidates.append(default_data_dir() / PROVISIONED_SOURCE_DIR)
+    return candidates
+
+
+def ensure_dav2_source_on_path() -> None:
+    """Expose the pinned DA-V2 source (dev checkout or provisioned) on sys.path.
+
+    Shared by every backend and by diagnostics so capability reports and
+    model loading agree on whether the upstream package is importable.
+    """
+    for candidate in dav2_source_candidates():
+        if (candidate / DAV2_SOURCE).is_dir() and str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+
+
+# Backwards-compatible private alias.
+_ensure_repo_dev_dav2_source_on_path = ensure_dav2_source_on_path
 
 
 def resolve_checkpoint(explicit: str | Path | None = None) -> tuple[Path | None, str]:

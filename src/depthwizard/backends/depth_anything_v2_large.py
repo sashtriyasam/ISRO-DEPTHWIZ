@@ -159,6 +159,9 @@ class DepthAnythingV2LargeBackend:
                 raise ModelInferenceError(f'device="mps" unavailable: {e}') from e
 
     def _import_model_class(self) -> Any:
+        from depthwizard.runtime.diagnostics import ensure_dav2_source_on_path
+
+        ensure_dav2_source_on_path()
         try:
             from depth_anything_v2.dpt import DepthAnythingV2
         except Exception as e:

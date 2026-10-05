@@ -142,13 +142,22 @@ describe("Electron security audit", () => {
     expect(preloadSource).toContain("Blocked IPC channel");
   });
 
-  it("Python resolution uses system Python (external prerequisite)", () => {
+  it("Python resolution prefers override, then the managed runtime", () => {
     expect(mainSource).toContain("getPythonPath");
     expect(mainSource).toContain("DEPTHWIZARD_PYTHON");
+    const body = mainSource.slice(mainSource.indexOf("function getPythonPath"));
+    expect(body.indexOf("DEPTHWIZARD_PYTHON")).toBeLessThan(body.indexOf("managedRuntimePython()"));
+    expect(mainSource).toContain('path.join(localAppData, "DepthWizard", "runtime", "Scripts", "python.exe")');
+  });
+
+  it("Python installs are ranked numerically with a 3.11 floor", () => {
+    expect(mainSource).toContain("const MIN_PYTHON_MINOR = 11;");
+    expect(mainSource).toContain("pickNewestPythonDir");
+    expect(mainSource).not.toContain("entries.reverse()");
   });
 
   it("Python missing produces actionable error", () => {
-    expect(mainSource).toContain("Install Python 3.10+");
+    expect(mainSource).toContain("Install Python 3.11+ and run setup_backend.bat");
   });
 
   it("Python missing produces actionable error message", () => {
