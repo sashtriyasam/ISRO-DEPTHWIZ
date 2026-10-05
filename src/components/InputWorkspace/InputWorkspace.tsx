@@ -53,6 +53,15 @@ async function toClientFile(file: File): Promise<ClientFile> {
   };
 }
 
+/** Reference sources the backend can calibrate against (DEM GeoTIFF, GCP CSV). */
+const REFERENCE_SUFFIXES = [".tif", ".tiff", ".csv"];
+
+interface CalibrationReference {
+  name: string;
+  stagedPath: string;
+  cleanup: () => Promise<void>;
+}
+
 const FIXTURE_METADATA: InputMetadata = {
   filename: "Built-in development fixture",
   format: "development fixture",
@@ -84,6 +93,10 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     useState<MetricTargetSemantics>(DEFAULT_TARGET_SEMANTICS);
   const [calibrationMethod, setCalibrationMethod] = useState("scale_offset_huber");
   const [meshLevels, setMeshLevels] = useState<string>("1,4,16");
+  const [reference, setReference] = useState<CalibrationReference | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const referenceRef = useRef<CalibrationReference | null>(null);
+  referenceRef.current = reference;
   const MESH_LEVEL_PRESETS: Record<string, number[]> = {
     "1": [1],
     "1,4,16": [1, 4, 16],
@@ -146,6 +159,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       if (cleanup) {
         void cleanup();
       }
+      void referenceRef.current?.cleanup();
     };
   }, []);
 
@@ -156,6 +170,42 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       await cleanup();
     }
   }, []);
+
+  const clearReference = useCallback(async () => {
+    const current = referenceRef.current;
+    setReference(null);
+    setReferenceError(null);
+    if (current) {
+      await current.cleanup();
+    }
+  }, []);
+
+  const handleReferenceFile = useCallback(
+    async (file: File) => {
+      if (processingRunning) {
+        return;
+      }
+      await clearReference();
+      const dot = file.name.lastIndexOf(".");
+      const suffix = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";
+      if (!REFERENCE_SUFFIXES.includes(suffix)) {
+        setReferenceError(
+          `Unsupported reference format (${suffix || "no extension"}). Use a DEM GeoTIFF or a GCP CSV.`,
+        );
+        return;
+      }
+      try {
+        const clientFile = await toClientFile(file);
+        const staged = await bridgeRef.current!.stageInputBytes(clientFile.bytes, file.name);
+        setReference({ name: file.name, stagedPath: staged.path, cleanup: staged.cleanup });
+      } catch (err) {
+        setReferenceError(
+          `Reference could not be staged: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [clearReference, processingRunning],
+  );
 
   const runValidation = useCallback(
     async (file: ClientFile, allowed: readonly string[]) => {
@@ -242,11 +292,12 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     validationRef.current?.abort();
     validationRef.current = null;
     await releaseStaged();
+    await clearReference();
     setInputState({ status: "empty" });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, [releaseStaged, processingRunning]);
+  }, [releaseStaged, clearReference, processingRunning]);
 
   const backendUnavailable = capabilities !== null && !backendRegistered;
 
@@ -276,13 +327,16 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
         targetSemantics,
         backend: selectedBackend,
         meshLevels: MESH_LEVEL_PRESETS[meshLevels],
-        calibrationMethod,
+        // Metric output only with a real reference; otherwise relative (no metres).
+        mode: reference ? "metric" : "relative",
+        calibrationMethod: reference ? calibrationMethod : undefined,
+        calibrationReference: reference?.stagedPath,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, calibrationMethod]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, calibrationMethod, reference]);
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
   return (
@@ -399,7 +453,43 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
             label="GSD"
             value={inputState.metadata.gsd === null ? "—" : String(inputState.metadata.gsd)}
           />
-          {targetChoices.length > 1 && inputState.stagedPath !== "" && (
+          {inputState.stagedPath !== "" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                Calibration reference
+              </span>
+              <input
+                type="file"
+                accept={REFERENCE_SUFFIXES.join(",")}
+                disabled={processingRunning}
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) {
+                    void handleReferenceFile(picked);
+                  }
+                }}
+                aria-label="Calibration reference file"
+                style={{ fontSize: "var(--font-size-xs)" }}
+              />
+              {reference ? (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--spacing-xs)" }}>
+                  <DataRow label="Output" value={`Metric, calibrated against ${reference.name}`} />
+                  <button onClick={() => void clearReference()} style={actionButtonStyle} disabled={processingRunning}>
+                    Remove reference
+                  </button>
+                </div>
+              ) : (
+                <div style={mutedStyle}>
+                  Output: relative surface (no metric units). Attach a DEM GeoTIFF or GCP CSV
+                  to produce a calibrated metric DSM.
+                </div>
+              )}
+              {referenceError && (
+                <div style={errorStyle} role="alert">{referenceError}</div>
+              )}
+            </div>
+          )}
+          {reference && targetChoices.length > 1 && inputState.stagedPath !== "" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
               <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
                 Output target
@@ -421,6 +511,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               ))}
             </div>
           )}
+          {reference && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
             <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
               Calibration method
@@ -458,6 +549,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               </label>
             </div>
           </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
             <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
               Mesh LOD levels

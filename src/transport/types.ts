@@ -15,6 +15,10 @@ export interface TerrainFetchRequest {
   buildMesh?: boolean;
   backend?: string;
   mode?: "metric" | "relative";
+  meshLevels?: number[];
+  calibrationMethod?: string;
+  /** Staged DEM GeoTIFF or GCP CSV backing metric calibration. */
+  calibrationReference?: string;
 }
 
 export interface TerrainBundle {

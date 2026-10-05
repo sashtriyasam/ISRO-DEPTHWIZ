@@ -18,6 +18,10 @@ export interface FileInputSourceOptions {
   targetSemantics?: MetricTargetSemantics;
   backend?: string;
   mode?: "metric" | "relative";
+  meshLevels?: number[];
+  calibrationMethod?: string;
+  /** Staged DEM GeoTIFF or GCP CSV; metric output needs one outside tests. */
+  calibrationReference?: string;
 }
 
 function stableIdFor(metadata: InputMetadata): string {
@@ -42,6 +46,9 @@ export class FileInputSource implements ArtifactSource {
   readonly targetSemantics: MetricTargetSemantics;
   private backend?: string;
   private mode: "metric" | "relative";
+  private meshLevels?: number[];
+  private calibrationMethod?: string;
+  private calibrationReference?: string;
 
   constructor(options: FileInputSourceOptions) {
     this.stagedPath = options.stagedPath;
@@ -50,6 +57,9 @@ export class FileInputSource implements ArtifactSource {
     this.targetSemantics = options.targetSemantics ?? "absolute_elevation_dsm";
     this.backend = options.backend;
     this.mode = options.mode ?? "metric";
+    this.meshLevels = options.meshLevels;
+    this.calibrationMethod = options.calibrationMethod;
+    this.calibrationReference = options.calibrationReference;
     this.id = stableIdFor(options.metadata);
     this.label = options.metadata.filename;
   }
@@ -84,6 +94,9 @@ export class FileInputSource implements ArtifactSource {
           stagedPath: this.stagedPath,
           targetSemantics: this.targetSemantics,
           backend: this.backend,
+          meshLevels: this.meshLevels,
+          calibrationMethod: this.calibrationMethod,
+          calibrationReference: this.calibrationReference,
         },
         loadOptions,
       );

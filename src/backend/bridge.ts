@@ -162,6 +162,14 @@ export interface BackendBridgeOptions {
   mode?: "metric" | "relative";
   meshLevels?: number[];
   calibrationMethod?: string;
+  /** Staged DEM GeoTIFF or GCP CSV used for metric calibration. */
+  calibrationReference?: string;
+}
+
+export interface TerrainPayloadOptions {
+  meshLevels?: number[];
+  calibrationMethod?: string;
+  calibrationReference?: string;
 }
 
 export interface SolarAnalysisResult {
@@ -215,6 +223,7 @@ export class BackendBridge {
   private mode: "metric" | "relative";
   private meshLevels: number[] | undefined;
   private calibrationMethod: string | undefined;
+  private calibrationReference: string | undefined;
 
   constructor(options: BackendBridgeOptions = {}) {
     this.pythonPath = options.pythonPath ?? defaultPythonExecutable();
@@ -226,6 +235,7 @@ export class BackendBridge {
     this.mode = options.mode ?? "metric";
     this.meshLevels = options.meshLevels;
     this.calibrationMethod = options.calibrationMethod;
+    this.calibrationReference = options.calibrationReference;
   }
 
   get backendName(): string {
@@ -261,6 +271,14 @@ export class BackendBridge {
       return [];
     }
     return ["--calibration-method", method];
+  }
+
+  private calibrationReferenceArgs(override?: string): string[] {
+    const reference = override ?? this.calibrationReference;
+    if (!reference) {
+      return [];
+    }
+    return ["--reference", reference];
   }
 
   get hostCapabilities(): HostCapabilities {
@@ -337,6 +355,7 @@ export class BackendBridge {
     modeOverride?: "metric" | "relative",
     meshLevels?: number[],
     calibrationMethod?: string,
+    calibrationReference?: string,
   ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
@@ -368,6 +387,7 @@ export class BackendBridge {
               ...this.modeArgs(mode),
               ...this.meshLevelsArgs(meshLevels),
               ...this.calibrationMethodArgs(calibrationMethod),
+              ...this.calibrationReferenceArgs(calibrationReference),
               "--terrain-file",
               stagedPath,
               targetSemantics,
@@ -377,6 +397,7 @@ export class BackendBridge {
               ...this.modeArgs(mode),
               ...this.meshLevelsArgs(meshLevels),
               ...this.calibrationMethodArgs(calibrationMethod),
+              ...this.calibrationReferenceArgs(calibrationReference),
               "--terrain-file",
               stagedPath,
             ];
@@ -417,21 +438,22 @@ export class BackendBridge {
     hooks: BridgeExecutionHooks = {},
     targetSemantics?: string,
     backendOverride?: string,
+    options: TerrainPayloadOptions = {},
   ): Promise<BackendTerrainProduct> {
     if (!this.host.processSpawning) {
       throw new Error(
         "Backend bridge requires a desktop host with process spawning",
       );
     }
-    const args =
-      targetSemantics !== undefined
-        ? [
-            ...this.backendArgs(backendOverride),
-            "--terrain-file",
-            stagedPath,
-            targetSemantics,
-          ]
-        : [...this.backendArgs(backendOverride), "--terrain-file", stagedPath];
+    const args = [
+      ...this.backendArgs(backendOverride),
+      ...this.meshLevelsArgs(options.meshLevels),
+      ...this.calibrationMethodArgs(options.calibrationMethod),
+      ...this.calibrationReferenceArgs(options.calibrationReference),
+      "--terrain-file",
+      stagedPath,
+      ...(targetSemantics !== undefined ? [targetSemantics] : []),
+    ];
     const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
   }

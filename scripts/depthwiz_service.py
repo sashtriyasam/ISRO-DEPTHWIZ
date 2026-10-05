@@ -14,11 +14,11 @@ Envelope out:  {"capabilities": {...ServiceCapabilities...}}
   executes the real ``PipelineRunner``; responses are encoded with the
   real wire encoder (``encode_response``). This script never touches
   scientific pipeline modules directly.
-- Calibration comes from an in-process dev provider mirroring the
-  sanctioned backend test collaborator
-  (``tests/pipeline/support.py::SyntheticCalibrationProvider``): paired
-  references fitted with the real ``ScaleOffsetCalibrator``. No DEM/GCP
-  source is faked — the reference id marks it as synthetic dev data.
+- Calibration comes from ``select_calibration_provider``: the request's
+  ``calibration_reference_path`` (DEM GeoTIFF or GCP CSV) backs metric
+  runs. Without one, metric runs fail at the calibrating stage unless
+  ``DW_DEV_CALIBRATION=1`` explicitly enables the labelled synthetic dev
+  calibration (test suites only; the packaged app strips it).
 - The service is synchronous with no live progress: no stage lines are
   emitted. Stage history arrives post-hoc inside the response.
 - Exit 0 for any valid wire exchange, even when
@@ -44,13 +44,7 @@ for _candidate in (
         sys.path.insert(0, str(_candidate))
 
 try:
-    from depthwizard.calibration import (
-        CalibrationResult,
-        CalibrationSamples,
-        ScaleOffsetCalibrator,
-    )
-    from depthwizard.contracts.artifacts import DepthResult
-    from depthwizard.contracts.semantics import ElevationSemantics
+    from depthwizard.calibration import select_calibration_provider
     from depthwizard.service import (
         LocalService,
         decode_request,
@@ -63,8 +57,6 @@ except ImportError as exc:
     )
     sys.exit(1)
 
-
-DEV_REFERENCE_ID = "synthetic-dev-ref"
 
 #: M17 checkpoint file name (canonical candidate, never committed).
 _M17_CHECKPOINT_FILE = "m17_geonrw_struct_best.pt"
@@ -133,39 +125,6 @@ def build_backends() -> dict[str, Any]:
     return backends
 
 
-class DevCalibrationProvider:
-    """Deterministic dev calibration provider (test infrastructure).
-
-    Mirrors the sanctioned backend test collaborator
-    ``tests/pipeline/support.py::SyntheticCalibrationProvider``:
-    reference = 2.5 * predicted + 10 fitted with the real OLS
-    calibrator. Never production data; the reference id says so.
-    """
-
-    def __init__(self, target: ElevationSemantics) -> None:
-        """Bind the metric target semantics for this run."""
-        self._target = target
-
-    @property
-    def name(self) -> str:
-        """Stable provider name for run metadata."""
-        return "synthetic-dev-provider"
-
-    def calibrate(self, depth_result: DepthResult) -> CalibrationResult:
-        """Fit paired references against the actual depth values."""
-        predicted = depth_result.depth_values
-        reference = tuple(2.5 * value + 10.0 for value in predicted)
-        samples = CalibrationSamples(
-            predicted_values=predicted,
-            reference_values=reference,
-            reference_id=DEV_REFERENCE_ID,
-            reference_units="meters",
-            target_semantics=self._target,
-            source_checksum=depth_result.provenance.input_checksum,
-        )
-        return ScaleOffsetCalibrator().calibrate(samples)
-
-
 def handle_capabilities() -> dict[str, Any]:
     """Answer capability discovery without running the pipeline."""
     service = LocalService(backends=build_backends())
@@ -180,7 +139,11 @@ def handle_request(payload: object) -> dict[str, Any]:
         request = decode_request(json.dumps(payload))
     except Exception as exc:
         return {"wire_error": f"invalid ServiceRequest: {exc}"}
-    provider = DevCalibrationProvider(request.target_semantics)
+    provider = select_calibration_provider(
+        request.calibration_reference_path,
+        request.target_semantics,
+        request.calibration_method,
+    )
     try:
         response = LocalService(backends=build_backends()).execute(request, provider)
     except Exception as exc:

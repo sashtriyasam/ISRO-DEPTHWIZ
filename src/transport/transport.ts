@@ -60,6 +60,8 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           buildMesh: request.buildMesh ?? true,
           backend: request.backend,
           outputMode: "metric",
+          calibrationMethod: request.calibrationMethod,
+          calibrationReference: request.calibrationReference,
         },
         hooks,
       );
@@ -94,6 +96,11 @@ export class ServiceArtifactTransport implements ArtifactTransport {
         hooks,
         request.targetSemantics,
         request.backend,
+        {
+          meshLevels: request.meshLevels,
+          calibrationMethod: request.calibrationMethod,
+          calibrationReference: request.calibrationReference,
+        },
       );
       return { response, terrain };
     } catch (err) {

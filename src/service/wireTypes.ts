@@ -75,6 +75,7 @@ export interface ServiceRequestWire {
   export_overwrite: boolean;
   mesh_levels?: number[];
   calibration_method?: string;
+  calibration_reference_path?: string;
   solar_config: SolarConfigWire | null;
 }
 

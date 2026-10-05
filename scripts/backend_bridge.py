@@ -20,7 +20,7 @@ Modes:
       Full terrain chain for a generated synthetic input:
         synthetic input
         → SyntheticDepthBackend.estimate_depth()
-        → deterministic dev calibration (scale_offset)
+        → deterministic dev calibration (synthetic input only)
         → create_scientific_height_product()
         → rasterize_height_product()  (DSMGrid)
         → build_terrain_mesh()        (TerrainMesh)
@@ -29,9 +29,13 @@ Modes:
 
 IMPORTANT: This script requires the depthwizard package to be installed.
 It does NOT contain a duplicate implementation of any backend behavior.
-The dev calibration mirrors tests/height/support.py::exact_calibration
-(the sanctioned deterministic dev calibration); the fit itself is computed
-by the real ScaleOffsetCalibrator.
+
+Calibration (metric mode on real files) comes from
+``depthwizard.calibration.select_calibration_provider``: ``--reference``
+(DEM GeoTIFF or GCP CSV) backs metric output; without it the run is
+refused unless ``DW_DEV_CALIBRATION=1`` enables the labelled synthetic
+dev calibration (tests only). Generated ``--terrain`` inputs are synthetic
+fixtures and always use the dev calibration.
 """
 
 from __future__ import annotations
@@ -68,13 +72,17 @@ for _candidate in (
 try:
     from depthwizard.backends.synthetic import SyntheticDepthBackend
     from depthwizard.calibration import (
-        CalibrationSamples,
-        HuberScaleOffsetCalibrator,
-        PiecewiseLinearCalibrator,
-        ScaleOffsetCalibrator,
+        DevCalibrationProvider,
+        select_calibration_provider,
+    )
+    from depthwizard.calibration.selection import (
+        MISSING_REFERENCE_MESSAGE,
+        MissingReferenceProvider,
+        calibrate_with,
     )
     from depthwizard.contracts.semantics import ElevationSemantics
     from depthwizard.dsm.rasterize import rasterize_height_product
+    from depthwizard.errors import CalibrationError
     from depthwizard.height import create_scientific_height_product
     from depthwizard.ingestion.api import inspect_input
     from depthwizard.integration import terrain_product, to_json_text
@@ -105,7 +113,6 @@ DAV2_BACKEND_NAME = "depth-anything-v2-small"
 DAV2_LARGE_BACKEND_NAME = "depth-anything-v2-large"
 DA_V2_SAT_BACKEND_NAME = "depth-anything-v2-satellite"
 
-DEV_REFERENCE_ID = "synthetic-dev-ref"
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
 
 
@@ -177,36 +184,6 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
     )
 
 
-def fit_dev_calibration(depth: Any, target: ElevationSemantics, method: str = "scale_offset") -> Any:
-    """Fit the sanctioned deterministic dev calibration to actual values.
-
-    Reference rule ``reference = 2.5 * predicted + 10`` (same as
-    ``tests/pipeline/support.py::SyntheticCalibrationProvider``) fitted
-    with the real calibrator against the backend's actual depth output.
-    Never production data; the reference id says so.
-    """
-    predicted = depth.depth_values
-    samples = CalibrationSamples(
-        predicted_values=predicted,
-        reference_values=tuple(2.5 * value + 10.0 for value in predicted),
-        reference_id=DEV_REFERENCE_ID,
-        reference_units="meters",
-        target_semantics=target,
-        source_checksum=depth.provenance.input_checksum,
-    )
-    _METHOD_MAP: dict[str, Any] = {
-        "scale_offset": ScaleOffsetCalibrator(),
-        "scale_offset_huber": HuberScaleOffsetCalibrator(),
-        "piecewise_linear": PiecewiseLinearCalibrator(),
-    }
-    calibrator = _METHOD_MAP.get(method)
-    if calibrator is None:
-        raise ValueError(
-            f"unsupported calibration method: {method!r} (supported: {', '.join(sorted(_METHOD_MAP))})"
-        )
-    return calibrator.calibrate(samples)
-
-
 def create_synthetic_png(width: int, height: int, path: Path) -> Path:
     """Create a deterministic synthetic PNG for testing using Pillow."""
     from PIL import Image
@@ -266,6 +243,7 @@ def run_terrain(
             backend_name=backend_name,
             mesh_levels=mesh_levels,
             calibration_method=calibration_method,
+            synthetic_input=True,
         )
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -280,7 +258,8 @@ _USAGE = (
     "| --inspect <path> | --capabilities | --diagnostics "
     "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>] "
     "[--mesh-levels <int> [<int> ...]] "
-    "[--calibration-method <scale_offset|scale_offset_huber|piecewise_linear>]"
+    "[--calibration-method <scale_offset|scale_offset_huber|piecewise_linear>] "
+    "[--reference <dem.tif|gcps.csv>]"
 )
 
 
@@ -309,9 +288,24 @@ def run_terrain_on_path(
     device: str | None = None,
     mesh_levels: tuple[int, ...] | None = None,
     calibration_method: str = "scale_offset",
+    reference_path: str | None = None,
+    synthetic_input: bool = False,
 ) -> dict[str, Any]:
-    """Full terrain chain on a real input file using only real backend subsystems."""
+    """Full terrain chain on a real input file using only real backend subsystems.
+
+    Metric calibration needs ``reference_path`` (DEM GeoTIFF or GCP CSV);
+    ``synthetic_input`` marks generated fixtures, which use the labelled
+    dev calibration because no real reference can exist for them.
+    """
     target = parse_target_semantics(target_value)
+    provider = (
+        DevCalibrationProvider(target, calibration_method)
+        if synthetic_input
+        else select_calibration_provider(reference_path, target, calibration_method)
+    )
+    if isinstance(provider, MissingReferenceProvider):
+        # Refuse before inference: no reference means no metres.
+        raise CalibrationError(MISSING_REFERENCE_MESSAGE)
     inspection = inspect_input(input_path)
     emit_stage("preprocessing")
     backend = resolve_backend(backend_name, device)
@@ -325,7 +319,7 @@ def run_terrain_on_path(
             close()
     emit_stage("inference_running")
 
-    calibration = fit_dev_calibration(depth, target, method=calibration_method)
+    calibration = calibrate_with(provider, inspection, depth)
 
     emit_stage("calibrating")
     product = create_scientific_height_product(depth, calibration, target)
@@ -496,6 +490,7 @@ def main() -> None:
     gsd: float | None = None
     mesh_levels: tuple[int, ...] | None = None
     calibration_method = "scale_offset"
+    reference_path: str | None = None
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -530,6 +525,9 @@ def main() -> None:
             mesh_levels = tuple(levels) if levels else None
         elif args[i] == "--calibration-method" and i + 1 < len(args):
             calibration_method = args[i + 1]
+            i += 2
+        elif args[i] == "--reference" and i + 1 < len(args):
+            reference_path = args[i + 1]
             i += 2
         else:
             positional.append(args[i])
@@ -606,6 +604,7 @@ def main() -> None:
                     device=device,
                     mesh_levels=mesh_levels,
                     calibration_method=calibration_method,
+                    reference_path=reference_path,
                 )
             print(json.dumps(runner, allow_nan=False))
         elif positional[0] == "--inspect":

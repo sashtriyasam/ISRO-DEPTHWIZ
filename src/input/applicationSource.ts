@@ -24,6 +24,9 @@ export interface ApplicationBackendOptions {
   backend?: string;
   meshLevels?: number[];
   calibrationMethod?: string;
+  /** Staged DEM GeoTIFF or GCP CSV backing metric calibration. */
+  calibrationReference?: string;
+  mode?: "metric" | "relative";
 }
 
 export class ApplicationBackendSource implements ArtifactSource {
@@ -34,6 +37,8 @@ export class ApplicationBackendSource implements ArtifactSource {
   readonly backendLabel: string;
   readonly meshLevels: number[] | undefined;
   readonly calibrationMethod: string | undefined;
+  readonly calibrationReference: string | undefined;
+  readonly mode: "metric" | "relative";
 
   private fileSource: FileInputSource | null;
   private bridge: BackendBridge;
@@ -48,6 +53,8 @@ export class ApplicationBackendSource implements ArtifactSource {
         : APPLICATION_BACKEND_LABEL;
     this.meshLevels = options.meshLevels;
     this.calibrationMethod = options.calibrationMethod;
+    this.calibrationReference = options.calibrationReference;
+    this.mode = options.mode ?? "metric";
     this.bridge =
       options.bridge ??
       new BackendBridge({ backend: options.backend, meshLevels: options.meshLevels, calibrationMethod: options.calibrationMethod });
@@ -59,6 +66,10 @@ export class ApplicationBackendSource implements ArtifactSource {
         transport: options.transport,
         targetSemantics: this.targetSemantics,
         backend: options.backend,
+        mode: this.mode,
+        meshLevels: options.meshLevels,
+        calibrationMethod: options.calibrationMethod,
+        calibrationReference: options.calibrationReference,
       });
       this.id = this.fileSource.id;
       this.label = this.fileSource.label;

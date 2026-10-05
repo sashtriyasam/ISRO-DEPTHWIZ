@@ -33,10 +33,9 @@ class FileBasedCalibrationProvider:
 
     The provider is intentionally stateless between ``prepare()`` and
     ``calibrate()``: the pipeline runner calls ``prepare(inspection)``
-    before inference, then ``calibrate(depth_result)`` afterwards. If
-    no reference path is configured, the provider falls back to a
-    deterministic synthetic reference so callers never receive an
-    unexpected ``None``.
+    and then ``calibrate(depth_result)`` in the calibrating stage. A
+    provider without a reference path refuses to calibrate: metric
+    values are never fabricated from a synthetic rule.
     """
 
     def __init__(
@@ -63,9 +62,12 @@ class FileBasedCalibrationProvider:
         return "file-based:none"
 
     def calibrate(self, depth_result: DepthResult) -> CalibrationResult:
-        """Fit calibration from reference file or synthetic fallback."""
-        if self._reference_path is None:
-            return self._synthetic_calibrate(depth_result)
+        """Fit calibration from the configured DEM or GCP reference file."""
+        if not self._reference_path:
+            raise CalibrationError(
+                "Metric output requires a calibration reference (DEM GeoTIFF or "
+                "GCP CSV); none was provided."
+            )
 
         path = Path(self._reference_path)
         suffix = path.suffix.lower()
@@ -160,20 +162,6 @@ class FileBasedCalibrationProvider:
             predicted_values=tuple(predicted),
             reference_values=tuple(reference),
             reference_id=path.name,
-            reference_units="meters",
-            target_semantics=self._target,
-            source_checksum=depth_result.provenance.input_checksum,
-        )
-        return self._calibrator.calibrate(samples)
-
-    def _synthetic_calibrate(self, depth_result: DepthResult) -> CalibrationResult:
-        """Deterministic synthetic fallback matching test-provider behavior."""
-        predicted = depth_result.depth_values
-        reference = tuple(2.5 * value + 10.0 for value in predicted)
-        samples = CalibrationSamples(
-            predicted_values=predicted,
-            reference_values=reference,
-            reference_id="synthetic-file-based-ref",
             reference_units="meters",
             target_semantics=self._target,
             source_checksum=depth_result.provenance.input_checksum,

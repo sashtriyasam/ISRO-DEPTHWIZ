@@ -150,6 +150,11 @@ function getSatelliteCheckpointPath() {
 }
 function withCheckpointEnv(base = process.env) {
     const env = { ...base };
+    // Synthetic dev calibration is test infrastructure: a packaged build must
+    // never fabricate metric references, whatever the user's environment says.
+    if (electron_1.app.isPackaged) {
+        delete env.DW_DEV_CALIBRATION;
+    }
     const dav2 = getCheckpointPath();
     if (fs.existsSync(dav2)) {
         env.DW_DAV2_CKPT = dav2;
@@ -468,6 +473,7 @@ function registerIpcHandlers() {
         const ALLOWED_FLAGS = new Set([
             "--inspect", "--capabilities", "--backend", "--mode",
             "--terrain-file", "--terrain", "--synthetic",
+            "--mesh-levels", "--calibration-method", "--reference",
         ]);
         const DANGEROUS_EXT = /\.(exe|bat|cmd|com|ps1|sh|vbs)$/i;
         const isBridgeArgs = typeof args.payload === "object" &&

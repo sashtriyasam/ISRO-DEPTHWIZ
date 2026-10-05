@@ -63,6 +63,15 @@ class ServiceRequest(BaseModel):
         "'relative' runs the calibration-free rDSM path (no metric output).",
     )
     build_mesh: bool = False
+    calibration_method: Literal["scale_offset", "scale_offset_huber", "piecewise_linear"] = Field(
+        default="scale_offset",
+        description="Calibration fitting method for metric runs.",
+    )
+    calibration_reference_path: str | None = Field(
+        default=None,
+        description="Local DEM GeoTIFF or GCP CSV backing metric calibration. "
+        "Metric runs without one are refused (no fabricated metres).",
+    )
     geotiff_path: str | None = None
     export_compression: Literal["deflate", "none"] = "deflate"
     export_overwrite: bool = False
@@ -76,6 +85,10 @@ class ServiceRequest(BaseModel):
                 "service target semantics must be a metric meaning "
                 "(height_agl_ndsm, absolute_elevation_dsm)"
             )
+        if self.calibration_reference_path is not None and not (
+            self.calibration_reference_path.strip()
+        ):
+            raise ValueError("calibration_reference_path must not be blank when provided")
         if self.geotiff_path is not None and not self.geotiff_path.strip():
             raise ValueError("geotiff_path must not be blank when provided")
         return self
