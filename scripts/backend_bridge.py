@@ -256,7 +256,7 @@ _USAGE = (
     "<input_path> | --synthetic <w> <h> "
     "| --terrain <w> <h> | --terrain-file <path> [target] "
     "| --inspect <path> | --capabilities | --diagnostics "
-    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>] "
+    "| --solar <path> [--sun-elevation <deg>] [--sun-azimuth <deg>] [--min-area <px>] [--gsd <m/px>] [--assume-north-up] "
     "[--mesh-levels <int> [<int> ...]] "
     "[--calibration-method <scale_offset|scale_offset_huber|piecewise_linear>] "
     "[--reference <dem.tif|gcps.csv>]"
@@ -429,6 +429,7 @@ def run_solar(
     sun_azimuth_deg: float | None = None,
     min_area_px: int = 20,
     gsd_override: float | None = None,
+    assume_north_up: bool = False,
 ) -> dict[str, Any]:
     """Run solar-shadow analysis on an image."""
     from depthwizard.solar.integrate import load_image_rgb, solar_observations_from_image
@@ -449,6 +450,7 @@ def run_solar(
             sun_azimuth_deg=sun_azimuth_deg,
             min_area_px=min_area_px,
             gsd_override=gsd_override,
+            assume_north_up=assume_north_up,
         )
         constraints = [
             {
@@ -488,6 +490,7 @@ def main() -> None:
     sun_azimuth: float | None = None
     min_area = 20
     gsd: float | None = None
+    assume_north_up = False
     mesh_levels: tuple[int, ...] | None = None
     calibration_method = "scale_offset"
     reference_path: str | None = None
@@ -516,6 +519,9 @@ def main() -> None:
         elif args[i] == "--gsd" and i + 1 < len(args):
             gsd = float(args[i + 1])
             i += 2
+        elif args[i] == "--assume-north-up":
+            assume_north_up = True
+            i += 1
         elif args[i] == "--mesh-levels" and i + 1 < len(args):
             levels: list[int] = []
             i += 1
@@ -634,6 +640,7 @@ def main() -> None:
                         sun_azimuth_deg=sun_azimuth,
                         min_area_px=min_area,
                         gsd_override=gsd,
+                        assume_north_up=assume_north_up,
                     ),
                     allow_nan=False,
                 )

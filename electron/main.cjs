@@ -502,6 +502,8 @@ function registerIpcHandlers() {
             "--inspect", "--capabilities", "--backend", "--mode",
             "--terrain-file", "--terrain", "--synthetic",
             "--mesh-levels", "--calibration-method", "--reference",
+            "--diagnostics", "--solar", "--sun-elevation", "--sun-azimuth",
+            "--min-area", "--gsd", "--assume-north-up",
         ]);
         const DANGEROUS_EXT = /\.(exe|bat|cmd|com|ps1|sh|vbs)$/i;
         const isBridgeArgs = typeof args.payload === "object" &&

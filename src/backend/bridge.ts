@@ -465,6 +465,7 @@ export class BackendBridge {
       sunAzimuthDeg?: number;
       minShadowAreaPx?: number;
       gsdOverride?: number;
+      assumeNorthUp?: boolean;
     },
     hooks: BridgeExecutionHooks = {},
   ): Promise<SolarAnalysisResult> {
@@ -477,18 +478,27 @@ export class BackendBridge {
       throw new OperationCancelledError();
     }
 
+    // Sun angles are sent only when the user supplied both: no defaults,
+    // otherwise the backend reads them from image metadata or refuses.
     const args: string[] = [
       "--solar",
       inputPath,
-      "--sun-elevation",
-      String(config.sunElevationDeg ?? 45),
-      "--sun-azimuth",
-      String(config.sunAzimuthDeg ?? 180),
       "--min-area",
       String(config.minShadowAreaPx ?? 20),
     ];
+    if (config.sunElevationDeg !== undefined && config.sunAzimuthDeg !== undefined) {
+      args.push(
+        "--sun-elevation",
+        String(config.sunElevationDeg),
+        "--sun-azimuth",
+        String(config.sunAzimuthDeg),
+      );
+    }
     if (config.gsdOverride !== undefined) {
       args.push("--gsd", String(config.gsdOverride));
+    }
+    if (config.assumeNorthUp) {
+      args.push("--assume-north-up");
     }
 
     const jsonData = await this.spawnPython(args, hooks);
