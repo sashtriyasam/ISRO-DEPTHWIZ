@@ -102,6 +102,8 @@ export interface SceneMetadata {
   exportPath?: string;
   /** Staged RGB texture of this run (model-input pixels). */
   texturePath?: string;
+  /** Staged product raster (dsm.tif or rdsm.tif) used for validation. */
+  productPath?: string;
 }
 
 export interface GeoTransform {

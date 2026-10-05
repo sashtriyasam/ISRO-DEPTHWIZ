@@ -32,6 +32,7 @@ import { sourceStatusLabel } from "../metadata/metadata";
 import { SceneInfo } from "../components/SceneInfo/SceneInfo";
 import { ProcessingPanel } from "../components/ProcessingPanel/ProcessingPanel";
 import { SolarShadowPanel } from "../components/SolarShadowPanel/SolarShadowPanel";
+import { ValidationPanel } from "../components/ValidationPanel/ValidationPanel";
 import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
 import { ArtifactLoader } from "../artifact";
 import type { ArtifactSource } from "../artifact/types";
@@ -892,6 +893,7 @@ export function App() {
               onClear={handleClearInspection}
             />
             <MetadataPanel artifact={artifact} activeLayerId={activeLayerId} />
+            <ValidationPanel productPath={artifact?.metadata.productPath} />
             <SolarShadowPanel inputPath={inputFilePath} />
             <SceneInfo
               artifact={artifact}

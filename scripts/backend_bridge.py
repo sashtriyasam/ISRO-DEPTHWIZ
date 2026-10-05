@@ -113,8 +113,22 @@ SYNTHETIC_BACKEND_NAME = "synthetic-depth"
 DAV2_BACKEND_NAME = "depth-anything-v2-small"
 DAV2_LARGE_BACKEND_NAME = "depth-anything-v2-large"
 DA_V2_SAT_BACKEND_NAME = "depth-anything-v2-satellite"
+NDSM_BACKEND_NAME = "depthwizard-ndsm-vits"
 
 DEV_TARGET_SEMANTICS = ElevationSemantics.ABSOLUTE_ELEVATION_DSM
+
+
+def _default_device() -> str:
+    """DW_DAV2_DEVICE if set, else CUDA when torch sees a GPU, else CPU."""
+    explicit = os.environ.get("DW_DAV2_DEVICE")
+    if explicit:
+        return explicit
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
 
 
 def resolve_backend(name: str, device: str | None = None) -> Any:
@@ -136,7 +150,7 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 "Install the 'dav2' extra and provide the upstream source."
             ) from exc
         checkpoint = os.environ.get("DW_DAV2_CKPT")
-        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        backend_device = device or _default_device()
         try:
             return DepthAnythingV2Backend(
                 checkpoint=Path(checkpoint) if checkpoint else None,
@@ -158,7 +172,7 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 "Install the 'dav2' extra and provide the upstream source."
             ) from exc
         checkpoint = os.environ.get("DW_DAV2_LARGE_CKPT")
-        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        backend_device = device or _default_device()
         try:
             return DepthAnythingV2LargeBackend(
                 checkpoint=Path(checkpoint) if checkpoint else None,
@@ -169,6 +183,10 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 f"backend {name!r} unavailable: {exc}. "
                 "Set DW_DAV2_LARGE_CKPT to an external checkpoint; weights are never committed."
             ) from exc
+    if name == NDSM_BACKEND_NAME:
+        from depthwizard.backends.ndsm import NdsmBackend
+
+        return NdsmBackend(device=device or _default_device())
     if name == DA_V2_SAT_BACKEND_NAME:
         try:
             from depthwizard.backends.satellite import SatelliteDepthBackend
@@ -178,7 +196,7 @@ def resolve_backend(name: str, device: str | None = None) -> Any:
                 "Install the 'dav2' extra and provide the upstream source."
             ) from exc
         checkpoint = os.environ.get("DW_DAV2_SAT_CKPT")
-        backend_device = device or os.environ.get("DW_DAV2_DEVICE", "cpu")
+        backend_device = device or _default_device()
         try:
             return SatelliteDepthBackend(
                 checkpoint=Path(checkpoint) if checkpoint else None, device=backend_device
@@ -271,6 +289,7 @@ _MODE_TOKENS = frozenset(
         "--capabilities",
         "--diagnostics",
         "--solar",
+        "--validate",
     }
 )
 
@@ -623,7 +642,11 @@ def main() -> None:
                     # explicitly via --backend (caller-provided always wins).
                     large_ckpt = os.environ.get("DW_DAV2_LARGE_CKPT")
                     repo_root = Path(__file__).resolve().parent.parent
-                    if large_ckpt and Path(large_ckpt).is_file():
+                    from depthwizard.backends.ndsm import default_checkpoint_path
+
+                    if default_checkpoint_path().is_file():
+                        backend_name = NDSM_BACKEND_NAME
+                    elif large_ckpt and Path(large_ckpt).is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME
                     elif (repo_root / "checkpoints" / "depth_anything_v2_vitl.pth").is_file():
                         backend_name = DAV2_LARGE_BACKEND_NAME
@@ -652,6 +675,13 @@ def main() -> None:
                 print(json.dumps({"error": "Missing input path for --inspect"}))
                 sys.exit(1)
             print(json.dumps(run_inspect(Path(positional[1]))))
+        elif positional[0] == "--validate":
+            if len(positional) < 3:
+                print(json.dumps({"error": "--validate needs <product> <reference>"}))
+                sys.exit(1)
+            from depthwizard.evaluation.validate import validate_dsm
+
+            print(json.dumps(validate_dsm(positional[1], positional[2]), allow_nan=False))
         elif positional[0] == "--capabilities":
             print(json.dumps(run_capabilities()))
         elif positional[0] == "--diagnostics":

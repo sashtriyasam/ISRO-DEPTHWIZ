@@ -283,6 +283,10 @@ class FileBasedCalibrationProvider:
             reference_id=self._reference_label or terrain.source_dem_id,
             target=self._target,
             source_checksum=depth_result.provenance.input_checksum,
+            # A height model declares metres above ground: no scale to fit.
+            fixed_scale=1.0
+            if depth_result.preprocessing.get("height_units") == "meters_above_ground"
+            else None,
         )
         self.warnings.extend(notes)
         return result

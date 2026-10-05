@@ -161,6 +161,7 @@ def test_registry_advertises_only_available(
     """Without assets the registry is synthetic-only (factual)."""
     monkeypatch.setenv("DW_DAV2_CKPT", str(tmp_path / "missing.pth"))
     monkeypatch.setenv("DW_DAV2_SAT_CKPT", str(tmp_path / "missing_sat.pth"))
+    monkeypatch.setenv("DW_NDSM_CKPT", str(tmp_path / "missing_ndsm.pth"))
     monkeypatch.setenv("DEPTHWIZARD_DATA", str(tmp_path / "empty"))
     monkeypatch.setenv("PYTHONPATH", "src")
     service = _load_service_script()

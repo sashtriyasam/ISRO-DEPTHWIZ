@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
-from depthwizard.backends.checkpoints import INJECTED, load_checkpoint_state
+from depthwizard.backends.checkpoints import (
+    INJECTED,
+    DeviceBoundModel,
+    load_checkpoint_state,
+)
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
@@ -296,7 +300,7 @@ class SatelliteDepthBackend:
             state = state["model"]
         model.load_state_dict(state)
         model = model.to(self._device).eval()
-        self._model = model
+        self._model = DeviceBoundModel(model, self._device)
 
     def estimate_depth(self, inspection: InputInspection) -> DepthResult:
         if not isinstance(inspection, InputInspection):

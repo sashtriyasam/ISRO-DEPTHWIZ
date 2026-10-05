@@ -174,6 +174,25 @@ export interface TerrainPayloadOptions {
   autoReference?: boolean;
 }
 
+export interface ValidationScores {
+  n: number;
+  rmse: number | null;
+  mae: number | null;
+  bias: number | null;
+  pearson_r: number;
+  spearman_rho: number;
+}
+
+export interface ValidationReport {
+  product: string;
+  reference: string;
+  metric: boolean;
+  coverage: number;
+  native: ValidationScores;
+  coarse?: ValidationScores & { block_m: number };
+  note?: string;
+}
+
 export interface SolarAnalysisResult {
   constraints: Array<{
     height_m: number;
@@ -514,6 +533,21 @@ export class BackendBridge {
     ];
     const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
+  }
+
+  async executeValidate(
+    productPath: string,
+    referencePath: string,
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<ValidationReport> {
+    if (!this.host.processSpawning) {
+      throw new Error("Validation requires a desktop host with process spawning");
+    }
+    const data = await this.spawnPython(["--validate", productPath, referencePath], hooks);
+    if (typeof data !== "object" || data === null || !("native" in data)) {
+      throw new Error("Malformed validation report from backend");
+    }
+    return data as ValidationReport;
   }
 
   async executeSolar(

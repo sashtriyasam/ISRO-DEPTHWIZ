@@ -49,13 +49,20 @@ function withWarnings(artifact: SceneArtifact, warnings: string[] | undefined): 
 /** Staged extras of the service run (texture for relative runs too). */
 function withPayloadExtras(artifact: SceneArtifact, payload: unknown): SceneArtifact {
   if (typeof payload !== "object" || payload === null) return artifact;
-  const extras = payload as { texture_path?: unknown; geotiff_path?: unknown };
+  const extras = payload as {
+    texture_path?: unknown;
+    geotiff_path?: unknown;
+    product_path?: unknown;
+  };
   const metadata = { ...artifact.metadata };
   if (typeof extras.texture_path === "string" && !metadata.texturePath) {
     metadata.texturePath = extras.texture_path;
   }
   if (typeof extras.geotiff_path === "string" && !metadata.exportPath) {
     metadata.exportPath = extras.geotiff_path;
+  }
+  if (typeof extras.product_path === "string") {
+    metadata.productPath = extras.product_path;
   }
   return { ...artifact, metadata };
 }

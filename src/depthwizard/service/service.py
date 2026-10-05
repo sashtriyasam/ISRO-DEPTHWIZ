@@ -11,9 +11,12 @@ stage ordering. Synchronous by design; no threads, no sockets.
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import numpy as np
 
 from depthwizard.backends.synthetic import SyntheticDepthBackend
 from depthwizard.contracts.artifacts import DepthBackend
@@ -46,6 +49,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from depthwizard.dsm.grid import DSMGrid
+    from depthwizard.rdsm.models import RelativeSurfaceGrid
 
 
 def _georeferenced(georeferencing: GeoreferencingLevel) -> bool:
@@ -118,6 +122,41 @@ def _slope_payload(dsm: DSMGrid) -> dict[str, object]:
         for v, valid in zip(slope.array.ravel(), slope.valid_mask.ravel(), strict=True)
     ]
     return {"units": "degrees", "values": values, "unavailable_reason": None}
+
+
+def _write_relative_surface(input_path: str, grid: RelativeSurfaceGrid) -> str | None:
+    """Write the rDSM beside the staged input for validation (no metric units).
+
+    Keeps the input's CRS/transform when it has them; a plain image gets a
+    pixel-grid raster without CRS.
+    """
+    import rasterio
+
+    from depthwizard.geospatial.transforms import to_affine
+
+    target = Path(input_path).parent / "rdsm.tif"
+    details = grid.spatial.details
+    profile: dict[str, object] = {
+        "driver": "GTiff",
+        "width": grid.width,
+        "height": grid.height,
+        "count": 1,
+        "dtype": "float32",
+        "nodata": float("nan"),
+    }
+    if details is not None and details.crs is not None and details.transform is not None:
+        profile["crs"] = details.crs
+        profile["transform"] = to_affine(details.transform)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # NotGeoreferencedWarning for plain images
+            with rasterio.open(target, "w", **profile) as dst:
+                data = np.where(grid.valid_mask, grid.array, np.nan).astype("float32")
+                dst.write(data, 1)
+                dst.update_tags(ns="depthwizard", semantics=grid.semantics.value, units="none")
+    except Exception:
+        return None
+    return str(target)
 
 
 def _write_texture(input_path: str) -> tuple[str | None, str | None]:
@@ -347,6 +386,7 @@ class LocalService:
             payload = _payload(terrain_product(result.depth, result.dsm, result.mesh))
             payload["stages"] = [state.value for state in result.states]
             payload["geotiff_path"] = result.export.path if result.export else None
+            payload["product_path"] = payload["geotiff_path"]
             payload["slope"] = _slope_payload(result.dsm)
             texture_path, texture_warning = _write_texture(request.input_path)
             payload["texture_path"] = texture_path
@@ -375,6 +415,7 @@ class LocalService:
             payload = _payload(relative_product(depth, grid, mesh))
             payload["stages"] = ["completed"]
             payload["texture_path"], _texture_warning = _write_texture(request.input_path)
+            payload["product_path"] = _write_relative_surface(request.input_path, grid)
         return ServiceResponse(
             payload=payload,
             contract_version=SERVICE_CONTRACT_VERSION,

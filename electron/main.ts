@@ -568,7 +568,7 @@ function registerIpcHandlers(): void {
         "--terrain-file", "--terrain", "--synthetic",
         "--mesh-levels", "--calibration-method", "--reference",
         "--diagnostics", "--solar", "--sun-elevation", "--sun-azimuth",
-        "--min-area", "--gsd", "--assume-north-up", "--auto-reference",
+        "--min-area", "--gsd", "--assume-north-up", "--auto-reference", "--validate",
       ]);
       // Flags whose next argument is a file the renderer staged.
       const PATH_FLAGS = new Set(["--terrain-file", "--reference", "--solar", "--inspect"]);
@@ -592,6 +592,13 @@ function registerIpcHandlers(): void {
           if (PATH_FLAGS.has(arg)) {
             const pathError = validateRendererPath(bridgeArgs[i + 1], `${arg} path`);
             if (pathError) return { error: pathError };
+          }
+          if (arg === "--validate") {
+            // Both the product and the reference must be staged files.
+            for (const offset of [1, 2]) {
+              const pathError = validateRendererPath(bridgeArgs[i + offset], "--validate path");
+              if (pathError) return { error: pathError };
+            }
           }
         }
       } else if (typeof args.payload === "object" && args.payload !== null) {

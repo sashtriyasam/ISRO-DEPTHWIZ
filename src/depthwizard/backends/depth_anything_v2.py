@@ -29,7 +29,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from depthwizard.backends.checkpoints import INJECTED, load_checkpoint_state
+from depthwizard.backends.checkpoints import (
+    INJECTED,
+    DeviceBoundModel,
+    load_checkpoint_state,
+)
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
@@ -205,7 +209,7 @@ class DepthAnythingV2Backend:
         )
         model.load_state_dict(state)
         model = model.to(self._device).eval()
-        self._model = model
+        self._model = DeviceBoundModel(model, self._device)
 
     def estimate_depth(self, inspection: InputInspection) -> DepthResult:
         """Run frozen inference on a validated input inspection.

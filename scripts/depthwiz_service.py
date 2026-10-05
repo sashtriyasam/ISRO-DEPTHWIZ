@@ -76,6 +76,21 @@ def _sat_checkpoint_present() -> bool:
     return (root / "checkpoints" / _SAT_CHECKPOINT_FILE).is_file()
 
 
+def _device() -> str:
+    """GPU when torch sees one (DW_DEVICE overrides), else CPU."""
+    import os
+
+    explicit = os.environ.get("DW_DEVICE")
+    if explicit:
+        return explicit
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
+
+
 def build_backends() -> dict[str, Any]:
     """Assemble the service backend registry.
 
@@ -105,6 +120,12 @@ def build_backends() -> dict[str, Any]:
     # M17 is a frozen research candidate whose head is not in this repository
     # (M17DepthBackend.load() always refuses without an injected factory), so
     # it is never advertised as an available backend.
+    from depthwizard.backends.ndsm import default_checkpoint_path
+
+    if module_available("torch") and default_checkpoint_path().is_file():
+        from depthwizard.backends.ndsm import NdsmBackend
+
+        backends["depthwizard-ndsm-vits"] = NdsmBackend(device=_device())
     if _sat_checkpoint_present():
         from depthwizard.backends.satellite import SatelliteDepthBackend
 

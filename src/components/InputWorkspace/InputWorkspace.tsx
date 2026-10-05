@@ -326,7 +326,11 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       if (capabilities && capabilities.available_backends.length > 0) {
         // Released backends first. The satellite fine-tune is smoke-trained with
         // no accuracy evidence yet, so it is only a fallback until promoted.
-        if (capabilities.available_backends.includes("depth-anything-v2-large")) {
+        // The LiDAR-trained height model predicts metres above ground and is
+        // preferred; then the released DA-V2 checkpoints.
+        if (capabilities.available_backends.includes("depthwizard-ndsm-vits")) {
+          selectedBackend = "depthwizard-ndsm-vits";
+        } else if (capabilities.available_backends.includes("depth-anything-v2-large")) {
           selectedBackend = "depth-anything-v2-large";
         } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
           selectedBackend = "depth-anything-v2-small";

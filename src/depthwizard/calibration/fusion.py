@@ -95,6 +95,7 @@ def dem_anchored_calibration(
     reference_id: str,
     target: ElevationSemantics,
     source_checksum: str | None,
+    fixed_scale: float | None = None,
 ) -> tuple[CalibrationResult, list[str]]:
     """Fit the fusion and return it as a calibration with an offset field."""
     if target is not ElevationSemantics.ABSOLUTE_ELEVATION_DSM:
@@ -136,6 +137,9 @@ def dem_anchored_calibration(
         r_squared = fit.r_squared
         if fit.scale > 0.0 and fit.r_squared >= MIN_DETAIL_R_SQUARED:
             scale = fit.scale
+    if fixed_scale is not None:
+        # Learned metric heights (nDSM model): add structure in metres as-is.
+        scale = float(fixed_scale)
     if scale == 0.0:
         warnings.append(
             "DEM-anchored DSM: the depth model's structure did not match the reference "

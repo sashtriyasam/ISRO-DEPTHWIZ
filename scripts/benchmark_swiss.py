@@ -41,6 +41,9 @@ IMAGE_COLLECTION = "ch.swisstopo.swissimage-dop10"
 DSM_COLLECTION = "ch.swisstopo.swisssurface3d-raster"
 
 #: (site id, landscape class, lon, lat) — one 1 km tile each.
+#: Device for the optional learned-height product (set by --ndsm).
+NDSM_DEVICE: str | None = None
+
 SITES: list[tuple[str, str, float, float]] = [
     ("urban_zurich", "urban", 8.5400, 47.3780),
     ("urban_bern", "urban", 7.4440, 46.9480),
@@ -53,14 +56,29 @@ SITES: list[tuple[str, str, float, float]] = [
 ]
 
 
+def lv95_tile(lon: float, lat: float) -> str:
+    """swisstopo 1 km tile id ("EEEE-NNNN", LV95 km) containing a WGS84 point."""
+    from rasterio.warp import transform
+
+    xs, ys = transform("EPSG:4326", "EPSG:2056", [lon], [lat])
+    return f"{int(xs[0] // 1000)}-{int(ys[0] // 1000)}"
+
+
 def _stac_asset(collection: str, lon: float, lat: float, suffix: str) -> str:
+    """Newest asset of the exact 1 km tile containing the point.
+
+    A bbox query also returns neighbouring tiles when the point is near a
+    tile edge; picking "newest" across them mixed different tiles between
+    imagery and LiDAR. The tile id is therefore matched explicitly.
+    """
+    tile = lv95_tile(lon, lat)
     bbox = f"{lon - 0.0005},{lat - 0.0005},{lon + 0.0005},{lat + 0.0005}"
-    url = f"{STAC}/{collection}/items?bbox={bbox}&limit=10"
+    url = f"{STAC}/{collection}/items?bbox={bbox}&limit=50"
     with urllib.request.urlopen(url, timeout=60) as response:
-        items = json.load(response)["features"]
+        items = [f for f in json.load(response)["features"] if f["id"].endswith("_" + tile)]
     if not items:
-        raise RuntimeError(f"no {collection} item at {lon},{lat}")
-    items.sort(key=lambda f: f["id"], reverse=True)  # newest acquisition first
+        raise RuntimeError(f"no {collection} item for tile {tile}")
+    items.sort(key=lambda f: f["id"], reverse=True)  # newest acquisition of this tile
     for asset in items[0]["assets"].values():
         if asset["href"].endswith(suffix):
             return str(asset["href"])
@@ -236,11 +254,24 @@ def run_site(
         okd = valid & np.isfinite(dem)
         a, b = np.polyfit(rel[okd], dem[okd], 1)
         product_affine = a * rel + b
+        if NDSM_DEVICE is not None:
+            from depthwizard.backends.ndsm import NdsmBackend
+
+            started = time.perf_counter()
+            heights_result = NdsmBackend(device=NDSM_DEVICE).estimate_depth(inspection)
+            heights = np.asarray(heights_result.depth_values, dtype=np.float64).reshape(shape)
+            ndsm_s = time.perf_counter() - started
+            ndsm_detail = heights - box_mean(heights, np.isfinite(heights), k)
+            extra = {"fusion_ndsm": dem + ndsm_detail}
+        else:
+            extra = {}
+            ndsm_s = None
         products = {
             "copernicus": dem,
             "fusion": product_fusion,
             "affine": product_affine,
             "fusion_oracle": product_oracle,
+            **extra,
         }
         for name, pred in products.items():
             row = {
@@ -252,7 +283,7 @@ def run_site(
                 "detail_scale": s_fit
                 if name == "fusion"
                 else (s_oracle if name == "fusion_oracle" else None),
-                "inference_s": round(infer_s, 1),
+                "inference_s": round(ndsm_s if name == "fusion_ndsm" and ndsm_s else infer_s, 1),
                 "vs_lidar": _metrics(pred, truth),
                 "vs_lidar_30m": _metrics(_block(pred, k), _block(truth, k)),
                 "vs_copernicus": _metrics(pred, dem),
@@ -286,7 +317,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gsd", type=float, nargs="+", default=[0.6, 2.0])
     parser.add_argument("--sites", nargs="*", default=None)
     parser.add_argument("--tiled", action="store_true")
+    parser.add_argument(
+        "--ndsm",
+        choices=["cpu", "cuda"],
+        default=None,
+        help="Also score DEM + learned nDSM structure (scripts/train_ndsm.py checkpoint)",
+    )
     args = parser.parse_args(argv)
+    global NDSM_DEVICE
+    NDSM_DEVICE = args.ndsm
     out = Path(args.out)
     chosen = [s for s in SITES if not args.sites or s[0] in args.sites]
     rows = []
@@ -297,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 json.dumps({"site": site[0], "error": f"{type(exc).__name__}: {exc}"}), flush=True
             )
-    suffix = "tiled" if args.tiled else "single"
+    suffix = ("tiled" if args.tiled else "single") + ("_ndsm" if args.ndsm else "")
     (out / f"results_{suffix}.json").write_text(json.dumps(rows, indent=2))
     return 0
 

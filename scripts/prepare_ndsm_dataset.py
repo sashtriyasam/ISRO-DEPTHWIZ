@@ -34,6 +34,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from benchmark_swiss import SITES as BENCHMARK_SITES  # noqa: E402
+from benchmark_swiss import _stac_asset, lv95_tile  # noqa: E402
 
 STAC = "https://data.geo.admin.ch/api/stac/v0.9/collections"
 IMAGE = ("ch.swisstopo.swissimage-dop10", "_0.1_2056.tif")
@@ -85,17 +86,8 @@ def _near_benchmark(lon: float, lat: float) -> bool:
 
 
 def _asset(collection: str, suffix: str, lon: float, lat: float) -> tuple[str, str]:
-    bbox = f"{lon - 0.0005},{lat - 0.0005},{lon + 0.0005},{lat + 0.0005}"
-    with urllib.request.urlopen(f"{STAC}/{collection}/items?bbox={bbox}&limit=10", timeout=60) as r:
-        items = json.load(r)["features"]
-    if not items:
-        raise RuntimeError(f"no {collection} item")
-    items.sort(key=lambda f: f["id"], reverse=True)
-    tile = items[0]["id"].split("_")[-1]  # e.g. 2599-1198
-    for asset in items[0]["assets"].values():
-        if asset["href"].endswith(suffix):
-            return str(asset["href"]), tile
-    raise RuntimeError(f"no {suffix} asset")
+    """Asset URL of the exact LV95 tile containing the point (shared with the benchmark)."""
+    return _stac_asset(collection, lon, lat, suffix), lv95_tile(lon, lat)
 
 
 def _download(url: str, target: Path) -> Path:

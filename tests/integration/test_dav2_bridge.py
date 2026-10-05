@@ -81,6 +81,7 @@ def test_service_registry_degrades_without_checkpoint() -> None:
         os.environ,
         DW_DAV2_CKPT="definitely/missing.pth",
         DW_DAV2_SAT_CKPT="definitely/missing_sat.pth",
+        DW_NDSM_CKPT="definitely/missing_ndsm.pth",
     )
     # Hide the upstream runtime if it happens to be on PYTHONPATH.
     merged["PYTHONPATH"] = "src"

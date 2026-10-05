@@ -74,3 +74,30 @@ def load_checkpoint_state(
             f"(weights_only=True): {exc}"
         ) from exc
     return state, status
+
+
+class DeviceBoundModel:
+    """Run upstream DA-V2 ``infer_image`` on the model's own device.
+
+    Upstream ``image2tensor`` moves the input to CUDA whenever CUDA exists,
+    regardless of where the model lives, so a CPU-configured backend crashed
+    on any GPU machine. This adapter re-homes the tensor before ``forward``.
+    """
+
+    def __init__(self, model: Any, device: str) -> None:
+        self._model = model
+        self._device = device
+
+    def infer_image(self, raw_image: Any, input_size: int = 518) -> Any:
+        import torch
+        import torch.nn.functional as F
+
+        image, (h, w) = self._model.image2tensor(raw_image, input_size)
+        image = image.to(self._device)
+        with torch.no_grad():
+            depth = self._model.forward(image)
+        depth = F.interpolate(depth[:, None], (h, w), mode="bilinear", align_corners=True)[0, 0]
+        return depth.cpu().numpy()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._model, name)
