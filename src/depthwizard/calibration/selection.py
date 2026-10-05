@@ -89,6 +89,7 @@ class DevCalibrationProvider:
         samples = CalibrationSamples(
             predicted_values=predicted,
             reference_values=tuple(2.5 * value + 10.0 for value in predicted),
+            valid_mask=depth_result.valid_mask,
             reference_id=DEV_REFERENCE_ID,
             reference_units="meters",
             target_semantics=self._target,

@@ -34,6 +34,7 @@ from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError, ModelInferenceError
 from depthwizard.ingestion.models import InputInspection
+from depthwizard.ingestion.pixels import load_model_rgb
 from depthwizard.version import __version__
 
 if TYPE_CHECKING:
@@ -84,51 +85,8 @@ def _default_checkpoint_path() -> Path:
 
 
 def _load_image_rgb(inspection: InputInspection) -> NDArray[np.uint8]:
-    """Load image pixels as HWC uint8 RGB from the inspected input.
-
-    Uses Pillow for PNG/JPEG, rasterio for TIFF.  Returns a numpy array
-    without storing it on the inspection object.  Model-specific
-    preprocessing (BGR conversion, normalization) belongs to the model
-    adapter, not here.
-    """
-    import numpy as np
-
-    path = Path(inspection.handle.source_path)
-    fmt = inspection.detected_format
-
-    if fmt.value in ("png", "jpeg"):
-        from PIL import Image
-
-        with Image.open(path) as img:
-            img.load()
-            if img.mode != "RGB":
-                rgb_img = img.convert("RGB")
-                return np.array(rgb_img, dtype=np.uint8)
-            return np.array(img, dtype=np.uint8)
-
-    if fmt.value == "tiff":
-        import rasterio
-
-        with rasterio.open(path) as ds:
-            bands = ds.count
-            if bands == 3:
-                data = ds.read((1, 2, 3))  # (3, H, W)
-            elif bands >= 3:
-                data = ds.read((1, 2, 3))  # take first 3 bands
-            elif bands == 1:
-                gray = ds.read(1)  # (H, W)
-                return np.stack([gray, gray, gray], axis=-1).astype(np.uint8)
-            else:
-                raise InvalidInputError(
-                    f"TIFF with {bands} bands cannot be interpreted as RGB: "
-                    f"{inspection.handle.display_name}"
-                )
-            # rasterio returns (bands, H, W) — transpose to (H, W, bands)
-            return np.transpose(data, (1, 2, 0)).astype(np.uint8)
-
-    raise InvalidInputError(
-        f"Unsupported format for DA-V2 inference: {fmt.value} ({inspection.handle.display_name})"
-    )
+    """Load image pixels as HWC uint8 RGB (shared loader, see ``ingestion.pixels``)."""
+    return load_model_rgb(inspection).rgb
 
 
 class DepthAnythingV2Backend:
@@ -262,7 +220,8 @@ class DepthAnythingV2Backend:
 
         # Load image as HWC uint8 RGB
         try:
-            image_rgb = _load_image_rgb(inspection)
+            loaded = load_model_rgb(inspection)
+            image_rgb = loaded.rgb
         except InvalidInputError:
             raise
         except Exception as e:
@@ -317,9 +276,9 @@ class DepthAnythingV2Backend:
             elevation_semantics=ElevationSemantics.RELATIVE_DEPTH,
             georeferencing=inspection.georeferencing,
             depth_values=depth_values,
-            valid_mask=None,
+            valid_mask=loaded.valid_mask_tuple(),
             confidence_values=None,
-            preprocessing=dict(PREPROCESSING_RECORD),
+            preprocessing={**PREPROCESSING_RECORD, **loaded.preprocessing_record()},
             units=None,
             spatial=inspection.spatial,
             provenance=ProductProvenance(

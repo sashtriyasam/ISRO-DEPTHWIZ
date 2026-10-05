@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -37,46 +36,10 @@ from depthwizard.solar.sun_angles import SunAngles, resolve_sun_angles
 
 
 def load_image_rgb(inspection: InputInspection) -> NDArray[np.uint8]:
-    """Load image pixels as HWC uint8 RGB from an InputInspection."""
-    import numpy as np
+    """Load image pixels as HWC uint8 RGB (shared loader, see ``ingestion.pixels``)."""
+    from depthwizard.ingestion.pixels import load_model_rgb
 
-    path = Path(inspection.handle.source_path)
-    fmt = inspection.detected_format
-
-    if fmt.value in ("png", "jpeg"):
-        from PIL import Image
-
-        with Image.open(path) as img:
-            img.load()
-            if img.mode != "RGB":
-                rgb_img = img.convert("RGB")
-                return np.array(rgb_img, dtype=np.uint8)
-            return np.array(img, dtype=np.uint8)
-
-    if fmt.value == "tiff":
-        try:
-            import rasterio
-
-            with rasterio.open(path) as ds:
-                bands = ds.count
-                if bands >= 3:
-                    data = ds.read((1, 2, 3))
-                    return np.transpose(data, (1, 2, 0)).astype(np.uint8)
-                elif bands == 1:
-                    gray = ds.read(1)
-                    return np.stack([gray, gray, gray], axis=-1).astype(np.uint8)
-        except Exception:
-            pass
-        from PIL import Image
-
-        with Image.open(path) as img:
-            img.load()
-            rgb_img = img.convert("RGB")
-            return np.array(rgb_img, dtype=np.uint8)
-
-    raise InvalidInputError(
-        f"Unsupported format for RGB loading: {fmt.value} ({inspection.handle.display_name})"
-    )
+    return load_model_rgb(inspection).rgb
 
 
 @dataclass(frozen=True)

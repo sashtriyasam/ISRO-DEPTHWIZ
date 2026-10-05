@@ -28,6 +28,13 @@ from depthwizard.geospatial.grids import TargetGrid
 from depthwizard.ingestion.models import InputInspection
 
 
+def _depth_valid(depth_result: DepthResult, height: int, width: int) -> NDArray[np.bool_]:
+    """Depth validity as a 2D mask (input nodata/alpha never calibrates)."""
+    if depth_result.valid_mask is None:
+        return np.ones((height, width), dtype=bool)
+    return np.asarray(depth_result.valid_mask, dtype=bool).reshape(height, width)
+
+
 class FileBasedCalibrationProvider:
     """Production calibration provider using local DEM or GCP references.
 
@@ -106,8 +113,9 @@ class FileBasedCalibrationProvider:
             depth_result.depth_values, dtype=np.float32
         ).reshape(target.height, target.width)
 
-        predicted = depth_array[terrain.valid_mask]
-        reference = terrain.array[terrain.valid_mask]
+        usable = terrain.valid_mask & _depth_valid(depth_result, target.height, target.width)
+        predicted = depth_array[usable]
+        reference = terrain.array[usable]
 
         if predicted.size < MIN_VALID_SAMPLES:
             raise CalibrationError(
@@ -143,12 +151,14 @@ class FileBasedCalibrationProvider:
             depth_result.output_resolution.width,
         )
 
+        depth_valid = _depth_valid(depth_result, depth_array.shape[0], depth_array.shape[1])
         predicted: list[float] = []
         reference: list[float] = []
         for gcp in gcps:
             row = int(round(gcp["row"]))
             col = int(round(gcp["col"]))
-            if 0 <= row < depth_array.shape[0] and 0 <= col < depth_array.shape[1]:
+            in_bounds = 0 <= row < depth_array.shape[0] and 0 <= col < depth_array.shape[1]
+            if in_bounds and depth_valid[row, col]:
                 predicted.append(float(depth_array[row, col]))
                 reference.append(gcp["elevation"])
 

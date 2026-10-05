@@ -62,6 +62,11 @@ class ScientificHeightProduct(BaseModel):
         default=None,
         description="For PIECEWISE_LINEAR: each tuple is (knot_x, scale, offset).",
     )
+    valid_mask: tuple[bool, ...] | None = Field(
+        default=None,
+        description="Row-major validity inherited from the depth result (input "
+        "nodata/alpha); None when every pixel is valid.",
+    )
     provenance: ProductProvenance = Field(
         description="Product provenance derived from the calibration record "
         "plus depth-backend identity (authoritative source: calibration)."
@@ -86,6 +91,8 @@ class ScientificHeightProduct(BaseModel):
             )
         if any(not math.isfinite(v) for v in self.values):
             raise ValueError("scientific height product values must all be finite")
+        if self.valid_mask is not None and len(self.valid_mask) != len(self.values):
+            raise ValueError("valid_mask length must match the value count")
         if self.georeferencing is GeoreferencingLevel.NON_GEOREFERENCED:
             if self.spatial.kind is SpatialKind.PRESENT:
                 raise ValueError(

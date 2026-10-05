@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
-from depthwizard.backends.depth_anything_v2 import _load_image_rgb
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError, ModelInferenceError
 from depthwizard.ingestion.models import InputInspection
+from depthwizard.ingestion.pixels import load_model_rgb
 from depthwizard.version import __version__
 
 if TYPE_CHECKING:
@@ -236,7 +236,8 @@ class SatelliteDepthBackend:
                 f"SatelliteDepthBackend requires InputInspection, got {type(inspection).__name__}"
             )
         try:
-            image_rgb = _load_image_rgb(inspection)
+            loaded = load_model_rgb(inspection)
+            image_rgb = loaded.rgb
         except InvalidInputError:
             raise
         except Exception as e:
@@ -280,9 +281,9 @@ class SatelliteDepthBackend:
             elevation_semantics=ElevationSemantics.RELATIVE_DEPTH,
             georeferencing=inspection.georeferencing,
             depth_values=depth_values,
-            valid_mask=None,
+            valid_mask=loaded.valid_mask_tuple(),
             confidence_values=None,
-            preprocessing=dict(PREPROCESSING_RECORD),
+            preprocessing={**PREPROCESSING_RECORD, **loaded.preprocessing_record()},
             units=None,
             spatial=inspection.spatial,
             provenance=ProductProvenance(
