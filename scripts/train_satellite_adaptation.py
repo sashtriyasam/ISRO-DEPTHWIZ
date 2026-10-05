@@ -55,6 +55,31 @@ def _resolve_device() -> str:
         return "cpu"
 
 
+#: Splits that hold evaluation data and must never be trained on.
+HELD_OUT_SPLITS = frozenset({"test", "eval", "evaluation", "holdout"})
+
+#: Parameters allowed to be absent/new when initialising from the base model.
+HEAD_PREFIX = "depth_head."
+
+
+def check_base_load(missing: list[str], unexpected: list[str]) -> str | None:
+    """Return an error when base init loaded anything but a compatible encoder.
+
+    ``strict=False`` exists only so a re-initialised depth head may differ;
+    a missing encoder key means the wrong checkpoint (training would start
+    from random weights without any error).
+    """
+    bad_missing = [k for k in missing if not k.startswith(HEAD_PREFIX)]
+    bad_unexpected = [k for k in unexpected if not k.startswith(HEAD_PREFIX)]
+    if bad_missing or bad_unexpected:
+        return (
+            f"base checkpoint does not match the DA-V2 Small encoder: "
+            f"{len(bad_missing)} missing (e.g. {bad_missing[:3]}), "
+            f"{len(bad_unexpected)} unexpected (e.g. {bad_unexpected[:3]})"
+        )
+    return None
+
+
 def _load_manifest(path: Path) -> dict[str, Any]:
     doc = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(doc, dict) or "samples" not in doc:
@@ -134,7 +159,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gamus-root", required=True, help="Root directory of GAMUS dataset")
     parser.add_argument("--manifest", required=True, help="Path to dataset manifest JSON")
     parser.add_argument("--split", default="train", help="Split to train on (train/val/test)")
-    parser.add_argument("--output", required=True, help="Output checkpoint path")
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Training checkpoint (model + optimizer state, for --resume)",
+    )
+    parser.add_argument(
+        "--export-weights",
+        default=None,
+        help="Weights-only file for the product backend "
+        "(default: <output stem>.weights.pth next to --output)",
+    )
+    parser.add_argument(
+        "--allow-held-out-split",
+        action="store_true",
+        help="Permit training on a test/eval split (contaminates evaluation)",
+    )
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -161,6 +201,14 @@ def main(argv: list[str] | None = None) -> int:
     all_samples = manifest.get("samples", [])
     if not isinstance(all_samples, list):
         return _fail("MANIFEST_INVALID", "manifest 'samples' must be a list")
+    if str(args.split).lower() in HELD_OUT_SPLITS and not args.allow_held_out_split:
+        return _fail(
+            "HELD_OUT_SPLIT",
+            f"refusing to train on held-out split '{args.split}': it would contaminate "
+            "the evaluation (pass --allow-held-out-split only for deliberate experiments)",
+        )
+    if args.resume and not Path(args.resume).is_file():
+        return _fail("RESUME_MISSING", f"--resume checkpoint not found: {args.resume}")
     train_samples = [s for s in all_samples if isinstance(s, dict) and s.get("split") == args.split]
     if not train_samples:
         return _fail("NO_SAMPLES", f"No samples for split '{args.split}' in manifest")
@@ -235,16 +283,20 @@ def main(argv: list[str] | None = None) -> int:
 
     # Model
     model = DepthAnythingV2(encoder="vits", features=64, out_channels=[48, 96, 192, 384])
-    state = torch.load(str(base_ckpt), map_location="cpu")
-    model.load_state_dict(state, strict=False)  # strict=False allows head mismatch
+    state = torch.load(str(base_ckpt), map_location="cpu", weights_only=True)
+    loaded = model.load_state_dict(state, strict=False)  # only the head may differ
+    base_error = check_base_load(list(loaded.missing_keys), list(loaded.unexpected_keys))
+    if base_error:
+        return _fail("BASE_CHECKPOINT_MISMATCH", base_error)
+    base_sha256 = hashlib.sha256(base_ckpt.read_bytes()).hexdigest()
     model = model.to(device).train()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scaler = torch.cuda.amp.GradScaler(enabled=(device == "cuda"))
 
     start_epoch = 0
-    if args.resume and Path(args.resume).is_file():
-        ckpt = torch.load(args.resume, map_location="cpu")
+    if args.resume:
+        ckpt = torch.load(args.resume, map_location="cpu", weights_only=True)
         model.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optimizer"])
         scaler.load_state_dict(ckpt["scaler"])
@@ -331,12 +383,31 @@ def main(argv: list[str] | None = None) -> int:
                 "scaler": scaler.state_dict(),
                 "epoch": epoch,
                 "args": vars(args),
-                "sha256_base": hashlib.sha256(base_ckpt.read_bytes()).hexdigest(),
+                "sha256_base": base_sha256,
             },
             str(output_path),
         )
         print(f"Checkpoint saved to {output_path}")
 
+    # Ship weights only: the training checkpoint carries AdamW moments
+    # (~3x the model size) and resume state the product never needs.
+    weights_path = (
+        Path(args.export_weights)
+        if args.export_weights
+        else output_path.with_name(output_path.stem + ".weights.pth")
+    )
+    torch.save({"model": model.state_dict()}, str(weights_path))
+    weights_sha256 = hashlib.sha256(weights_path.read_bytes()).hexdigest()
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "weights": str(weights_path),
+                "weights_sha256": weights_sha256,
+                "note": "pin weights_sha256 in SatelliteDepthBackend.CHECKPOINT_SHA256 to promote",
+            }
+        )
+    )
     print("Training complete.")
     return 0
 
