@@ -266,6 +266,7 @@ class _Engine:
                     sun_azimuth_deg=request.solar_config.sun_azimuth_deg,
                     min_area_px=request.solar_config.min_shadow_area_px,
                     gsd_override=request.solar_config.gsd_override,
+                    assume_north_up=request.solar_config.assume_north_up,
                 )
                 self._solar_constraints = res.constraints
                 self._solar_refused_reason = res.refused_reason

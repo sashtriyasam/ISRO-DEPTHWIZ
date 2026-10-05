@@ -60,6 +60,7 @@ export interface SolarConfigWire {
   sun_azimuth_deg?: number;
   min_shadow_area_px?: number;
   gsd_override?: number;
+  assume_north_up?: boolean;
 }
 
 export interface ServiceRequestWire {

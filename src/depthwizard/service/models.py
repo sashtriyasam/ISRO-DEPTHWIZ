@@ -39,10 +39,27 @@ class ArtifactKind(str, Enum):
     GEOTIFF = "geotiff"
 
 
-class ServiceRequest(BaseModel):
-    """Serializable execution request (no callables, no classes)."""
+class SolarRequestConfig(BaseModel):
+    """Optional solar-shadow analysis for a run (angles: both or neither)."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sun_elevation_deg: float | None = None
+    sun_azimuth_deg: float | None = None
+    min_shadow_area_px: int = Field(default=20, ge=1)
+    gsd_override: float | None = Field(default=None, gt=0)
+    assume_north_up: bool = False
+
+
+class ServiceRequest(BaseModel):
+    """Serializable execution request (no callables, no classes).
+
+    Unknown fields are rejected: silently ignoring them hid that the
+    desktop's calibration method, LOD levels and solar settings never
+    reached the engine.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     contract_version: Literal["1"] = "1"
     input_path: str = Field(min_length=1)
@@ -81,6 +98,7 @@ class ServiceRequest(BaseModel):
         description="Return the terrain/relative product of this run in the "
         "response so the desktop needs no second inference pass.",
     )
+    solar_config: SolarRequestConfig | None = None
     geotiff_path: str | None = None
     export_compression: Literal["deflate", "none"] = "deflate"
     export_overwrite: bool = False
@@ -169,6 +187,11 @@ class ServiceResponse(BaseModel):
     warnings: list[str] = Field(
         default_factory=list,
         description="Non-fatal findings (weak calibration fit, flat depth, ...).",
+    )
+    solar: dict[str, Any] | None = Field(
+        default=None,
+        description="Solar-shadow height cues of this run (independent cross-check; "
+        "never fused into the DSM), or why the analysis was refused.",
     )
     payload: dict[str, Any] | None = Field(
         default=None,

@@ -368,3 +368,34 @@ def test_payload_slope_for_projected_geotiff(tmp_path: Path) -> None:
         and len(values) == response.artifacts[3].width * response.artifacts[3].height
     )  # type: ignore[operator]
     assert any(v is not None for v in values)
+
+
+def test_unknown_request_fields_are_rejected() -> None:
+    """Silently dropped fields hid that UI settings never reached the engine."""
+    import pydantic
+    import pytest
+
+    with pytest.raises(pydantic.ValidationError, match="Extra inputs are not permitted"):
+        ServiceRequest.model_validate(
+            {
+                "input_path": "tile.png",
+                "target_semantics": "height_agl_ndsm",
+                "calibration_mehtod": "scale_offset",
+            }
+        )
+
+
+def test_solar_config_reaches_the_pipeline(tmp_path: Path) -> None:
+    from depthwizard.service.models import SolarRequestConfig
+
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        solar_config=SolarRequestConfig(),
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert "solar_shadow_analysis" in response.states
+    assert response.solar is not None
+    # No metadata angles, no GSD on a PNG: refused with a reason, never invented.
+    assert response.solar["count"] == 0
+    assert response.solar["refused_reason"]

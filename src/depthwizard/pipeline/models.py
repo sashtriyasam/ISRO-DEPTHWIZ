@@ -44,6 +44,7 @@ class SolarConfig:
     sun_azimuth_deg: float | None = None
     min_shadow_area_px: int = 20
     gsd_override: float | None = None
+    assume_north_up: bool = False
 
 
 @dataclass(frozen=True)

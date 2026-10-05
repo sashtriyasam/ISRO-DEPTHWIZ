@@ -28,6 +28,7 @@ from depthwizard.pipeline import (
     PipelineResult,
     PipelineRunner,
 )
+from depthwizard.pipeline.models import SolarConfig
 from depthwizard.rdsm.pipeline import run_relative_path
 from depthwizard.service.models import (
     SERVICE_CONTRACT_VERSION,
@@ -50,6 +51,37 @@ if TYPE_CHECKING:
 def _georeferenced(georeferencing: GeoreferencingLevel) -> bool:
     """Whether a level carries CRS-backed spatial referencing."""
     return georeferencing is not GeoreferencingLevel.NON_GEOREFERENCED
+
+
+def _solar_config(request: ServiceRequest) -> SolarConfig | None:
+    """Translate the wire solar settings into the pipeline configuration."""
+    config = request.solar_config
+    if config is None:
+        return None
+    return SolarConfig(
+        sun_elevation_deg=config.sun_elevation_deg,
+        sun_azimuth_deg=config.sun_azimuth_deg,
+        min_shadow_area_px=config.min_shadow_area_px,
+        gsd_override=config.gsd_override,
+        assume_north_up=config.assume_north_up,
+    )
+
+
+def _solar_summary(result: PipelineResult) -> dict[str, object]:
+    """JSON-safe solar cues (heights stay independent of the DSM)."""
+    return {
+        "count": len(result.solar_constraints),
+        "refused_reason": result.solar_refused_reason,
+        "constraints": [
+            {
+                "height_m": float(c.height_m),
+                "quality": c.quality,
+                "method": c.method,
+                "assumptions": list(c.assumptions),
+            }
+            for c in result.solar_constraints
+        ],
+    }
 
 
 #: Longest side of the RGB texture written for the desktop (GPU texture limits).
@@ -296,10 +328,13 @@ class LocalService:
             cancellation=cancellation,
             mesh_levels=tuple(request.mesh_levels) if request.mesh_levels else None,
             on_stage=on_stage,
+            solar_config=_solar_config(request),
             max_mesh_vertices=MAX_DISPLAY_MESH_VERTICES if request.include_payload else None,
         )
         result = PipelineRunner().run(pipeline_request)
         response = build_response(result)
+        if request.solar_config is not None:
+            response = response.model_copy(update={"solar": _solar_summary(result)})
         if (
             request.include_payload
             and result.succeeded
