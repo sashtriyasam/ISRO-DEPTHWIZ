@@ -76,6 +76,8 @@ export interface ServiceRequestWire {
   mesh_levels?: number[];
   calibration_method?: string;
   calibration_reference_path?: string;
+  /** Return this run's terrain/relative product (no second inference pass). */
+  include_payload?: boolean;
   solar_config: SolarConfigWire | null;
 }
 
@@ -120,6 +122,8 @@ export interface ServiceResponseWire {
   summary: RunSummaryWire;
   /** Non-fatal findings, e.g. a weak calibration fit (absent on older engines). */
   warnings?: string[];
+  /** Product JSON of this run when include_payload was requested. */
+  payload?: unknown;
 }
 
 export interface ServiceCapabilitiesWire {

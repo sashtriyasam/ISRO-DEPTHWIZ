@@ -35,6 +35,10 @@ def _depth_valid(depth_result: DepthResult, height: int, width: int) -> NDArray[
     return np.asarray(depth_result.valid_mask, dtype=bool).reshape(height, width)
 
 
+#: Upper bound on DEM pixel pairs per fit (ample for an affine/spline fit).
+MAX_DEM_SAMPLES = 250_000
+
+
 class FileBasedCalibrationProvider:
     """Production calibration provider using local DEM or GCP references.
 
@@ -123,6 +127,13 @@ class FileBasedCalibrationProvider:
         usable = terrain.valid_mask & _depth_valid(depth_result, target.height, target.width)
         predicted = depth_array[usable]
         reference = terrain.array[usable]
+        if predicted.size > MAX_DEM_SAMPLES:
+            # Evenly spaced deterministic subsample: a multi-megapixel DEM
+            # overlap would otherwise be fitted pair by pair in pure Python.
+            picks = np.unique(np.linspace(0, predicted.size - 1, MAX_DEM_SAMPLES).round())
+            index = picks.astype(np.int64)
+            predicted = predicted[index]
+            reference = reference[index]
 
         if predicted.size < MIN_VALID_SAMPLES:
             raise CalibrationError(

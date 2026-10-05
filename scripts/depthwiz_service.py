@@ -19,8 +19,10 @@ Envelope out:  {"capabilities": {...ServiceCapabilities...}}
   runs. Without one, metric runs fail at the calibrating stage unless
   ``DW_DEV_CALIBRATION=1`` explicitly enables the labelled synthetic dev
   calibration (test suites only; the packaged app strips it).
-- The service is synchronous with no live progress: no stage lines are
-  emitted. Stage history arrives post-hoc inside the response.
+- Each pipeline stage is reported on stderr as ``STAGE <name>`` once it
+  has completed (same protocol as backend_bridge.py); the full state
+  history also arrives inside the response. With ``include_payload`` the
+  response carries this run's product, so no second inference is needed.
 - Exit 0 for any valid wire exchange, even when
   ``response.success`` is false (a failed run is still a valid
   response). Non-zero exit means wire/process failure only.
@@ -110,6 +112,11 @@ def build_backends() -> dict[str, Any]:
     return backends
 
 
+def _emit_stage(name: str) -> None:
+    """Report a completed pipeline stage on stderr (``STAGE <name>``)."""
+    print(f"STAGE {name}", file=sys.stderr, flush=True)
+
+
 def handle_capabilities() -> dict[str, Any]:
     """Answer capability discovery without running the pipeline."""
     service = LocalService(backends=build_backends())
@@ -130,7 +137,9 @@ def handle_request(payload: object) -> dict[str, Any]:
         request.calibration_method,
     )
     try:
-        response = LocalService(backends=build_backends()).execute(request, provider)
+        response = LocalService(backends=build_backends()).execute(
+            request, provider, on_stage=_emit_stage
+        )
     except Exception as exc:
         return {"wire_error": f"service execution failed: {type(exc).__name__}: {exc}"}
     return {"response": json.loads(encode_response(response))}

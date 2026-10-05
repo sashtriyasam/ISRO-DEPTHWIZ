@@ -268,3 +268,61 @@ def test_calibration_method_piecewise(tmp_path: Path) -> None:
     response = LocalService().execute(request, _PiecewiseCalibrationProvider())
     assert response.success is True
     assert response.summary.calibration_method == "piecewise_linear"
+
+
+def test_payload_comes_from_the_same_run(tmp_path: Path) -> None:
+    """include_payload returns this run's product (no second inference pass)."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.success is True
+    payload = response.payload
+    assert payload is not None
+    assert payload["kind"] == "terrain"
+    mesh = payload["mesh"]
+    assert isinstance(mesh, dict)
+    assert mesh["source_checksum"] == response.summary.input_checksum
+    assert mesh["calibration_reference"] == response.summary.calibration_reference
+    assert payload["stages"] == response.states
+
+
+def test_payload_absent_unless_requested(tmp_path: Path) -> None:
+    request = _request(png_input(tmp_path), build_mesh=True)
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.payload is None
+
+
+def test_mesh_levels_reach_the_mesh_stage(tmp_path: Path) -> None:
+    """The first LOD factor decimates the returned mesh (was silently dropped)."""
+
+    def vertex_count(levels: list[int] | None) -> int:
+        request = ServiceRequest(
+            input_path=png_input(tmp_path),
+            target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+            build_mesh=True,
+            mesh_levels=levels,
+            include_payload=True,
+        )
+        response = LocalService().execute(request, SyntheticCalibrationProvider())
+        assert response.payload is not None
+        mesh = response.payload["mesh"]
+        assert isinstance(mesh, dict)
+        return int(mesh["vertex_count"])
+
+    assert vertex_count([2]) < vertex_count(None)
+
+
+def test_relative_payload(tmp_path: Path) -> None:
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        output_mode="relative",
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.payload is not None
+    assert response.payload["kind"] == "relative-terrain"

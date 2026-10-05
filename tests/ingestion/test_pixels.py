@@ -135,3 +135,22 @@ def test_two_band_non_alpha_tiff_is_refused(tmp_path: Path) -> None:
     data = np.ones((2, 4, 4), dtype=np.uint8)
     with pytest.raises(InvalidInputError, match="2 bands"):
         load_model_rgb(inspect_input(_write_tiff(tmp_path / "two.tif", data)))
+
+
+def test_oversized_inputs_are_refused_with_advice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from depthwizard.errors import InvalidInputError
+    from depthwizard.ingestion.readers import MAX_PIXELS_ENV
+
+    monkeypatch.setenv(MAX_PIXELS_ENV, "15")
+    data = np.full((3, 4, 4), 100, dtype=np.uint8)
+    with pytest.raises(InvalidInputError, match="split the scene into tiles"):
+        inspect_input(_write_tiff(tmp_path / "big.tif", data))
+    from PIL import Image
+
+    Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8)).save(tmp_path / "big.png")
+    with pytest.raises(InvalidInputError, match="pixel limit"):
+        inspect_input(tmp_path / "big.png")
+    monkeypatch.setenv(MAX_PIXELS_ENV, "16")
+    assert inspect_input(tmp_path / "big.png").width == 4

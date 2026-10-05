@@ -169,8 +169,24 @@ def _triangulate_surface(
     }
 
 
-def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
+def _lattice(length: int, stride: int) -> np.ndarray:
+    """Every ``stride``-th index, always including the last one (no edge loss)."""
+    indices: np.ndarray = np.arange(0, length, stride, dtype=np.int64)
+    if indices[-1] != length - 1:
+        indices = np.append(indices, length - 1)
+    return indices
+
+
+def build_terrain_mesh(grid: DSMGrid, stride: int = 1) -> TerrainMesh:
     """Build an owned terrain mesh from a validated DSM grid.
+
+    ``stride > 1`` builds a level-of-detail mesh on every ``stride``-th row
+    and column (plus the last ones) of the *same* grid: vertex positions,
+    UVs and source indices keep the original pixel geometry and transform,
+    and the mesh still describes the full ``width x height`` grid. (The
+    earlier LOD path meshed a subsampled grid that kept the original pixel
+    size, shrinking georeferenced geometry by the factor and producing mesh
+    dimensions the desktop rejects.)
 
     Never mutates the source grid. Raises :class:`MeshGenerationError`
     for degenerate dimensions, absent valid pixels, unusable topology
@@ -178,12 +194,31 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
     """
     if not isinstance(grid, DSMGrid):
         raise TypeError(f"build_terrain_mesh requires a DSMGrid; got {type(grid).__name__}")
+    if not isinstance(stride, int) or stride < 1:
+        raise ValueError(f"stride must be a positive integer; got {stride!r}")
     height, width = grid.height, grid.width
-    valid = grid.valid_mask
-    rows, cols = np.nonzero(valid)
+    row_index = _lattice(height, stride)
+    col_index = _lattice(width, stride)
+    sub_values = grid.array[np.ix_(row_index, col_index)]
+    sub_valid = grid.valid_mask[np.ix_(row_index, col_index)]
+    sub_rows, sub_cols = np.nonzero(sub_valid)
+    rows = row_index[sub_rows]
+    cols = col_index[sub_cols]
     local_x, local_z, frame, origin_x, origin_y, flip = _planar_coordinates(grid, cols, rows)
-    surface = _triangulate_surface(grid.array, valid, local_x, local_z, flip, width, height)
+    surface = _triangulate_surface(
+        sub_values, sub_valid, local_x, local_z, flip, len(col_index), len(row_index)
+    )
     assert isinstance(surface["vertices"], np.ndarray)
+    if stride > 1:
+        # Re-express lattice bookkeeping in original-grid pixels.
+        surface["vertex_source_indices"] = rows * width + cols
+        surface["uvs"] = np.stack(
+            [
+                cols.astype(np.float64) / (width - 1) if width > 1 else np.zeros(cols.size),
+                rows.astype(np.float64) / (height - 1) if height > 1 else np.zeros(rows.size),
+            ],
+            axis=1,
+        )
     return TerrainMesh(
         vertices=surface["vertices"],
         indices=surface["indices"],  # type: ignore[arg-type]
@@ -216,6 +251,8 @@ def build_terrain_mesh(grid: DSMGrid) -> TerrainMesh:
         calibration_offset=grid.calibration_offset,
         calibration_valid_samples=grid.calibration_valid_samples,
         provenance=grid.provenance,
+        decimated=stride > 1,
+        lod_level=stride,
     )
 
 
@@ -360,24 +397,4 @@ def build_lod_meshes(
     for lv in levels:
         if not isinstance(lv, int) or lv < 1:
             raise ValueError(f"LOD levels must be positive integers; got {lv!r}")
-    meshes: list[TerrainMesh] = []
-    for lv in levels:
-        if lv == 1:
-            mesh = build_terrain_mesh(grid)
-            meshes.append(mesh.model_copy(update={"decimated": False, "lod_level": 1}))
-        else:
-            sub_array = grid.array[::lv, ::lv]
-            sub_mask = grid.valid_mask[::lv, ::lv]
-            sub_grid = grid.model_copy(
-                update={
-                    "array": sub_array,
-                    "valid_mask": sub_mask,
-                    "width": sub_array.shape[1],
-                    "height": sub_array.shape[0],
-                    "invalid_count": int((~sub_mask).sum()),
-                    "calibration_valid_samples": int(sub_mask.sum()),
-                }
-            )
-            mesh = build_terrain_mesh(sub_grid)
-            meshes.append(mesh.model_copy(update={"decimated": True, "lod_level": lv}))
-    return tuple(meshes)
+    return tuple(build_terrain_mesh(grid, stride=lv) for lv in levels)

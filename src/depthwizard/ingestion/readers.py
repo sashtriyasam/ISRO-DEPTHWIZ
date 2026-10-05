@@ -46,6 +46,40 @@ class RasterFacts:
     source_format_metadata: dict[str, str]
 
 
+#: Default pixel budget per input. Products travel to the desktop as JSON
+#: (depth + DSM per pixel, plus a display mesh capped separately); beyond
+#: this the transfer cannot complete. Override with DW_MAX_INPUT_PIXELS.
+DEFAULT_MAX_INPUT_PIXELS = 8_000_000
+MAX_PIXELS_ENV = "DW_MAX_INPUT_PIXELS"
+
+
+def max_input_pixels() -> int:
+    """Pixel budget for one input (environment override, else the default)."""
+    import os
+
+    raw = os.environ.get(MAX_PIXELS_ENV)
+    if raw:
+        try:
+            value = int(raw)
+        except ValueError:
+            return DEFAULT_MAX_INPUT_PIXELS
+        if value > 0:
+            return value
+    return DEFAULT_MAX_INPUT_PIXELS
+
+
+def check_pixel_budget(width: int, height: int, display: str) -> None:
+    """Refuse inputs larger than the pixel budget with actionable advice."""
+    budget = max_input_pixels()
+    if width * height > budget:
+        raise InvalidInputError(
+            f"{display} is {width}x{height} ({width * height:,} pixels), above the "
+            f"{budget:,}-pixel limit for one run. Crop or split the scene into tiles "
+            f"of at most {budget:,} pixels (or raise {MAX_PIXELS_ENV} if this machine "
+            "has the memory)."
+        )
+
+
 def inspect_pillow(path: Path, display: str, claimed: DetectedFormat) -> RasterFacts:
     """Validate a PNG/JPEG with Pillow and capture its metadata.
 
@@ -58,11 +92,18 @@ def inspect_pillow(path: Path, display: str, claimed: DetectedFormat) -> RasterF
     expected = _PILLOW_FORMATS[claimed]
     try:
         with Image.open(path) as img:
+            check_pixel_budget(img.size[0], img.size[1], display)
             img.load()  # force decode: proves the file is a readable image
             decoded_format = img.format
             width, height = img.size
             mode = img.mode
             bands = Image.getmodebands(mode)
+    except InvalidInputError:
+        raise
+    except Image.DecompressionBombError as exc:
+        raise InvalidInputError(
+            f"{display} is too large to decode safely ({exc}); crop or tile the scene."
+        ) from exc
     except Exception as exc:
         raise InvalidInputError(f"unreadable {claimed.value} image: {display}: {exc}") from exc
     if decoded_format != expected:
@@ -124,6 +165,7 @@ def inspect_geotiff(path: Path, display: str) -> RasterFacts:
                     )
                 width = int(dataset.width)
                 height = int(dataset.height)
+                check_pixel_budget(width, height, display)
                 band_count = int(dataset.count)
                 dtypes = tuple(dataset.dtypes)
                 dtype: str | None = dtypes[0] if len(set(dtypes)) == 1 else None

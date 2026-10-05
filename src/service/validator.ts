@@ -183,6 +183,7 @@ export function validateServiceResponse(data: unknown): ServiceResponseWire {
     artifacts,
     summary,
     warnings: (data.warnings as string[] | undefined) ?? [],
+    payload: isRecord(data.payload) ? data.payload : undefined,
   };
 }
 

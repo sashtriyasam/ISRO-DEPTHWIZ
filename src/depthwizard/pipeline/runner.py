@@ -158,6 +158,10 @@ class _Engine:
                 )
         else:
             check_transition(self._states[-1], state)
+            # Entering a new state means the previous one genuinely completed.
+            callback = self._request.on_stage
+            if callback is not None:
+                callback(self._states[-1].value)
         self._states.append(state)
 
     def _cancelled(self) -> bool:
@@ -350,7 +354,19 @@ class _Engine:
                 return self._finish(PipelineState.CANCELLED)
             self._enter(PipelineState.MESH_GENERATION)
             try:
-                mesh = build_terrain_mesh(dsm)
+                stride = request.mesh_levels[0] if request.mesh_levels else 1
+                if request.max_mesh_vertices:
+                    valid_pixels = int(dsm.valid_mask.sum())
+                    needed = math.ceil(math.sqrt(valid_pixels / request.max_mesh_vertices))
+                    if needed > stride:
+                        self._warnings.append(
+                            f"Display mesh simplified to every {needed}th pixel "
+                            f"({valid_pixels} valid pixels exceed the "
+                            f"{request.max_mesh_vertices}-vertex transfer limit); the DSM "
+                            "and exports keep full resolution."
+                        )
+                        stride = needed
+                mesh = build_terrain_mesh(dsm, stride=stride)
             except Exception as exc:
                 return self._fail(PipelineState.MESH_GENERATION, exc)
             self._mesh = mesh

@@ -21,6 +21,8 @@ export interface ServiceExecutionArgs {
   meshLevels?: number[];
   calibrationMethod?: string;
   calibrationReference?: string;
+  /** Ask the service for this run's product so no second pass is needed. */
+  includePayload?: boolean;
   solarConfig?: SolarConfig;
 }
 
@@ -93,6 +95,9 @@ export class LocalServiceClient {
     }
     if (args.calibrationReference !== undefined) {
       request.calibration_reference_path = args.calibrationReference;
+    }
+    if (args.includePayload) {
+      request.include_payload = true;
     }
     return request;
   }

@@ -10,6 +10,10 @@ stage ordering. Synchronous by design; no threads, no sockets.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 from depthwizard.backends.synthetic import SyntheticDepthBackend
 from depthwizard.contracts.artifacts import DepthBackend
 from depthwizard.contracts.semantics import ElevationSemantics, GeoreferencingLevel
@@ -36,10 +40,26 @@ from depthwizard.service.models import (
 )
 from depthwizard.version import __version__
 
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
 
 def _georeferenced(georeferencing: GeoreferencingLevel) -> bool:
     """Whether a level carries CRS-backed spatial referencing."""
     return georeferencing is not GeoreferencingLevel.NON_GEOREFERENCED
+
+
+#: Mesh vertices shipped to the desktop as JSON; larger scenes get a coarser
+#: display LOD automatically (the DSM itself is never decimated).
+MAX_DISPLAY_MESH_VERTICES = 1_000_000
+
+
+def _payload(product: BaseModel) -> dict[str, object]:
+    """JSON-safe dict of a transport product (canonical integration encoding)."""
+    from depthwizard.integration import to_json_text
+
+    data: dict[str, object] = json.loads(to_json_text(product))
+    return data
 
 
 def build_descriptors(result: PipelineResult) -> list[ArtifactDescriptor]:
@@ -177,6 +197,7 @@ class LocalService:
         request: ServiceRequest,
         calibration_provider: CalibrationProvider,
         cancellation: CancellationToken | None = None,
+        on_stage: Callable[[str], None] | None = None,
     ) -> ServiceResponse:
         """Validate, translate, run the pipeline, translate the result.
 
@@ -208,9 +229,25 @@ class LocalService:
                 compression=Compression(request.export_compression),
             ),
             cancellation=cancellation,
+            mesh_levels=tuple(request.mesh_levels) if request.mesh_levels else None,
+            on_stage=on_stage,
+            max_mesh_vertices=MAX_DISPLAY_MESH_VERTICES if request.include_payload else None,
         )
         result = PipelineRunner().run(pipeline_request)
-        return build_response(result)
+        response = build_response(result)
+        if (
+            request.include_payload
+            and result.succeeded
+            and result.depth is not None
+            and result.dsm is not None
+            and result.mesh is not None
+        ):
+            from depthwizard.integration import terrain_product
+
+            payload = _payload(terrain_product(result.depth, result.dsm, result.mesh))
+            payload["stages"] = [state.value for state in result.states]
+            response = response.model_copy(update={"payload": payload})
+        return response
 
     def _execute_relative(self, request: ServiceRequest, backend: DepthBackend) -> ServiceResponse:
         """Run the calibration-free rDSM path (no metric output, ever).
@@ -224,7 +261,14 @@ class LocalService:
         grid = outcome.grid
         mesh = outcome.mesh
         georeferenced = _georeferenced(depth.georeferencing)
+        payload: dict[str, object] | None = None
+        if request.include_payload:
+            from depthwizard.integration import relative_product
+
+            payload = _payload(relative_product(depth, grid, mesh))
+            payload["stages"] = ["completed"]
         return ServiceResponse(
+            payload=payload,
             contract_version=SERVICE_CONTRACT_VERSION,
             success=True,
             final_state="completed",

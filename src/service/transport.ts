@@ -17,7 +17,8 @@ export interface ServiceTransport {
   invoke(payload: unknown, hooks?: BridgeExecutionHooks): Promise<unknown>;
 }
 
-const SERVICE_TIMEOUT_MS = 120_000;
+// The service now runs the whole pipeline (inference included) in one pass.
+const SERVICE_TIMEOUT_MS = 600_000;
 
 function defaultPythonExecutable(): string {
   if (typeof process !== "undefined") {
@@ -109,8 +110,18 @@ export class SubprocessServiceTransport implements ServiceTransport {
       proc.stdout?.on("data", (chunk: Buffer) => {
         stdout += chunk.toString();
       });
+      let stderrBuffer = "";
       proc.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
+        const text = chunk.toString();
+        stderr += text;
+        stderrBuffer += text;
+        const lines = stderrBuffer.split(/\r?\n/);
+        stderrBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line.startsWith("STAGE ")) {
+            hooks.onStage?.(line.slice("STAGE ".length).trim());
+          }
+        }
       });
       proc.on("close", (code) => {
         clearTimeout(timer);

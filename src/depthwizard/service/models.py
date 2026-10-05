@@ -9,7 +9,7 @@ contract itself — distinct from engine, package and model versions.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -72,6 +72,15 @@ class ServiceRequest(BaseModel):
         description="Local DEM GeoTIFF or GCP CSV backing metric calibration. "
         "Metric runs without one are refused (no fabricated metres).",
     )
+    mesh_levels: list[int] | None = Field(
+        default=None,
+        description="Mesh LOD factors (each >= 1); the first is the returned mesh.",
+    )
+    include_payload: bool = Field(
+        default=False,
+        description="Return the terrain/relative product of this run in the "
+        "response so the desktop needs no second inference pass.",
+    )
     geotiff_path: str | None = None
     export_compression: Literal["deflate", "none"] = "deflate"
     export_overwrite: bool = False
@@ -89,6 +98,10 @@ class ServiceRequest(BaseModel):
             self.calibration_reference_path.strip()
         ):
             raise ValueError("calibration_reference_path must not be blank when provided")
+        if self.mesh_levels is not None and (
+            not self.mesh_levels or any(level < 1 for level in self.mesh_levels)
+        ):
+            raise ValueError("mesh_levels must be a non-empty list of factors >= 1")
         if self.geotiff_path is not None and not self.geotiff_path.strip():
             raise ValueError("geotiff_path must not be blank when provided")
         return self
@@ -156,6 +169,11 @@ class ServiceResponse(BaseModel):
     warnings: list[str] = Field(
         default_factory=list,
         description="Non-fatal findings (weak calibration fit, flat depth, ...).",
+    )
+    payload: dict[str, Any] | None = Field(
+        default=None,
+        description="Terrain or relative product JSON of this very run "
+        "(only when include_payload was requested and the run succeeded).",
     )
 
 

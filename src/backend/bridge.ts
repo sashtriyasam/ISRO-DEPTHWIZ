@@ -61,7 +61,8 @@ export interface BridgeResult {
   warnings: string[];
 }
 
-const BRIDGE_TIMEOUT_MS = 120_000;
+// Large scenes on CPU (tiled satellite, Large model, solar) exceed 2 minutes.
+const BRIDGE_TIMEOUT_MS = 600_000;
 
 function validateTransportShape(data: unknown): BackendDepthResult {
   if (typeof data !== "object" || data === null) {
@@ -106,7 +107,7 @@ function validateTransportShape(data: unknown): BackendDepthResult {
   return obj as unknown as BackendDepthResult;
 }
 
-function validateRelativeShape(data: unknown): BackendRelativeProduct {
+export function validateRelativeShape(data: unknown): BackendRelativeProduct {
   if (typeof data !== "object" || data === null) {
     throw new Error("Transport data is not an object");
   }
@@ -128,7 +129,7 @@ function validateRelativeShape(data: unknown): BackendRelativeProduct {
   return obj as unknown as BackendRelativeProduct;
 }
 
-function validateTerrainShape(data: unknown): BackendTerrainProduct {
+export function validateTerrainShape(data: unknown): BackendTerrainProduct {
   if (typeof data !== "object" || data === null) {
     throw new Error("Transport data is not an object");
   }
