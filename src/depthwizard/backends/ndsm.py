@@ -43,7 +43,7 @@ MODEL_VERSION = "1.0.0"
 CHECKPOINT_FILE = "depthwizard_ndsm_vits.pth"
 CHECKPOINT_ENV = "DW_NDSM_CKPT"
 #: Pinned when a checkpoint is promoted (see docs/benchmarks); verified at load.
-CHECKPOINT_SHA256 = "0" * 64
+CHECKPOINT_SHA256 = "80903694b6039058808b47887bb45b07579a5528fbef0e27e36f74df47cdd2a4"
 ENCODER_CONFIG = {"encoder": "vits", "features": 64, "out_channels": [48, 96, 192, 384]}
 TILE = 392
 OVERLAP = 56

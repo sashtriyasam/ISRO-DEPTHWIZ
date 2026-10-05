@@ -29,6 +29,10 @@
 - **Delivered**: RGB texture, slope layer, DSM GeoTIFF export; solar cues returned (never invented sun angles).
 - **Installer**: `setup_backend.bat` provisions a managed runtime with the DA-V2 model; checkpoints are SHA-verified and loaded weights-only.
 
+### Learned height model (height-model-v1)
+- **`depthwizard-ndsm-vits`**: DA-V2 Small fine-tuned on open Swiss airborne LiDAR to predict height above ground (0.35-2 m GSD), run tiled at native resolution and fused onto the Copernicus GLO-30 DEM with a fixed scale of 1. SHA-pinned; fetched by `setup_backend.bat` and preferred automatically when present and verified.
+- **Measured on 8 held-out LiDAR sites** ([docs/benchmarks/swiss-lidar.md](docs/benchmarks/swiss-lidar.md)): RMSE vs LiDAR DSM at 0.6 m GSD — urban 8.41 → **6.13 m**, forested 7.39 → **6.09 m**, sparse 2.00 → **1.64 m**, hilly 18.07 → **17.41 m** (Copernicus alone → DEM + height model). Better than the DEM in every class at 0.6 m and 2 m; not yet measured above 2 m GSD or on Cartosat-2S scenes.
+
 ### Recent Enhancements (v1.3.1)
 - **Satellite / Orthophoto Backend**: `SatelliteDepthBackend` (`depth-anything-v2-satellite`) — DA-V2 Small fine-tuned on GAMUS (smoke run, **no accuracy evaluation yet**; never auto-selected over DA-V2 Small). Checkpoint-gated via `DW_DAV2_SAT_CKPT`; output remains **relative** depth only.
 - **Flat-Depth Variance Check**: Pipeline warns when depth output variance is near zero (std/mean ratio below 1e-6), catching model failures on uniform imagery (e.g. map screenshots).
@@ -145,7 +149,8 @@ npm run test
 
 1. **DSM Estimation Accuracy (50%)**:
    - Automated benchmark harness (`src/depthwizard/evaluation/`) evaluates **RMSE**, **MAE**, and **$R^2$ correlation** against reference LiDAR/DEM ground truth across urban, sparse, hilly, and forested landscapes.
-   - **Measured so far (DA-V2 Small, calibrated):** 32-tile GAMUS pooled MAE 4.40 m, RMSE 5.86 m, $R^2$ 0.23; cross-city macro $R^2$ ≈ 0.09 ([docs/gamus-cross-city-expanded.md](docs/gamus-cross-city-expanded.md)). Formal external test-city scoring is **pending**. The satellite fine-tune has no accuracy evaluation yet.
+   - **Swiss LiDAR benchmark (DEM + learned height model, 8 held-out sites):** RMSE improves on Copernicus GLO-30 in every class (urban −27%, sparse −18%, forested −18%, hilly −4% at 0.6 m GSD) — see [docs/benchmarks/swiss-lidar.md](docs/benchmarks/swiss-lidar.md).
+   - **Earlier (DA-V2 Small, calibrated):** 32-tile GAMUS pooled MAE 4.40 m, RMSE 5.86 m, $R^2$ 0.23; cross-city macro $R^2$ ≈ 0.09 ([docs/gamus-cross-city-expanded.md](docs/gamus-cross-city-expanded.md)). Formal external test-city scoring is **pending**. The satellite fine-tune has no accuracy evaluation yet.
    - Reference Dataset: Compatible with [ISRO SAC SIH Reference Dataset](https://github.com/IMG-PROCESS-SAC/SIH2026/).
 
 2. **Visualization & UX (50%)**:

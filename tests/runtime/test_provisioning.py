@@ -465,9 +465,29 @@ def test_provisioned_source_dir_is_discoverable(
     assert str(source) in sys.path
 
 
-def test_height_model_step_skips_until_published(tmp_path: Path) -> None:
-    status = prov_mod.ensure_height_model(tmp_path)
-    from depthwizard.backends.ndsm import CHECKPOINT_SHA256
+def test_height_model_step_fetches_and_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hashlib
 
-    if set(CHECKPOINT_SHA256) == {"0"}:
-        assert status.ok and status.code == "SKIPPED"
+    from depthwizard.backends import ndsm
+
+    published = tmp_path / "published.pth"
+    published.write_bytes(b"height model bytes")
+    monkeypatch.setattr(prov_mod, "HEIGHT_MODEL_URL", published.as_uri())
+    data_dir = tmp_path / "data"
+
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", "f" * 64)
+    status = prov_mod.ensure_height_model(data_dir)
+    assert not status.ok and status.code == "CHECKPOINT_HASH_MISMATCH"
+    assert not (data_dir / "checkpoints" / ndsm.CHECKPOINT_FILE).exists()
+
+    digest = hashlib.sha256(b"height model bytes").hexdigest()
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", digest)
+    status = prov_mod.ensure_height_model(data_dir)
+    assert status.ok and status.detail == "fetched and verified"
+    status = prov_mod.ensure_height_model(data_dir)
+    assert status.ok and status.reused
+
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", "0" * 64)
+    assert prov_mod.ensure_height_model(tmp_path / "other").code == "SKIPPED"
