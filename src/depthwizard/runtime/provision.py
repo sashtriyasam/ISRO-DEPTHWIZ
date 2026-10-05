@@ -508,6 +508,46 @@ def ensure_checkpoint(
     )
 
 
+#: Release asset hosting the LiDAR-trained height model (SHA-pinned in backends.ndsm).
+HEIGHT_MODEL_URL = (
+    "https://github.com/sashtriyasam/ISRO-DEPTHWIZ/releases/download/"
+    "height-model-v1/depthwizard_ndsm_vits.pth"
+)
+
+
+def ensure_height_model(data_dir: Path) -> StepStatus:
+    """Fetch and verify the nDSM height model (optional; DA-V2 works without it)."""
+    from depthwizard.backends.ndsm import CHECKPOINT_FILE as HEIGHT_FILE
+    from depthwizard.backends.ndsm import CHECKPOINT_SHA256 as HEIGHT_SHA256
+
+    name = "height-model"
+    if set(HEIGHT_SHA256) == {"0"}:
+        return StepStatus(name=name, ok=True, code="SKIPPED", detail="no published height model")
+    dest = data_dir / "checkpoints" / HEIGHT_FILE
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.is_file() and sha256_file(dest) == HEIGHT_SHA256:
+            return StepStatus(name=name, ok=True, code="OK", detail="kept verified", reused=True)
+        request = urllib.request.Request(
+            HEIGHT_MODEL_URL, headers={"User-Agent": "DepthWizard-provision"}
+        )
+        tmp = dest.with_suffix(".part")
+        with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT) as response:
+            with open(tmp, "wb") as handle:
+                shutil.copyfileobj(response, handle)
+        if sha256_file(tmp) != HEIGHT_SHA256:
+            tmp.unlink(missing_ok=True)
+            return StepStatus(
+                name=name, ok=False, code="CHECKPOINT_HASH_MISMATCH", detail="discarded"
+            )
+        tmp.replace(dest)
+    except Exception as exc:
+        return StepStatus(
+            name=name, ok=False, code="CHECKPOINT_FETCH_FAILED", detail=str(exc)[-300:]
+        )
+    return StepStatus(name=name, ok=True, code="OK", detail="fetched and verified")
+
+
 def _fetch_checkpoint(dest: Path) -> StepStatus:
     """Download ONLY the fixed checkpoint identity, then verify."""
     try:
@@ -634,6 +674,9 @@ def provision(request: ProvisionRequest) -> ProvisionStatus:
         )
         steps.append(checkpoint_status)
         dav2_ready = source_status.ok and checkpoint_status.ok
+        if dav2_ready and request.fetch_checkpoint:
+            # Optional LiDAR-trained height model: never blocks readiness.
+            steps.append(ensure_height_model(data_dir))
         if not dav2_ready:
             return ProvisionStatus(
                 ready=False,

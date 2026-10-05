@@ -463,3 +463,11 @@ def test_provisioned_source_dir_is_discoverable(
     monkeypatch.setattr(sys, "path", list(sys.path))
     diagnostics.ensure_dav2_source_on_path()
     assert str(source) in sys.path
+
+
+def test_height_model_step_skips_until_published(tmp_path: Path) -> None:
+    status = prov_mod.ensure_height_model(tmp_path)
+    from depthwizard.backends.ndsm import CHECKPOINT_SHA256
+
+    if set(CHECKPOINT_SHA256) == {"0"}:
+        assert status.ok and status.code == "SKIPPED"

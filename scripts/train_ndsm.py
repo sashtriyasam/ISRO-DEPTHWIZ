@@ -34,10 +34,15 @@ sys.path.insert(0, str(ROOT / "src"))
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 ENCODER_CONFIG = {"encoder": "vits", "features": 64, "out_channels": [48, 96, 192, 384]}
-DEFAULT_VAL_SITES = ("lucerne", "jura_forest", "thurgau_fields", "davos")
+DEFAULT_VAL_SITES = ("lucerne", "jura_forest", "thurgau_fields", "davos", "gamus_val")
+#: GAMUS tile numbers (PHL_xxxx etc.) held out for validation (~8% of tiles).
+GAMUS_VAL_TILES = frozenset(str(n) for n in range(0, 10000) if n % 13 == 0)
 
 
 def _site_of(path: Path) -> str:
+    """Swiss crops are <site>_<gsd>m_<i>; GAMUS crops validate on whole tiles."""
+    if path.name.startswith("gamus_"):
+        return "gamus_val" if path.name.split("_")[2] in GAMUS_VAL_TILES else "gamus"
     return path.name.rsplit("_", 2)[0]
 
 
@@ -126,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     from torch.utils.data import DataLoader
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", default="data/ndsm")
+    parser.add_argument("--data", nargs="+", default=["data/ndsm"])
     parser.add_argument("--base", default=str(ROOT / "checkpoints" / "depth_anything_v2_vits.pth"))
     parser.add_argument("--out", default=str(ROOT / "checkpoints" / "depthwizard_ndsm_vits.pth"))
     parser.add_argument("--size", type=int, default=392)
@@ -147,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     torch.manual_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    files = sorted(Path(args.data).glob("*.npz"))
+    files = sorted(f for folder in args.data for f in Path(folder).glob("*.npz"))
     val_files = [f for f in files if _site_of(f) in set(args.val_sites)]
     train_files = [f for f in files if _site_of(f) not in set(args.val_sites)]
     if not train_files or not val_files:
