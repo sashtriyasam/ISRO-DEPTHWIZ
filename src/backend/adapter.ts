@@ -39,9 +39,9 @@ function mapTransform(details: BackendSpatialDetails): GeoTransform | undefined 
   return {
     originX: details.transform.a,
     originY: details.transform.d,
+    // Contract is GDAL order: b = pixel width, f = pixel height, c/e = rotation.
     pixelWidth: details.transform.b,
-    pixelHeight: details.transform.e,
-    rotation: details.transform.c !== 0 || details.transform.f !== 0 ? undefined : undefined,
+    pixelHeight: details.transform.f,
   };
 }
 
@@ -187,9 +187,10 @@ export function adaptBackendResult(result: BackendDepthResult): AdapterResult {
 
   const metadata: SceneArtifact["metadata"] = {
     source,
+    // Depth-only artifacts are meshed on the pixel grid (cellSize 1).
     units: {
-      spatial: "meters",
-      elevation: "meters",
+      spatial: "pixels",
+      elevation: result.depth_scale === "metric" ? "meters" : "relative",
     },
     backend,
   };
@@ -271,9 +272,10 @@ export function adaptCalibratedResult(
 
   const metadata: SceneArtifact["metadata"] = {
     source: "backend",
+    // Depth-only artifacts are meshed on the pixel grid (cellSize 1).
     units: {
-      spatial: "meters",
-      elevation: "meters",
+      spatial: "pixels",
+      elevation: result.depth_scale === "metric" ? "meters" : "relative",
     },
     backend,
   };

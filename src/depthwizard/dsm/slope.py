@@ -27,9 +27,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from depthwizard.contracts.artifacts import METRIC_UNIT
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import ElevationSemantics, GeoreferencingLevel
-from depthwizard.contracts.spatial import SpatialContext, SpatialKind
+from depthwizard.contracts.spatial import SpatialContext, SpatialDetails, SpatialKind
 from depthwizard.dsm.grid import DSMGrid
-from depthwizard.errors import InvalidInputError
+from depthwizard.errors import GeospatialProcessingError, InvalidInputError
+from depthwizard.geospatial.crs import crs_is_projected_metric, parse_crs
 
 #: Slope output units: degrees on [0, 90).
 SLOPE_UNIT = "degrees"
@@ -104,8 +105,13 @@ class SlopeGrid(BaseModel):
         return self
 
 
-def _planimetric_metre_step(grid: DSMGrid) -> float:
-    """Resolve the horizontal pixel step in metres, or refuse honestly.
+def _planimetric_metre_step(grid: DSMGrid) -> tuple[float, float]:
+    """Resolve the (column, row) pixel steps in metres, or refuse honestly.
+
+    Steps are the ground distances between neighbouring pixel centres:
+    ``hypot(b, e)`` along columns and ``hypot(c, f)`` along rows of the
+    stored GDAL-order affine, so non-square and rotated pixels are handled. Without a
+    transform the recorded square ``resolution_gsd`` is used for both.
 
     Metric horizontal units come from the recorded planimetric
     ``units`` when explicit, else from introspecting the authoritative
@@ -121,12 +127,9 @@ def _planimetric_metre_step(grid: DSMGrid) -> float:
     if grid.spatial.kind is not SpatialKind.PRESENT or grid.spatial.details is None:
         raise InvalidInputError("slope requires PRESENT spatial context with resolution")
     details = grid.spatial.details
-    if details.resolution_gsd is None or not math.isfinite(details.resolution_gsd):
-        raise InvalidInputError("slope requires a known finite resolution_gsd")
-    if details.resolution_gsd <= 0.0:
-        raise InvalidInputError("slope requires a positive resolution_gsd")
+    steps = _pixel_steps(details)
     if details.units == METRIC_UNIT:
-        return float(details.resolution_gsd)
+        return steps
     if details.units is not None:
         raise InvalidInputError(
             "slope requires metric planimetric units ('meters'); "
@@ -138,22 +141,34 @@ def _planimetric_metre_step(grid: DSMGrid) -> float:
             "slope requires metric planimetric units: no units recorded and no CRS to introspect"
         )
     try:
-        from rasterio.crs import CRS
-
-        crs = CRS.from_string(details.crs)
-        projected = bool(crs.is_projected)
-        linear = str(getattr(crs, "linear_units", "") or "").lower()
-    except Exception as e:
+        parse_crs(details.crs)
+    except GeospatialProcessingError as e:
         raise InvalidInputError(
             f"slope cannot interpret CRS {details.crs!r} for planimetric units: {e}"
         ) from e
-    if not projected or linear not in ("metre", "meter", "m"):
+    if not crs_is_projected_metric(details.crs):
         raise InvalidInputError(
-            f"slope requires a projected metric CRS; got crs={details.crs!r} "
-            f"(projected={projected}, linear units={linear!r}) — "
+            f"slope requires a projected metric CRS; got crs={details.crs!r} — "
             "geographic-degree grids are refused, never silently converted"
         )
-    return float(details.resolution_gsd)
+    return steps
+
+
+def _pixel_steps(details: SpatialDetails) -> tuple[float, float]:
+    """Ground spacing between adjacent pixel centres (column step, row step)."""
+    transform = details.transform
+    if transform is not None:
+        col_step = math.hypot(float(transform.b), float(transform.e))
+        row_step = math.hypot(float(transform.c), float(transform.f))
+    else:
+        gsd = details.resolution_gsd
+        if gsd is None or not math.isfinite(gsd):
+            raise InvalidInputError("slope requires a transform or a known finite resolution_gsd")
+        col_step = row_step = float(gsd)
+    for step in (col_step, row_step):
+        if not math.isfinite(step) or step <= 0.0:
+            raise InvalidInputError("slope requires positive finite pixel spacing")
+    return col_step, row_step
 
 
 def compute_slope(grid: DSMGrid) -> SlopeGrid:
@@ -166,7 +181,7 @@ def compute_slope(grid: DSMGrid) -> SlopeGrid:
     """
     if not isinstance(grid, DSMGrid):
         raise InvalidInputError(f"compute_slope requires a DSMGrid, got {type(grid).__name__}")
-    step = _planimetric_metre_step(grid)
+    col_step, row_step = _planimetric_metre_step(grid)
 
     elevation = np.asarray(grid.array, dtype=np.float64)
     valid = np.asarray(grid.valid_mask, dtype=bool)
@@ -186,8 +201,8 @@ def compute_slope(grid: DSMGrid) -> SlopeGrid:
             & valid[2:, 1:-1]
             & valid[2:, 2:]
         )
-        dz_dcol = (elevation[1:-1, 2:] - elevation[1:-1, :-2]) / (2.0 * step)
-        dz_drow = (elevation[2:, 1:-1] - elevation[:-2, 1:-1]) / (2.0 * step)
+        dz_dcol = (elevation[1:-1, 2:] - elevation[1:-1, :-2]) / (2.0 * col_step)
+        dz_drow = (elevation[2:, 1:-1] - elevation[:-2, 1:-1]) / (2.0 * row_step)
         magnitude = np.hypot(dz_dcol, dz_drow)
         interior = np.degrees(np.arctan(magnitude))
         slope[1:-1, 1:-1][neighbourhood_valid] = interior[neighbourhood_valid]

@@ -20,7 +20,7 @@ from depthwizard.solar.models import ShadowHeightConstraint
 def _make_georeferenced_inspection(
     gsd: float = 0.5, meta: dict[str, str] | None = None
 ) -> InputInspection:
-    transform = AffineTransform(a=gsd, b=0.0, c=1000.0, d=0.0, e=-gsd, f=2000.0)
+    transform = AffineTransform(a=1000.0, b=gsd, c=0.0, d=2000.0, e=0.0, f=-gsd)
     return InputInspection(
         handle=InputHandle(
             source_path="sat_scene.tif",
@@ -166,7 +166,7 @@ def test_png_without_declared_orientation_is_refused() -> None:
 def test_geographic_crs_gsd_is_never_metres() -> None:
     from depthwizard.solar.shadow_detect import gsd_from_inspection
 
-    transform = AffineTransform(a=1e-5, b=0.0, c=73.0, d=0.0, e=-1e-5, f=19.0)
+    transform = AffineTransform(a=73.0, b=1e-5, c=0.0, d=19.0, e=0.0, f=-1e-5)
     insp = InputInspection(
         handle=InputHandle(
             source_path="geo.tif", display_name="geo.tif", file_size=1, sha256="f" * 64

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from depthwizard.contracts.spatial import AffineTransform, SpatialDetails
+from depthwizard.contracts.spatial import Bounds, SpatialDetails
 
 
 def resolve_local_utm_crs(lon: float, lat: float) -> str:
@@ -41,61 +41,70 @@ def resolve_local_utm_crs(lon: float, lat: float) -> str:
 
 
 def projected_metric_details(details: SpatialDetails) -> SpatialDetails:
-    """Construct an explicit projected SpatialDetails if input CRS is geographic.
+    """Describe the grid a geographic raster would occupy in its local UTM zone.
 
-    If CRS is already projected (metres), returns details unchanged.
-    If CRS is geographic (degrees), determines local UTM zone and estimates
-    approximate metre scale factors for pixel resolution (1 deg lat ~ 111,320 m).
+    Projected metric CRSs are returned unchanged. Geographic CRSs are
+    reprojected with GDAL (``rasterio.warp.calculate_default_transform``):
+    a real projection of the raster footprint, not degrees multiplied by an
+    approximate metres-per-degree factor relabelled as UTM (which produced
+    coordinates with no false easting and a fabricated CRS claim).
 
-    Parameters
-    ----------
-    details:
-        Source SpatialDetails.
-
-    Returns
-    -------
-    SpatialDetails
-        Updated SpatialDetails with projected metric CRS and transform.
+    The returned details describe a *target* grid; no pixels are resampled
+    here (use ``geospatial.warp`` for that). Requires the raster size, from
+    ``raster_width``/``raster_height`` or the bounds and pixel size.
     """
+    from rasterio.crs import CRS
+    from rasterio.warp import calculate_default_transform
+
+    from depthwizard.geospatial.crs import crs_is_projected_metric
+    from depthwizard.geospatial.transforms import from_affine
+
     if details.crs is None or details.transform is None or details.bounds is None:
         return details
-
-    crs_str = str(details.crs).upper()
-    if crs_str in ("EPSG:4326", "WGS84", "WGS 84", "OGC:CRS84", "EPSG:4269") or "GEOGCS" in crs_str:
-        # Needs projection to local UTM
-        pass
-    elif "326" in crs_str or "327" in crs_str or "UTM" in crs_str or "PROJECTED" in crs_str:
-        # Already projected
+    if crs_is_projected_metric(details.crs):
         return details
+    source = CRS.from_string(details.crs)
+    if not source.is_geographic:
+        raise ValueError(f"cannot derive a local UTM grid from non-geographic CRS {details.crs!r}")
 
-    center_x = (details.bounds.min_x + details.bounds.max_x) / 2.0
-    center_y = (details.bounds.min_y + details.bounds.max_y) / 2.0
-
+    bounds = details.bounds
+    t = details.transform  # GDAL order: a=x0, b=pixel width, f=pixel height
+    width = details.raster_width or max(1, round((bounds.max_x - bounds.min_x) / abs(t.b)))
+    height = details.raster_height or max(1, round((bounds.max_y - bounds.min_y) / abs(t.f)))
+    center_x = (bounds.min_x + bounds.max_x) / 2.0
+    center_y = (bounds.min_y + bounds.max_y) / 2.0
     target_crs = resolve_local_utm_crs(center_x, center_y)
 
-    # 1 deg lat = ~111,320 m; 1 deg lon = ~111,320 * cos(lat) m
-    lat_rad = math.radians(center_y)
-    m_per_deg_lat = 111_320.0
-    m_per_deg_lon = 111_320.0 * math.cos(lat_rad)
-
-    t = details.transform
-    proj_a = t.a * m_per_deg_lon
-    proj_e = t.e * m_per_deg_lat
-    proj_c = t.c * m_per_deg_lon
-    proj_f = t.f * m_per_deg_lat
-
-    proj_transform = AffineTransform(a=proj_a, b=t.b, c=proj_c, d=t.d, e=proj_e, f=proj_f)
-
-    b = details.bounds
-    proj_bounds = b.__class__(
-        min_x=b.min_x * m_per_deg_lon,
-        min_y=b.min_y * m_per_deg_lat,
-        max_x=b.max_x * m_per_deg_lon,
-        max_y=b.max_y * m_per_deg_lat,
+    affine, out_width, out_height = calculate_default_transform(
+        source,
+        CRS.from_string(target_crs),
+        width,
+        height,
+        left=bounds.min_x,
+        bottom=bounds.min_y,
+        right=bounds.max_x,
+        top=bounds.max_y,
     )
-
+    transform = from_affine(affine)
+    min_x = transform.a
+    max_y = transform.d
+    max_x = min_x + transform.b * out_width
+    min_y = max_y + transform.f * out_height
     return SpatialDetails(
         crs=target_crs,
-        transform=proj_transform,
-        bounds=proj_bounds,
+        transform=transform,
+        bounds=Bounds(
+            min_x=min(min_x, max_x),
+            min_y=min(min_y, max_y),
+            max_x=max(min_x, max_x),
+            max_y=max(min_y, max_y),
+        ),
+        resolution_gsd=abs(transform.b)
+        if abs(abs(transform.b) - abs(transform.f)) < 1e-9
+        else None,
+        units="meters",
+        raster_width=out_width,
+        raster_height=out_height,
+        nodata=details.nodata,
+        source="local-utm-reprojection",
     )

@@ -33,8 +33,12 @@ export interface MeasurementResult {
   pointB: MeasurementPoint;
   horizontalDistance: number;
   verticalDifference: number;
+  /** NaN when horizontal and vertical units differ (no meaningful 3D length). */
   distance3D: number;
+  /** Vertical (elevation) units. */
   units: "meters" | "relative" | string;
+  /** Horizontal units of the display frame (metres or pixel indices). */
+  horizontalUnits: "meters" | "pixels" | string;
   source: "fixture-coordinate-system" | "backend";
 }
 

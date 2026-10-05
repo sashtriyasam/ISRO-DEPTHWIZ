@@ -90,6 +90,7 @@ const makeMeasurement = (status: MeasurementState["status"]): MeasurementState =
           verticalDifference: 0,
           distance3D: 1,
           units: "meters",
+          horizontalUnits: "meters",
           source: "fixture-coordinate-system",
         },
       };

@@ -2,6 +2,7 @@ import type {
   SceneArtifact,
   SceneMetadata,
   ElevationData,
+  DisplayGrid,
   BoundingBox3D,
 } from "../types/scene";
 import type {
@@ -320,6 +321,25 @@ export function validateTerrainProduct(
   return errors;
 }
 
+/**
+ * Display↔pixel mapping of a backend terrain mesh. Georeferenced-local
+ * vertices are pixel centres relative to the raster origin in the contract's
+ * GDAL-order affine (x = b·(col+½), z = f·(row+½) for unrotated rasters);
+ * local-frame vertices are plain pixel indices.
+ */
+function terrainDisplayGrid(mesh: BackendTerrainProduct["mesh"]): DisplayGrid {
+  const transform = mesh.spatial.kind === "present" ? mesh.spatial.details?.transform : undefined;
+  if (mesh.frame === "georeferenced_local" && transform) {
+    return {
+      offsetX: 0.5 * transform.b,
+      offsetZ: 0.5 * transform.f,
+      stepX: transform.b,
+      stepZ: transform.f,
+    };
+  }
+  return { offsetX: 0, offsetZ: 0, stepX: 1, stepZ: 1 };
+}
+
 export function adaptTerrainProduct(
   product: BackendTerrainProduct,
 ): MeshAdapterResult {
@@ -336,12 +356,14 @@ export function adaptTerrainProduct(
     const v = dsm.values[i];
     grid[i] = v === null ? NaN : v;
   }
+  const displayGrid = terrainDisplayGrid(mesh);
   const elevation: ElevationData = {
     grid,
     width: dsm.width,
     height: dsm.height,
-    cellSize: 1,
+    cellSize: Math.abs(displayGrid.stepX),
     unit: "meters",
+    displayGrid,
     ...(dsm.invalid_count > 0 ? { noDataValue: NaN } : {}),
   };
 
@@ -381,7 +403,10 @@ export function adaptTerrainProduct(
 
   const metadata: SceneMetadata = {
     source: "backend",
-    units: { spatial: "meters", elevation: "meters" },
+    units: {
+      spatial: mesh.frame === "georeferenced_local" ? "meters" : "pixels",
+      elevation: "meters",
+    },
     backend,
     bounds,
   };
@@ -675,6 +700,7 @@ export function adaptRelativeProduct(
     height: rsm.height,
     cellSize: 1,
     unit: "relative",
+    displayGrid: { offsetX: 0, offsetZ: 0, stepX: 1, stepZ: 1 },
   };
 
   // Relative vertices are copied verbatim (LOCAL frame, Y = relative
@@ -707,7 +733,7 @@ export function adaptRelativeProduct(
 
   const metadata: SceneMetadata = {
     source: "backend",
-    units: { spatial: "meters", elevation: "meters" },
+    units: { spatial: "pixels", elevation: "relative" },
     backend,
     bounds,
   };

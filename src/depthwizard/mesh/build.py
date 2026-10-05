@@ -16,6 +16,7 @@ import numpy as np
 
 from depthwizard.dsm.grid import DSMGrid
 from depthwizard.errors import MeshGenerationError
+from depthwizard.geospatial.crs import crs_is_projected_metric
 from depthwizard.mesh.models import CoordinateFrame, TerrainMesh
 
 _FALLBACK_NORMAL = (0.0, 1.0, 0.0)
@@ -26,13 +27,17 @@ def _planar_coordinates(
 ) -> tuple[np.ndarray, np.ndarray, CoordinateFrame, float | None, float | None, bool]:
     """Horizontal positions, frame, origin and winding-flip flag.
 
-    Georeferenced grids use pixel centers through the stored GDAL-order
-    affine, expressed relative to the raster origin (translation terms)
-    so vertex coordinates stay small and reconstructible. Anything else
-    uses deterministic pixel-local coordinates with no CRS claims.
+    Grids in a projected metre CRS use pixel centers through the stored
+    GDAL-order affine, expressed relative to the raster origin (translation
+    terms) so vertex coordinates stay small and reconstructible. Anything
+    else — including geographic CRSs, whose degrees must never sit beside
+    metric heights — uses deterministic pixel-local coordinates with no CRS
+    claims.
     """
     details = grid.spatial.details
     transform = details.transform if details is not None else None
+    if details is None or not crs_is_projected_metric(details.crs):
+        transform = None
     cols_f: np.ndarray = cols.astype(np.float64)
     rows_f: np.ndarray = rows.astype(np.float64)
     if transform is not None:

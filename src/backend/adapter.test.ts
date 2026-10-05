@@ -51,10 +51,13 @@ describe("adaptBackendResult", () => {
       }
     });
 
-    it("sets units to meters", () => {
+    it("labels pixel-grid horizontal units and the depth scale honestly", () => {
       const result = adaptBackendResult(BACKEND_TEST_FIXTURE);
-      expect(result.artifact!.metadata.units.spatial).toBe("meters");
-      expect(result.artifact!.metadata.units.elevation).toBe("meters");
+      // Depth-only artifacts are meshed on the pixel grid; relative depth has no metres.
+      expect(result.artifact!.metadata.units.spatial).toBe("pixels");
+      expect(result.artifact!.metadata.units.elevation).toBe(
+        BACKEND_TEST_FIXTURE.depth_scale === "metric" ? "meters" : "relative",
+      );
     });
 
     it("includes backend origin metadata", () => {

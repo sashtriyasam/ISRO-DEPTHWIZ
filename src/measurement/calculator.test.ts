@@ -259,3 +259,41 @@ describe("formatMeasurementValue", () => {
     expect(formatMeasurementValue("distance", result)).toBe("0.000 m");
   });
 });
+
+describe("measurement units", () => {
+  const point = (x: number, z: number, elevation: number) => ({
+    displayPosition: { x, y: elevation, z },
+    scientific: { elevation },
+    uv: { u: 0, v: 0 },
+    gridIndex: { col: 0, row: 0 },
+    layerId: "dsm",
+    artifactId: "a",
+  });
+
+  it("labels pixel-frame horizontal distance in px, never metres", () => {
+    const result = calculateMeasurement("distance", point(0, 0, 10), point(3, 4, 20), {
+      units: "meters",
+      horizontalUnits: "pixels",
+      source: "backend",
+    });
+    expect(formatMeasurementValue("distance", result)).toBe("5.000 px");
+    expect(formatMeasurementValue("vertical", result)).toBe("10.000 m");
+  });
+
+  it("refuses a 3D distance mixing pixels and metres", () => {
+    const result = calculateMeasurement("distance-3d", point(0, 0, 10), point(3, 4, 20), {
+      units: "meters",
+      horizontalUnits: "pixels",
+    });
+    expect(Number.isNaN(result.distance3D)).toBe(true);
+    expect(formatMeasurementValue("distance-3d", result)).toMatch(/^n\/a/);
+  });
+
+  it("computes 3D distance when both axes are metres", () => {
+    const result = calculateMeasurement("distance-3d", point(0, 0, 0), point(3, 0, 4), {
+      units: "meters",
+      horizontalUnits: "meters",
+    });
+    expect(result.distance3D).toBeCloseTo(5);
+  });
+});

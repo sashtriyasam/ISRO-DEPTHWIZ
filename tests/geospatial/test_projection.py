@@ -30,21 +30,29 @@ def test_projected_metric_details_passthrough_utm() -> None:
     """Already projected UTM details are returned unchanged."""
     details = SpatialDetails(
         crs="EPSG:32643",
-        transform=AffineTransform(a=0.5, b=0.0, c=100.0, d=0.0, e=-0.5, f=200.0),
+        transform=AffineTransform(a=100.0, b=0.5, c=0.0, d=200.0, e=0.0, f=-0.5),
         bounds=Bounds(min_x=100.0, min_y=100.0, max_x=200.0, max_y=200.0),
     )
     result = projected_metric_details(details)
     assert result == details
 
 
-def test_projected_metric_details_converts_geographic() -> None:
-    """Geographic WGS84 details are transformed into metric local UTM representation."""
+def test_projected_metric_details_reprojects_geographic() -> None:
+    """A 0.1 degree WGS84 tile near Delhi becomes a real UTM 43N grid."""
     details = SpatialDetails(
         crs="EPSG:4326",
-        transform=AffineTransform(a=0.0001, b=0.0, c=77.0, d=0.0, e=-0.0001, f=28.0),
+        # GDAL order: x0=77.0, pixel width 1e-4 deg, y0=28.0, pixel height -1e-4 deg.
+        transform=AffineTransform(a=77.0, b=0.0001, c=0.0, d=28.0, e=0.0, f=-0.0001),
         bounds=Bounds(min_x=77.0, min_y=27.9, max_x=77.1, max_y=28.0),
+        raster_width=1000,
+        raster_height=1000,
     )
     result = projected_metric_details(details)
-    assert "EPSG:3264" in str(result.crs)
-    assert result.transform is not None
-    assert abs(result.transform.a) > 1.0  # Converted to metres (~10m)
+    assert result.crs == "EPSG:32643"
+    assert result.units == "meters"
+    assert result.transform is not None and result.bounds is not None
+    # ~1e-4 deg is ~10 m on the ground; real UTM eastings carry the 500 km
+    # false easting (77E is ~2 deg east of the 75E central meridian).
+    assert 8.0 < result.transform.b < 12.0
+    assert 680_000 < result.bounds.min_x < 720_000
+    assert 3_080_000 < result.bounds.min_y < 3_110_000

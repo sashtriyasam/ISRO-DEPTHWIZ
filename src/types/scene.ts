@@ -25,6 +25,17 @@ export interface TextureData {
 
 export type ElevationUnit = "meters" | "relative" | string;
 
+/**
+ * How mesh display coordinates map to grid pixels:
+ * display.x = offsetX + stepX * col, display.z = offsetZ + stepZ * row.
+ */
+export interface DisplayGrid {
+  offsetX: number;
+  offsetZ: number;
+  stepX: number;
+  stepZ: number;
+}
+
 export interface ElevationData {
   grid: Float32Array;
   width: number;
@@ -32,6 +43,8 @@ export interface ElevationData {
   cellSize: number;
   noDataValue?: number;
   unit: ElevationUnit;
+  /** Exact display↔pixel mapping for backend meshes (absent for fixtures). */
+  displayGrid?: DisplayGrid;
 }
 
 export interface LayerPayloads {
@@ -71,8 +84,9 @@ export interface SceneMetadata {
   transform?: GeoTransform;
   bounds?: BoundingBox3D;
   units: {
-    spatial: "meters";
-    elevation: "meters";
+    /** Horizontal units of display/mesh coordinates. */
+    spatial: "meters" | "pixels";
+    elevation: "meters" | "relative";
   };
   source: "deterministic-fixture" | "backend";
   description?: string;

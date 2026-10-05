@@ -60,8 +60,8 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     assert first.spatial.details is not None
     assert first.spatial.details.transform is not None
     base_t = first.spatial.details.transform
-    res_x = abs(float(base_t.a))
-    res_y = abs(float(base_t.e))
+    res_x = abs(float(base_t.b))
+    res_y = abs(float(base_t.f))
 
     # Verify compatibility across all grids
     for i, g in enumerate(grids[1:], start=1):
@@ -79,8 +79,8 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
         assert g.spatial.details is not None
         assert g.spatial.details.transform is not None
         t_i = g.spatial.details.transform
-        gx = abs(float(t_i.a))
-        gy = abs(float(t_i.e))
+        gx = abs(float(t_i.b))
+        gy = abs(float(t_i.f))
         if not (math.isclose(res_x, gx, rel_tol=0.01) and math.isclose(res_y, gy, rel_tol=0.01)):
             raise GeospatialProcessingError(
                 f"grid {i} pixel resolution ({gx:.4f}, {gy:.4f}) disagrees "
@@ -88,7 +88,7 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
             )
 
     # Compute bounding boxes in world space for all grids
-    # Standard north-up GeoTIFF: x = c + col * a, y = f + row * e (e is negative)
+    # Contract GDAL order (north-up): x = a + col * b, y = d + row * f (f < 0)
     world_bounds: list[tuple[float, float, float, float]] = []
     tile_infos: list[MosaicTileInfo] = []
 
@@ -98,10 +98,10 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
         t = g.spatial.details.transform
         w, h = g.width, g.height
 
-        x0 = float(t.c)
-        x1 = x0 + w * float(t.a)
-        y0 = float(t.f)
-        y1 = y0 + h * float(t.e)
+        x0 = float(t.a)
+        x1 = x0 + w * float(t.b)
+        y0 = float(t.d)
+        y1 = y0 + h * float(t.f)
 
         min_x, max_x = min(x0, x1), max(x0, x1)
         min_y, max_y = min(y0, y1), max(y0, y1)
@@ -129,14 +129,14 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
     if mosaic_w <= 0 or mosaic_h <= 0:
         raise GeospatialProcessingError("computed mosaic dimensions are non-positive")
 
-    # Target affine transform (north-up: e < 0)
+    # Target affine transform, contract GDAL order (north-up: f < 0)
     mosaic_transform = AffineTransform(
-        a=res_x,
-        b=0.0,
-        c=union_min_x,
-        d=0.0,
-        e=-res_y,
-        f=union_max_y,
+        a=union_min_x,
+        b=res_x,
+        c=0.0,
+        d=union_max_y,
+        e=0.0,
+        f=-res_y,
     )
 
     # Accumulator buffers
@@ -147,8 +147,8 @@ def stitch_dsm_grids(grids: Sequence[DSMGrid]) -> MosaicResult:
         assert g.spatial.details is not None
         assert g.spatial.details.transform is not None
         t = g.spatial.details.transform
-        g_x0 = float(t.c)
-        g_y0 = float(t.f)
+        g_x0 = float(t.a)
+        g_y0 = float(t.d)
 
         # Offset in mosaic pixels
         col_offset = int(round((g_x0 - union_min_x) / res_x))

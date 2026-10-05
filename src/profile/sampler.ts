@@ -1,4 +1,4 @@
-import type { ElevationData } from "../types/scene";
+import type { DisplayGrid, ElevationData } from "../types/scene";
 import type { MeasurementPoint } from "../measurement/types";
 import type { ProfilePoint, ElevationProfile } from "./types";
 
@@ -31,6 +31,25 @@ function bilinearSample(grid: Float32Array, width: number, height: number, u: nu
   const top = v00 * (1 - fx) + v10 * fx;
   const bottom = v01 * (1 - fx) + v11 * fx;
   return top * (1 - fy) + bottom * fy;
+}
+
+function sampleOnDisplayGrid(
+  elevationData: ElevationData,
+  grid: DisplayGrid,
+  pathX: number,
+  pathZ: number,
+): number {
+  const col = (pathX - grid.offsetX) / grid.stepX;
+  const row = (pathZ - grid.offsetZ) / grid.stepZ;
+  const u = elevationData.width > 1 ? col / (elevationData.width - 1) : 0;
+  const v = elevationData.height > 1 ? row / (elevationData.height - 1) : 0;
+  return bilinearSample(
+    elevationData.grid,
+    elevationData.width,
+    elevationData.height,
+    Math.max(0, Math.min(1, u)),
+    Math.max(0, Math.min(1, v)),
+  );
 }
 
 function sampleElevationAt(
@@ -83,7 +102,11 @@ export function generateProfile(
     const cumulativeDistance = totalDistance * t;
 
     let elevation: number;
-    if (elevationData && transform) {
+    if (elevationData?.displayGrid) {
+      // Backend meshes: exact mapping (display coords are origin-relative,
+      // so the absolute CRS origin in `transform` must not be subtracted).
+      elevation = sampleOnDisplayGrid(elevationData, elevationData.displayGrid, pathX, pathZ);
+    } else if (elevationData && transform) {
       elevation = sampleElevationAt(elevationData, pathX, pathZ, originX, originZ, cellSize);
     } else if (elevationData) {
       elevation = sampleElevationAt(elevationData, pathX, pathZ, 0, 0, elevationData.cellSize);
@@ -92,7 +115,9 @@ export function generateProfile(
     }
 
     let agl: number | undefined;
-    if (aglData && transform) {
+    if (aglData?.displayGrid) {
+      agl = sampleOnDisplayGrid(aglData, aglData.displayGrid, pathX, pathZ);
+    } else if (aglData && transform) {
       agl = sampleElevationAt(aglData, pathX, pathZ, originX, originZ, cellSize);
     } else if (aglData) {
       agl = sampleElevationAt(aglData, pathX, pathZ, 0, 0, aglData.cellSize);

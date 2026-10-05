@@ -387,29 +387,21 @@ def gsd_from_inspection(inspection: object) -> float | None:
     if details is None or details.transform is None or details.crs is None:
         return None
     transform = details.transform
+    # Contract is GDAL order: x = a + b*col + c*row, y = d + e*col + f*row,
+    # so b/f are the pixel sizes and c/e the rotation terms.
     try:
-        a, b = float(transform.a), float(transform.b)
-        d, e = float(transform.d), float(transform.e)
+        b, c = float(transform.b), float(transform.c)
+        e, f = float(transform.e), float(transform.f)
     except (TypeError, ValueError, AttributeError):
         return None
-    if b != 0.0 or d != 0.0 or not math.isclose(abs(a), abs(e), rel_tol=1e-6):
+    if c != 0.0 or e != 0.0 or not math.isclose(abs(b), abs(f), rel_tol=1e-6):
         return None
-    if not _is_projected_metric(details.crs):
+    from depthwizard.geospatial.crs import crs_is_projected_metric
+
+    if not crs_is_projected_metric(details.crs):
         return None
-    gsd = abs(a)
+    gsd = abs(b)
     return gsd if math.isfinite(gsd) and gsd > 0.0 else None
-
-
-def _is_projected_metric(crs_id: str) -> bool:
-    """Whether a CRS is projected with metre linear units (rasterio introspection)."""
-    try:
-        from rasterio.crs import CRS
-
-        crs = CRS.from_string(crs_id)
-        linear = str(getattr(crs, "linear_units", "") or "").lower()
-        return bool(crs.is_projected) and linear in ("metre", "meter", "m")
-    except Exception:
-        return False
 
 
 def is_north_up(inspection: object) -> bool:
@@ -422,9 +414,11 @@ def is_north_up(inspection: object) -> bool:
     transform = spatial.details.transform
     if transform is None:
         return False
+    # GDAL order: no rotation (c == e == 0), x grows east (b > 0), y shrinks
+    # down the rows (f < 0).
     return (
-        float(transform.b) == 0.0
-        and float(transform.d) == 0.0
-        and float(transform.a) > 0.0
-        and float(transform.e) < 0.0
+        float(transform.c) == 0.0
+        and float(transform.e) == 0.0
+        and float(transform.b) > 0.0
+        and float(transform.f) < 0.0
     )

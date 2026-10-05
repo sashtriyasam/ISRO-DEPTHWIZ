@@ -34,7 +34,7 @@ def _make_tile(
 ) -> DSMGrid:
     arr = np.full((height, width), fill_value, dtype=np.float32)
     mask = np.ones((height, width), dtype=bool)
-    t = AffineTransform(a=1.0, b=0.0, c=x_offset, d=0.0, e=-1.0, f=y_offset)
+    t = AffineTransform(a=x_offset, b=1.0, c=0.0, d=y_offset, e=0.0, f=-1.0)
     spatial = SpatialContext(
         kind=SpatialKind.PRESENT,
         details=SpatialDetails(

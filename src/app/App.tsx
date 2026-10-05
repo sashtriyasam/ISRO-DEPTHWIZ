@@ -543,6 +543,7 @@ export function App() {
     if (!artifact?.metadata.backend)
       return {
         units: "meters" as const,
+        horizontalUnits: artifact?.metadata.units.spatial ?? ("meters" as const),
         source: "fixture-coordinate-system" as const,
       };
     return {
@@ -550,6 +551,7 @@ export function App() {
         artifact.metadata.backend.depth_scale === "metric"
           ? ("meters" as const)
           : ("relative" as const),
+      horizontalUnits: artifact.metadata.units.spatial,
       source: "backend" as const,
     };
   }, [artifact]);
