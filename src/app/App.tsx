@@ -38,7 +38,7 @@ import { InputWorkspace } from "../components/InputWorkspace/InputWorkspace";
 import { ArtifactLoader } from "../artifact";
 import type { ArtifactSource } from "../artifact/types";
 import { runProcessingOperation, type ProcessingState } from "../processing";
-import { STAGE_LABELS, isProcessingStage } from "../processing/types";
+import { STAGE_LABELS, isProcessingStage, mergeRelayedStages } from "../processing/types";
 import { SessionStatus } from "../components/SessionStatus/SessionStatus";
 import { IsroLoader } from "../components/IsroLoader/IsroLoader";
 import {
@@ -122,7 +122,6 @@ export function App() {
     viewerRef.current?.clearMeasurementGraphics();
     setProfileState({ status: "empty" });
     viewerRef.current?.clearProfileGraphics();
-    setInputFilePath("");
   }, []);
 
   // ── IPC stage relay: Electron main process pushes STAGE lines in real time ──
@@ -188,7 +187,7 @@ export function App() {
             previousAvailable: hadArtifact,
             signal: controller.signal,
           },
-          setProcessing,
+          (next) => setProcessing((prev) => mergeRelayedStages(prev, next)),
         );
         if (operationRef.current?.controller !== controller) {
           return;
@@ -418,6 +417,7 @@ export function App() {
       clearArtifact: () => {
         setArtifact(null);
         setArtifactState("idle");
+        setInputFilePath("");
       },
       clearLayers: () => setLayerState(null),
       clearAnalysis: clearAnalysisState,

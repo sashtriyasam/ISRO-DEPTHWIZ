@@ -14,6 +14,7 @@ import type { CameraMode, DisplayBounds } from "../camera/types";
 import type { FlythroughTrajectory, PlaybackSpeed, WaypointPosition } from "../flythrough/types";
 import { buildPreviewGroup, disposePreviewGroup } from "../flythrough/preview";
 import { resolveInspection } from "../inspection/resolver";
+import { relativeDisplayFit } from "../display/relativeFit";
 
 type InteractionMode = "inspect" | "measure" | "profile";
 
@@ -85,7 +86,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     onMeasurementPointSelectedRef: ((point: MeasurementPoint | null) => void) | null;
     onProfilePointSelectedRef: ((point: MeasurementPoint | null) => void) | null;
     interactionModeRef: InteractionMode;
+    /** Effective vertical scale: user exaggeration x relative display fit. */
     verticalScaleRef: number;
+    /** The user's exaggeration level alone. */
+    userScaleRef: number;
     cameraModeRef: CameraMode;
     renderingModeRef: RenderingMode;
     lastBoundsRef: DisplayBounds | null;
@@ -115,6 +119,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     onProfilePointSelectedRef: null,
     interactionModeRef: "inspect",
     verticalScaleRef: 1,
+    userScaleRef: 1,
     cameraModeRef: "orbit",
     renderingModeRef: "shaded",
     lastBoundsRef: null,
@@ -263,6 +268,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
       clearProfileGraphics(state);
 
       state.currentArtifact = artifact;
+      state.verticalScaleRef = state.userScaleRef * relativeDisplayFit(artifact);
 
       const meshGroup = replaceMeshGroup(state, artifact, state.currentLayerId ?? "dsm");
       if (meshGroup) {
@@ -383,8 +389,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
   }, [interactionMode]);
 
   useEffect(() => {
-    stateRef.current.verticalScaleRef = verticalScale;
-  }, [verticalScale]);
+    const state = stateRef.current;
+    state.userScaleRef = verticalScale;
+    state.verticalScaleRef = verticalScale * relativeDisplayFit(state.currentArtifact ?? scene);
+  }, [verticalScale, scene]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -423,13 +431,15 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ sc
     threeScene.add(hemisphereLight);
 
     state.currentArtifact = scene;
+    state.userScaleRef = verticalScale;
+    state.verticalScaleRef = verticalScale * relativeDisplayFit(scene);
 
     if (replaceMeshGroup(state, scene, layerId)) {
       state.currentLayerId = layerId;
     }
     const group = state.currentMeshGroup;
 
-      const bounds = group ? computeScaledBounds(group.mesh, verticalScale) : computeDisplayBounds([]);
+      const bounds = group ? computeScaledBounds(group.mesh, state.verticalScaleRef) : computeDisplayBounds([]);
       state.lastBoundsRef = {
         center: bounds.center.clone(),
         size: bounds.size.clone(),
