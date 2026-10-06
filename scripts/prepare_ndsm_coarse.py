@@ -133,6 +133,7 @@ def process_site(
     crop: int,
     span: int,
     rng: np.random.Generator,
+    workers: int = 6,
 ) -> int:
     from rasterio.warp import transform
 
@@ -144,7 +145,7 @@ def process_site(
     dsm = np.full((size, size), np.nan, dtype=np.float32)
     dtm = np.full((size, size), np.nan, dtype=np.float32)
     jobs = [(e0 + i, n0 + j) for i in range(span) for j in range(span)]
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         for e_km, n_km, layers in pool.map(lambda t: _fetch_tile(*t, raw), jobs):
             if layers is None:
                 continue
@@ -193,6 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--crop", type=int, default=392)
     parser.add_argument("--span", type=int, default=5, help="mosaic size in 1 km tiles")
     parser.add_argument("--seed", type=int, default=26176)
+    parser.add_argument("--workers", type=int, default=6, help="parallel tile downloads")
     parser.add_argument("--sites", nargs="*", help="limit to these seed names")
     args = parser.parse_args(argv)
     out = Path(args.out)
@@ -209,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             continue  # resumable
         started = time.perf_counter()
         try:
-            n = process_site(site, out, Path(args.raw), args.crop, args.span, rng)
+            n = process_site(site, out, Path(args.raw), args.crop, args.span, rng, args.workers)
             total += n
             print(
                 json.dumps(
