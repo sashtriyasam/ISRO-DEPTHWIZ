@@ -57,6 +57,9 @@ def rasterize_height_product(
     with np.errstate(over="ignore"):
         working: NDArray[np.float64] = base.astype(opts.dtype, copy=True)
     valid = np.isfinite(working)
+    if product.valid_mask is not None:
+        # Input nodata/alpha pixels stay invalid in the DSM (never data).
+        valid &= np.asarray(product.valid_mask, dtype=bool).reshape((height, width))
     invalid_count = int((~valid).sum())
     if invalid_count == expected:
         raise InvalidInputError(

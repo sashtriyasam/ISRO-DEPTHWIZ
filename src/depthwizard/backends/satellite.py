@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import math
 import os
-import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -12,12 +12,17 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
-from depthwizard.backends.depth_anything_v2 import _load_image_rgb
+from depthwizard.backends.checkpoints import (
+    INJECTED,
+    DeviceBoundModel,
+    load_checkpoint_state,
+)
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError, ModelInferenceError
 from depthwizard.ingestion.models import InputInspection
+from depthwizard.ingestion.pixels import load_model_rgb
 from depthwizard.version import __version__
 
 if TYPE_CHECKING:
@@ -49,7 +54,11 @@ PREPROCESSING_RECORD = {
         "tiles blended via linear feathering at overlap; "
         "final stitched to source (H,W)"
     ),
-    "tiling": ("overlapping tile grid of 512px with 64px overlap, linear feather blending"),
+    "tiling": (
+        "overlapping 512px tiles (64px overlap, last tile snapped to the edge); "
+        "each tile aligned to the mosaic by a least-squares scale+shift fit on "
+        "its overlap, then linearly feather-blended"
+    ),
 }
 VALID_DEVICES = ("cpu", "cuda", "mps")
 CHECKPOINT_ENV = "DW_DAV2_SAT_CKPT"
@@ -72,6 +81,51 @@ def _feather_weight(n: int) -> NDArray[np.float64]:
     return (np.arange(n) + 0.5) / n
 
 
+def _tile_starts(length: int, tile_size: int, stride: int) -> list[int]:
+    """Tile origins covering ``length`` with full-size tiles (no slivers).
+
+    The last tile is snapped to end exactly at ``length`` so every tile the
+    model sees is ``tile_size`` long (when the image is that large).
+    """
+    if length <= tile_size:
+        return [0]
+    starts = list(range(0, length - tile_size, stride))
+    starts.append(length - tile_size)
+    return sorted(set(starts))
+
+
+#: Minimum overlap samples needed to fit a scale+shift alignment.
+_MIN_ALIGN_SAMPLES = 16
+
+
+def _align_to_mosaic(
+    tile_depth: NDArray[np.float64],
+    mosaic: NDArray[np.float64],
+    covered: NDArray[np.bool_],
+) -> tuple[NDArray[np.float64], float, float]:
+    """Map a tile's relative depth onto the mosaic frame via its overlap.
+
+    Each tile is an independent affine-invariant prediction (own scale and
+    shift). Fitting ``mosaic ≈ s * tile + o`` on the already-covered overlap
+    puts every tile in one consistent relative frame before blending. With
+    too little or degenerate overlap, a shift-only (median) alignment is used.
+    """
+    overlap = covered & np.isfinite(tile_depth) & np.isfinite(mosaic)
+    if not overlap.any():
+        return tile_depth, 1.0, 0.0
+    x = tile_depth[overlap]
+    y = mosaic[overlap]
+    scale, offset = 1.0, float(np.median(y - x))
+    if x.size >= _MIN_ALIGN_SAMPLES:
+        x_var = float(np.var(x))
+        if x_var > 1e-12:
+            fitted = float(np.mean((x - x.mean()) * (y - y.mean())) / x_var)
+            if math.isfinite(fitted) and fitted > 0.0:
+                scale = fitted
+                offset = float(y.mean() - scale * x.mean())
+    return tile_depth * scale + offset, scale, offset
+
+
 def _tiled_infer_image(
     model: Any,
     image_bgr: NDArray[np.uint8],
@@ -91,13 +145,27 @@ def _tiled_infer_image(
     stride = tile_size - overlap
     depth_sum = np.zeros((h, w), dtype=np.float64)
     weight_sum = np.zeros((h, w), dtype=np.float64)
-    for top in range(0, h, stride):
-        for left in range(0, w, stride):
+    for top in _tile_starts(h, tile_size, stride):
+        for left in _tile_starts(w, tile_size, stride):
             bottom = min(top + tile_size, h)
             right = min(left + tile_size, w)
             tile = image_bgr[top:bottom, left:right]
             tile_depth = np.asarray(model.infer_image(tile, input_size), dtype=np.float64)
             th, tw = tile_depth.shape[:2]
+            if (th, tw) != (bottom - top, right - left):
+                raise ModelInferenceError(
+                    f"Tile inference must restore tile size {(bottom - top, right - left)}, "
+                    f"got {(th, tw)}"
+                )
+            window_weight = weight_sum[top:bottom, left:right]
+            covered = window_weight > 0
+            current = np.divide(
+                depth_sum[top:bottom, left:right],
+                window_weight,
+                out=np.full((th, tw), np.nan),
+                where=covered,
+            )
+            tile_depth, _scale, _offset = _align_to_mosaic(tile_depth, current, covered)
             weight = np.ones((th, tw), dtype=np.float64)
             if top > 0:
                 r = min(overlap, th)
@@ -157,6 +225,7 @@ class SatelliteDepthBackend:
         self._seed = int(seed)
         self._factory = model_factory
         self._model: Any = None
+        self._checkpoint_status = INJECTED if model_factory is not None else "not loaded"
 
     @property
     def model_name(self) -> str:
@@ -194,11 +263,9 @@ class SatelliteDepthBackend:
                 raise ModelInferenceError(f'device="mps" unavailable: {e}') from e
 
     def _import_model_class(self) -> Any:
-        for parent_dir in (Path(__file__).resolve().parents[3], Path.cwd()):
-            for sub in ("third_party", "deps", ".deps"):
-                cand = parent_dir / sub / "Depth-Anything-V2"
-                if cand.is_dir() and str(cand) not in sys.path:
-                    sys.path.insert(0, str(cand))
+        from depthwizard.runtime.diagnostics import ensure_dav2_source_on_path
+
+        ensure_dav2_source_on_path()
         try:
             from depth_anything_v2.dpt import DepthAnythingV2
         except Exception as e:
@@ -224,14 +291,16 @@ class SatelliteDepthBackend:
         torch = self._require_torch()
         self._check_device(torch)
         torch.manual_seed(self._seed)
+        state, self._checkpoint_status = load_checkpoint_state(
+            torch, self._checkpoint, CHECKPOINT_SHA256, self.model_name
+        )
         model_cls = self._import_model_class()
         model = model_cls(**ENCODER_CONFIG)
-        state = torch.load(str(self._checkpoint), map_location="cpu")
         if isinstance(state, dict) and "model" in state:
             state = state["model"]
         model.load_state_dict(state)
         model = model.to(self._device).eval()
-        self._model = model
+        self._model = DeviceBoundModel(model, self._device)
 
     def estimate_depth(self, inspection: InputInspection) -> DepthResult:
         if not isinstance(inspection, InputInspection):
@@ -239,7 +308,8 @@ class SatelliteDepthBackend:
                 f"SatelliteDepthBackend requires InputInspection, got {type(inspection).__name__}"
             )
         try:
-            image_rgb = _load_image_rgb(inspection)
+            loaded = load_model_rgb(inspection)
+            image_rgb = loaded.rgb
         except InvalidInputError:
             raise
         except Exception as e:
@@ -283,9 +353,13 @@ class SatelliteDepthBackend:
             elevation_semantics=ElevationSemantics.RELATIVE_DEPTH,
             georeferencing=inspection.georeferencing,
             depth_values=depth_values,
-            valid_mask=None,
+            valid_mask=loaded.valid_mask_tuple(),
             confidence_values=None,
-            preprocessing=dict(PREPROCESSING_RECORD),
+            preprocessing={
+                **PREPROCESSING_RECORD,
+                **loaded.preprocessing_record(),
+                "checkpoint_verification": self._checkpoint_status,
+            },
             units=None,
             spatial=inspection.spatial,
             provenance=ProductProvenance(

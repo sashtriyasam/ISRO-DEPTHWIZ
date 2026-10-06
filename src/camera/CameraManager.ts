@@ -3,12 +3,14 @@ import type { CameraController, CameraMode, DisplayBounds } from "./types";
 import { OrbitCameraController } from "./OrbitController";
 import { FirstPersonCameraController } from "./FirstPersonController";
 import { AerialCameraController } from "./AerialController";
+import { fitClipPlanes } from "./sceneBounds";
 
 export class CameraManager {
   private activeController: CameraController | null = null;
   private camera: THREE.PerspectiveCamera;
   private domElement: HTMLElement;
   private initialPosition: THREE.Vector3;
+  private lastBounds: DisplayBounds | null = null;
 
   constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement) {
     this.camera = camera;
@@ -40,6 +42,8 @@ export class CameraManager {
       this.activeController = null;
     }
 
+    fitClipPlanes(this.camera, bounds.sphere.radius);
+    this.lastBounds = bounds;
     switch (mode) {
       case "orbit":
         this.activeController = new OrbitCameraController({
@@ -89,10 +93,17 @@ export class CameraManager {
   }
 
   frameBounds(bounds: DisplayBounds): void {
+    fitClipPlanes(this.camera, bounds.sphere.radius);
+    this.lastBounds = bounds;
     this.activeController?.frameBounds(bounds);
   }
 
   reset(): void {
+    if (this.lastBounds && this.activeController?.mode === "orbit") {
+      // Reset to the framed view of the loaded scene, not a fixed position.
+      this.activeController.frameBounds(this.lastBounds);
+      return;
+    }
     this.camera.position.copy(this.initialPosition);
     this.activeController?.reset();
   }

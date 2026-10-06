@@ -268,3 +268,134 @@ def test_calibration_method_piecewise(tmp_path: Path) -> None:
     response = LocalService().execute(request, _PiecewiseCalibrationProvider())
     assert response.success is True
     assert response.summary.calibration_method == "piecewise_linear"
+
+
+def test_payload_comes_from_the_same_run(tmp_path: Path) -> None:
+    """include_payload returns this run's product (no second inference pass)."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.success is True
+    payload = response.payload
+    assert payload is not None
+    assert payload["kind"] == "terrain"
+    mesh = payload["mesh"]
+    assert isinstance(mesh, dict)
+    assert mesh["source_checksum"] == response.summary.input_checksum
+    assert mesh["calibration_reference"] == response.summary.calibration_reference
+    assert payload["stages"] == response.states
+
+
+def test_payload_absent_unless_requested(tmp_path: Path) -> None:
+    request = _request(png_input(tmp_path), build_mesh=True)
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.payload is None
+
+
+def test_mesh_levels_reach_the_mesh_stage(tmp_path: Path) -> None:
+    """The first LOD factor decimates the returned mesh (was silently dropped)."""
+
+    def vertex_count(levels: list[int] | None) -> int:
+        request = ServiceRequest(
+            input_path=png_input(tmp_path),
+            target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+            build_mesh=True,
+            mesh_levels=levels,
+            include_payload=True,
+        )
+        response = LocalService().execute(request, SyntheticCalibrationProvider())
+        assert response.payload is not None
+        mesh = response.payload["mesh"]
+        assert isinstance(mesh, dict)
+        return int(mesh["vertex_count"])
+
+    assert vertex_count([2]) < vertex_count(None)
+
+
+def test_relative_payload(tmp_path: Path) -> None:
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        output_mode="relative",
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.payload is not None
+    assert response.payload["kind"] == "relative-terrain"
+
+
+def test_payload_extras_for_png(tmp_path: Path) -> None:
+    """Texture and GeoTIFF are written beside the staged input; slope explains why not."""
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    payload = response.payload
+    assert payload is not None
+    assert Path(str(payload["texture_path"])).is_file()
+    assert Path(str(payload["geotiff_path"])).is_file()
+    slope = payload["slope"]
+    assert isinstance(slope, dict)
+    assert slope["values"] is None
+    assert slope["unavailable_reason"]
+
+
+def test_payload_slope_for_projected_geotiff(tmp_path: Path) -> None:
+    from tests.pipeline.support import geotiff_input
+
+    request = ServiceRequest(
+        input_path=geotiff_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        build_mesh=True,
+        include_payload=True,
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert response.success, response.failure
+    payload = response.payload
+    assert payload is not None
+    slope = payload["slope"]
+    assert isinstance(slope, dict)
+    values = slope["values"]
+    assert (
+        isinstance(values, list)
+        and len(values) == response.artifacts[3].width * response.artifacts[3].height
+    )  # type: ignore[operator]
+    assert any(v is not None for v in values)
+
+
+def test_unknown_request_fields_are_rejected() -> None:
+    """Silently dropped fields hid that UI settings never reached the engine."""
+    import pydantic
+    import pytest
+
+    with pytest.raises(pydantic.ValidationError, match="Extra inputs are not permitted"):
+        ServiceRequest.model_validate(
+            {
+                "input_path": "tile.png",
+                "target_semantics": "height_agl_ndsm",
+                "calibration_mehtod": "scale_offset",
+            }
+        )
+
+
+def test_solar_config_reaches_the_pipeline(tmp_path: Path) -> None:
+    from depthwizard.service.models import SolarRequestConfig
+
+    request = ServiceRequest(
+        input_path=png_input(tmp_path),
+        target_semantics=ElevationSemantics.HEIGHT_AGL_NDSM,
+        solar_config=SolarRequestConfig(),
+    )
+    response = LocalService().execute(request, SyntheticCalibrationProvider())
+    assert "solar_shadow_analysis" in response.states
+    assert response.solar is not None
+    # No metadata angles, no GSD on a PNG: refused with a reason, never invented.
+    assert response.solar["count"] == 0
+    assert response.solar["refused_reason"]

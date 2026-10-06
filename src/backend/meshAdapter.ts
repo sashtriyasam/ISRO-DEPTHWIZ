@@ -2,6 +2,7 @@ import type {
   SceneArtifact,
   SceneMetadata,
   ElevationData,
+  DisplayGrid,
   BoundingBox3D,
 } from "../types/scene";
 import type {
@@ -320,6 +321,48 @@ export function validateTerrainProduct(
   return errors;
 }
 
+/**
+ * Display↔pixel mapping of a backend terrain mesh. Georeferenced-local
+ * vertices are pixel centres relative to the raster origin in the contract's
+ * GDAL-order affine (x = b·(col+½), z = f·(row+½) for unrotated rasters);
+ * local-frame vertices are plain pixel indices.
+ */
+/** Slope degrees (canonical Python computation) as a colourable layer. */
+function slopeLayer(
+  product: BackendTerrainProduct,
+  elevation: ElevationData,
+): ElevationData | undefined {
+  const values = product.slope?.values;
+  if (!values || values.length !== elevation.width * elevation.height) return undefined;
+  const grid = new Float32Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    grid[i] = v === null ? NaN : v;
+  }
+  return {
+    grid,
+    width: elevation.width,
+    height: elevation.height,
+    cellSize: elevation.cellSize,
+    unit: "degrees",
+    noDataValue: NaN,
+    displayGrid: elevation.displayGrid,
+  };
+}
+
+function terrainDisplayGrid(mesh: BackendTerrainProduct["mesh"]): DisplayGrid {
+  const transform = mesh.spatial.kind === "present" ? mesh.spatial.details?.transform : undefined;
+  if (mesh.frame === "georeferenced_local" && transform) {
+    return {
+      offsetX: 0.5 * transform.b,
+      offsetZ: 0.5 * transform.f,
+      stepX: transform.b,
+      stepZ: transform.f,
+    };
+  }
+  return { offsetX: 0, offsetZ: 0, stepX: 1, stepZ: 1 };
+}
+
 export function adaptTerrainProduct(
   product: BackendTerrainProduct,
 ): MeshAdapterResult {
@@ -330,18 +373,22 @@ export function adaptTerrainProduct(
   }
 
   const { dsm, mesh, depth_result } = product;
+  // Metric only when the product says so: never upgrade units in the UI.
+  const metric = /^(m|meters|metres)$/i.test(dsm.units);
 
   const grid = new Float32Array(dsm.values.length);
   for (let i = 0; i < dsm.values.length; i++) {
     const v = dsm.values[i];
     grid[i] = v === null ? NaN : v;
   }
+  const displayGrid = terrainDisplayGrid(mesh);
   const elevation: ElevationData = {
     grid,
     width: dsm.width,
     height: dsm.height,
-    cellSize: 1,
-    unit: "meters",
+    cellSize: Math.abs(displayGrid.stepX),
+    unit: metric ? "meters" : "relative",
+    displayGrid,
     ...(dsm.invalid_count > 0 ? { noDataValue: NaN } : {}),
   };
 
@@ -367,7 +414,7 @@ export function adaptTerrainProduct(
 
   const backend: SceneMetadata["backend"] = {
     model_name: mesh.depth_model_name,
-    depth_scale: "metric",
+    depth_scale: metric ? "metric" : "relative",
     elevation_semantics: mesh.semantics,
     georeferencing: mesh.georeferencing,
     calibration_method: mesh.calibration_method,
@@ -381,7 +428,10 @@ export function adaptTerrainProduct(
 
   const metadata: SceneMetadata = {
     source: "backend",
-    units: { spatial: "meters", elevation: "meters" },
+    units: {
+      spatial: mesh.frame === "georeferenced_local" ? "meters" : "pixels",
+      elevation: metric ? "meters" : "relative",
+    },
     backend,
     bounds,
   };
@@ -396,7 +446,9 @@ export function adaptTerrainProduct(
     `Backend terrain mesh: ${mesh.vertex_count} vertices, ${mesh.triangle_count} triangles (frame: ${mesh.frame})`,
   );
   warnings.push(
-    `Calibrated via ${mesh.calibration_method}: scale=${mesh.calibration_scale}, offset=${mesh.calibration_offset} (reference: ${mesh.calibration_reference})`,
+    mesh.calibration_method === "piecewise_linear"
+      ? `Calibrated via piecewise_linear (continuous spline; overall line scale=${mesh.calibration_scale}, offset=${mesh.calibration_offset} shown for reference only) (reference: ${mesh.calibration_reference})`
+      : `Calibrated via ${mesh.calibration_method}: scale=${mesh.calibration_scale}, offset=${mesh.calibration_offset} (reference: ${mesh.calibration_reference})`,
   );
   if (dsm.invalid_count > 0) {
     warnings.push(
@@ -414,9 +466,15 @@ export function adaptTerrainProduct(
       uvs,
       vertexCount: mesh.vertex_count,
       indexCount: mesh.indices.length,
+      sourceIndices: new Uint32Array(mesh.vertex_source_indices),
     },
     elevation,
-    metadata,
+    metadata: {
+      ...metadata,
+      ...(product.geotiff_path ? { exportPath: product.geotiff_path } : {}),
+      ...(product.texture_path ? { texturePath: product.texture_path } : {}),
+    },
+    ...(slopeLayer(product, elevation) ? { layers: { slope: slopeLayer(product, elevation) } } : {}),
   };
 
   void depth_result;
@@ -673,6 +731,7 @@ export function adaptRelativeProduct(
     height: rsm.height,
     cellSize: 1,
     unit: "relative",
+    displayGrid: { offsetX: 0, offsetZ: 0, stepX: 1, stepZ: 1 },
   };
 
   // Relative vertices are copied verbatim (LOCAL frame, Y = relative
@@ -705,7 +764,7 @@ export function adaptRelativeProduct(
 
   const metadata: SceneMetadata = {
     source: "backend",
-    units: { spatial: "meters", elevation: "meters" },
+    units: { spatial: "pixels", elevation: "relative" },
     backend,
     bounds,
   };
@@ -731,6 +790,7 @@ export function adaptRelativeProduct(
       uvs,
       vertexCount: mesh.vertex_count,
       indexCount: mesh.indices.length,
+      sourceIndices: new Uint32Array(mesh.vertex_source_indices),
     },
     elevation,
     metadata,

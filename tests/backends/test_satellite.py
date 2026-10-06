@@ -252,3 +252,57 @@ class TestConfigDict:
         assert cfg["encoder"] == "vits"
         assert cfg["tile_size"] == TILE_SIZE
         assert cfg["tile_overlap"] == TILE_OVERLAP
+
+
+# ---------------------------------------------------------------------------
+# Tile alignment: independent per-tile scale/shift must not survive stitching
+# ---------------------------------------------------------------------------
+
+
+class _PerTileAffineModel:
+    """Returns the true signal under a different scale/shift for every tile."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.shapes: list[tuple[int, int]] = []
+
+    def infer_image(self, bgr: Any, input_size: int) -> Any:
+        import numpy as np
+
+        self.calls += 1
+        self.shapes.append(bgr.shape[:2])
+        signal = bgr[:, :, 0].astype(np.float64) + bgr[:, :, 1].astype(np.float64) * 256.0
+        scale = 0.5 + 0.37 * self.calls
+        shift = 11.0 * self.calls
+        return signal * scale + shift
+
+
+def test_tiles_share_one_relative_frame() -> None:
+    import numpy as np
+
+    from depthwizard.backends.satellite import _tiled_infer_image
+
+    h, w = 300, 420
+    rows, cols = np.mgrid[0:h, 0:w]
+    truth = (rows * 7 + cols * 3).astype(np.int64)
+    image = np.zeros((h, w, 3), dtype=np.uint8)
+    image[:, :, 0] = truth % 256
+    image[:, :, 1] = truth // 256
+    model = _PerTileAffineModel()
+    depth = _tiled_infer_image(model, image, 518, tile_size=128, overlap=32)
+    assert model.calls > 4
+    # One global affine map must explain the whole stitched field.
+    slope, intercept = np.polyfit(truth.ravel(), depth.ravel().astype(np.float64), 1)
+    residual = depth - (slope * truth + intercept)
+    assert float(np.abs(residual).max()) < 1e-3 * float(np.ptp(depth))
+
+
+def test_tiles_are_full_size_without_slivers() -> None:
+    import numpy as np
+
+    from depthwizard.backends.satellite import _tile_starts, _tiled_infer_image
+
+    assert _tile_starts(300, 128, 96) == [0, 96, 172]
+    model = _PerTileAffineModel()
+    _tiled_infer_image(model, np.zeros((300, 300, 3), dtype=np.uint8), 518, 128, 32)
+    assert set(model.shapes) == {(128, 128)}

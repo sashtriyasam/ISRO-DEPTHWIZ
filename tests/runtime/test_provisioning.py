@@ -390,3 +390,104 @@ def test_provisioned_core_runtime_runs_service(tmp_path: Path) -> None:
     assert service.returncode == 0, service.stderr
     capabilities = json.loads(service.stdout)["capabilities"]
     assert capabilities["available_backends"] == ["synthetic-depth"]
+
+
+# ---------------------------------------------------------------------------
+# Installed-app provisioning: non-editable install, archive source, discovery
+# ---------------------------------------------------------------------------
+
+
+def test_pip_non_editable_for_installed_apps() -> None:
+    interp = Path("venv/python")
+    root = Path("app/resources")
+    args = prov_mod.pip_install_args(interp, root, DAV2_MODE, editable=False)
+    assert "-e" not in args
+    assert args[-1] == str(root) + "[dav2]"
+
+
+def test_source_archive_url_is_pinned_revision() -> None:
+    url = prov_mod.source_archive_url("https://github.com/Org/Repo.git", "a" * 40)
+    assert url == "https://github.com/Org/Repo/archive/" + "a" * 40 + ".zip"
+
+
+def _make_archive(tmp_path: Path, members: dict[str, str]) -> Path:
+    import zipfile
+
+    archive = tmp_path / "src.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        for name, text in members.items():
+            bundle.writestr(name, text)
+    return archive
+
+
+def test_archive_source_extracts_and_verifies(tmp_path: Path) -> None:
+    archive = _make_archive(
+        tmp_path, {"Depth-Anything-V2-rev/depth_anything_v2/dpt.py": "# model\n"}
+    )
+    dest = tmp_path / "data" / "dav2-upstream"
+    dest.parent.mkdir()
+    prov_mod.extract_source_archive(archive, tmp_path / "work", dest)
+    status = prov_mod.verify_source_dir(dest)
+    assert status.ok, status
+    assert "archive" in status.detail
+
+
+def test_archive_source_rejects_wrong_revision(tmp_path: Path) -> None:
+    dest = tmp_path / "dav2-upstream"
+    (dest / "depth_anything_v2").mkdir(parents=True)
+    (dest / "depth_anything_v2" / "dpt.py").write_text("# model\n")
+    (dest / prov_mod.SOURCE_MARKER).write_text(
+        json.dumps({"url": prov_mod.FIXED_UPSTREAM_URL, "revision": "0" * 40})
+    )
+    status = prov_mod.verify_source_dir(dest)
+    assert not status.ok
+    assert status.code == "UPSTREAM_REVISION_MISMATCH"
+
+
+def test_archive_extraction_refuses_zip_slip(tmp_path: Path) -> None:
+    archive = _make_archive(tmp_path, {"../escape.txt": "x"})
+    with pytest.raises(ValueError, match="unsafe archive member"):
+        prov_mod.extract_source_archive(archive, tmp_path / "work", tmp_path / "dest")
+    assert not (tmp_path / "escape.txt").exists()
+
+
+def test_provisioned_source_dir_is_discoverable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from depthwizard.runtime import diagnostics
+
+    monkeypatch.setenv("DEPTHWIZARD_DATA", str(tmp_path))
+    source = tmp_path / prov_mod.SOURCE_DIR_NAME
+    (source / "depth_anything_v2").mkdir(parents=True)
+    assert source in diagnostics.dav2_source_candidates()
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    diagnostics.ensure_dav2_source_on_path()
+    assert str(source) in sys.path
+
+
+def test_height_model_step_fetches_and_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hashlib
+
+    from depthwizard.backends import ndsm
+
+    published = tmp_path / "published.pth"
+    published.write_bytes(b"height model bytes")
+    monkeypatch.setattr(prov_mod, "HEIGHT_MODEL_URL", published.as_uri())
+    data_dir = tmp_path / "data"
+
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", "f" * 64)
+    status = prov_mod.ensure_height_model(data_dir)
+    assert not status.ok and status.code == "CHECKPOINT_HASH_MISMATCH"
+    assert not (data_dir / "checkpoints" / ndsm.CHECKPOINT_FILE).exists()
+
+    digest = hashlib.sha256(b"height model bytes").hexdigest()
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", digest)
+    status = prov_mod.ensure_height_model(data_dir)
+    assert status.ok and status.detail == "fetched and verified"
+    status = prov_mod.ensure_height_model(data_dir)
+    assert status.ok and status.reused
+
+    monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", "0" * 64)
+    assert prov_mod.ensure_height_model(tmp_path / "other").code == "SKIPPED"

@@ -60,6 +60,7 @@ export interface SolarConfigWire {
   sun_azimuth_deg?: number;
   min_shadow_area_px?: number;
   gsd_override?: number;
+  assume_north_up?: boolean;
 }
 
 export interface ServiceRequestWire {
@@ -75,6 +76,11 @@ export interface ServiceRequestWire {
   export_overwrite: boolean;
   mesh_levels?: number[];
   calibration_method?: string;
+  calibration_reference_path?: string;
+  /** Fetch the Copernicus DEM for georeferenced inputs without a reference file. */
+  auto_reference?: boolean;
+  /** Return this run's terrain/relative product (no second inference pass). */
+  include_payload?: boolean;
   solar_config: SolarConfigWire | null;
 }
 
@@ -117,6 +123,10 @@ export interface ServiceResponseWire {
   failure: ServiceFailureWire | null;
   artifacts: ArtifactDescriptorWire[];
   summary: RunSummaryWire;
+  /** Non-fatal findings, e.g. a weak calibration fit (absent on older engines). */
+  warnings?: string[];
+  /** Product JSON of this run when include_payload was requested. */
+  payload?: unknown;
 }
 
 export interface ServiceCapabilitiesWire {

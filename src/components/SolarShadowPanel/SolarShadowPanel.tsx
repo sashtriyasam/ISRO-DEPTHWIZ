@@ -21,10 +21,20 @@ export interface SolarShadowPanelProps {
   inputPath?: string;
 }
 
+/** Empty â†’ undefined; "0" stays 0 (a falsy-coalesce would drop it). */
+function parseOptionalNumber(value: string): number | undefined {
+  if (value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function SolarShadowPanel({ inputPath = "" }: SolarShadowPanelProps) {
-  const [sunElevation, setSunElevation] = useState("45");
-  const [sunAzimuth, setSunAzimuth] = useState("180");
+  // No default sun angles: invented geometry would yield invented heights.
+  // Empty fields mean "read from image metadata"; otherwise both are required.
+  const [sunElevation, setSunElevation] = useState("");
+  const [sunAzimuth, setSunAzimuth] = useState("");
   const [gsdOverride, setGsdOverride] = useState("");
+  const [assumeNorthUp, setAssumeNorthUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SolarAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,15 +54,23 @@ export function SolarShadowPanel({ inputPath = "" }: SolarShadowPanelProps) {
       setError("Solar analysis requires a desktop host with process spawning");
       return;
     }
+    const elevation = parseOptionalNumber(sunElevation);
+    const azimuth = parseOptionalNumber(sunAzimuth);
+    const gsd = parseOptionalNumber(gsdOverride);
+    if ((elevation === undefined) !== (azimuth === undefined)) {
+      setError("Enter both sun elevation and azimuth, or leave both empty to use image metadata.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setResults(null);
     try {
       const result: SolarAnalysisResult = await bridge.executeSolar(inputPath, {
-        sunElevationDeg: parseFloat(sunElevation) || undefined,
-        sunAzimuthDeg: parseFloat(sunAzimuth) || undefined,
+        sunElevationDeg: elevation,
+        sunAzimuthDeg: azimuth,
         minShadowAreaPx: 20,
-        gsdOverride: gsdOverride ? parseFloat(gsdOverride) : undefined,
+        gsdOverride: gsd,
+        assumeNorthUp,
       });
       setResults(result);
     } catch (err) {
@@ -60,7 +78,7 @@ export function SolarShadowPanel({ inputPath = "" }: SolarShadowPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [inputPath, sunElevation, sunAzimuth, gsdOverride]);
+  }, [inputPath, sunElevation, sunAzimuth, gsdOverride, assumeNorthUp]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
@@ -71,7 +89,7 @@ export function SolarShadowPanel({ inputPath = "" }: SolarShadowPanelProps) {
       </div>
 
       <div className="solar-field">
-        <span className="solar-field-label">Sun elevation (°)</span>
+        <span className="solar-field-label">Sun elevation (Â°)</span>
         <input
           type="number"
           className="solar-input"
@@ -85,7 +103,7 @@ export function SolarShadowPanel({ inputPath = "" }: SolarShadowPanelProps) {
       </div>
 
       <div className="solar-field">
-        <span className="solar-field-label">Sun azimuth (°)</span>
+        <span className="solar-field-label">Sun azimuth (Â°)</span>
         <input
           type="number"
           className="solar-input"
@@ -112,12 +130,24 @@ export function SolarShadowPanel({ inputPath = "" }: SolarShadowPanelProps) {
         />
       </div>
 
+      <label className="solar-field">
+        <input
+          type="checkbox"
+          checked={assumeNorthUp}
+          onChange={(e) => setAssumeNorthUp(e.target.checked)}
+          disabled={loading}
+        />
+        <span className="solar-field-label">
+          Image is north-up (needed when the file has no georeferenced orientation)
+        </span>
+      </label>
+
       <button
         className="solar-button"
         onClick={handleRun}
         disabled={loading || !inputPath}
       >
-        {loading ? "Analyzing…" : "Run Solar Analysis"}
+        {loading ? "Analyzingâ€¦" : "Run Solar Analysis"}
       </button>
 
       {error && <div className="solar-error" role="alert">{error}</div>}

@@ -29,12 +29,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from depthwizard.backends.depth_anything_v2 import _load_image_rgb
+from depthwizard.backends.checkpoints import (
+    INJECTED,
+    DeviceBoundModel,
+    load_checkpoint_state,
+)
 from depthwizard.contracts.artifacts import DepthResult, ImageResolution
 from depthwizard.contracts.provenance import ProductProvenance
 from depthwizard.contracts.semantics import DepthScale, ElevationSemantics
 from depthwizard.errors import InvalidInputError, ModelInferenceError
 from depthwizard.ingestion.models import InputInspection
+from depthwizard.ingestion.pixels import load_model_rgb
 from depthwizard.version import __version__
 
 if TYPE_CHECKING:
@@ -119,6 +124,7 @@ class DepthAnythingV2LargeBackend:
         self._seed = int(seed)
         self._factory = model_factory
         self._model: Any = None
+        self._checkpoint_status = INJECTED if model_factory is not None else "not loaded"
 
     @property
     def model_name(self) -> str:
@@ -159,6 +165,9 @@ class DepthAnythingV2LargeBackend:
                 raise ModelInferenceError(f'device="mps" unavailable: {e}') from e
 
     def _import_model_class(self) -> Any:
+        from depthwizard.runtime.diagnostics import ensure_dav2_source_on_path
+
+        ensure_dav2_source_on_path()
         try:
             from depth_anything_v2.dpt import DepthAnythingV2
         except Exception as e:
@@ -187,12 +196,14 @@ class DepthAnythingV2LargeBackend:
         torch = self._require_torch()
         self._check_device(torch)
         torch.manual_seed(self._seed)
+        state, self._checkpoint_status = load_checkpoint_state(
+            torch, self._checkpoint, CHECKPOINT_SHA256, self.model_name
+        )
         model_cls = self._import_model_class()
         model = model_cls(**ENCODER_CONFIG)
-        state = torch.load(str(self._checkpoint), map_location="cpu")
         model.load_state_dict(state)
         model = model.to(self._device).eval()
-        self._model = model
+        self._model = DeviceBoundModel(model, self._device)
 
     def estimate_depth(self, inspection: InputInspection) -> DepthResult:
         """Run frozen inference on a validated input inspection.
@@ -211,7 +222,8 @@ class DepthAnythingV2LargeBackend:
 
         # Load image as HWC uint8 RGB
         try:
-            image_rgb = _load_image_rgb(inspection)
+            loaded = load_model_rgb(inspection)
+            image_rgb = loaded.rgb
         except InvalidInputError:
             raise
         except Exception as e:
@@ -266,9 +278,13 @@ class DepthAnythingV2LargeBackend:
             elevation_semantics=ElevationSemantics.RELATIVE_DEPTH,
             georeferencing=inspection.georeferencing,
             depth_values=depth_values,
-            valid_mask=None,
+            valid_mask=loaded.valid_mask_tuple(),
             confidence_values=None,
-            preprocessing=dict(PREPROCESSING_RECORD),
+            preprocessing={
+                **PREPROCESSING_RECORD,
+                **loaded.preprocessing_record(),
+                "checkpoint_verification": self._checkpoint_status,
+            },
             units=None,
             spatial=inspection.spatial,
             provenance=ProductProvenance(

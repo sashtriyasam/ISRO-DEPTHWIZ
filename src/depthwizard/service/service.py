@@ -10,6 +10,14 @@ stage ordering. Synchronous by design; no threads, no sockets.
 
 from __future__ import annotations
 
+import json
+import warnings
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+
 from depthwizard.backends.synthetic import SyntheticDepthBackend
 from depthwizard.contracts.artifacts import DepthBackend
 from depthwizard.contracts.semantics import ElevationSemantics, GeoreferencingLevel
@@ -23,6 +31,7 @@ from depthwizard.pipeline import (
     PipelineResult,
     PipelineRunner,
 )
+from depthwizard.pipeline.models import SolarConfig
 from depthwizard.rdsm.pipeline import run_relative_path
 from depthwizard.service.models import (
     SERVICE_CONTRACT_VERSION,
@@ -36,10 +45,157 @@ from depthwizard.service.models import (
 )
 from depthwizard.version import __version__
 
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+    from depthwizard.dsm.grid import DSMGrid
+    from depthwizard.rdsm.models import RelativeSurfaceGrid
+
 
 def _georeferenced(georeferencing: GeoreferencingLevel) -> bool:
     """Whether a level carries CRS-backed spatial referencing."""
     return georeferencing is not GeoreferencingLevel.NON_GEOREFERENCED
+
+
+def _solar_config(request: ServiceRequest) -> SolarConfig | None:
+    """Translate the wire solar settings into the pipeline configuration."""
+    config = request.solar_config
+    if config is None:
+        return None
+    return SolarConfig(
+        sun_elevation_deg=config.sun_elevation_deg,
+        sun_azimuth_deg=config.sun_azimuth_deg,
+        min_shadow_area_px=config.min_shadow_area_px,
+        gsd_override=config.gsd_override,
+        assume_north_up=config.assume_north_up,
+    )
+
+
+def _solar_summary(result: PipelineResult) -> dict[str, object]:
+    """JSON-safe solar cues (heights stay independent of the DSM)."""
+    return {
+        "count": len(result.solar_constraints),
+        "refused_reason": result.solar_refused_reason,
+        "constraints": [
+            {
+                "height_m": float(c.height_m),
+                "quality": c.quality,
+                "method": c.method,
+                "assumptions": list(c.assumptions),
+            }
+            for c in result.solar_constraints
+        ],
+    }
+
+
+#: Longest side of the RGB texture written for the desktop (GPU texture limits).
+MAX_TEXTURE_SIDE = 4096
+
+
+def _desktop_dir(request: ServiceRequest) -> Path | None:
+    """Folder holding the staged input (where desktop extras are written)."""
+    parent = Path(request.input_path).parent
+    return parent if parent.is_dir() else None
+
+
+def _desktop_geotiff_path(request: ServiceRequest) -> str | None:
+    """Export the DSM next to the staged input when the desktop asks for it."""
+    if not request.include_payload:
+        return None
+    folder = _desktop_dir(request)
+    return str(folder / "dsm.tif") if folder is not None else None
+
+
+def _slope_payload(dsm: DSMGrid) -> dict[str, object]:
+    """Canonical slope (degrees) for display, or why it is unavailable."""
+    import math as _math
+
+    from depthwizard.dsm.slope import compute_slope
+    from depthwizard.errors import InvalidInputError
+
+    try:
+        slope = compute_slope(dsm)
+    except InvalidInputError as exc:
+        return {"units": "degrees", "values": None, "unavailable_reason": str(exc)}
+    values = [
+        round(float(v), 2) if valid and _math.isfinite(float(v)) else None
+        for v, valid in zip(slope.array.ravel(), slope.valid_mask.ravel(), strict=True)
+    ]
+    return {"units": "degrees", "values": values, "unavailable_reason": None}
+
+
+def _write_relative_surface(input_path: str, grid: RelativeSurfaceGrid) -> str | None:
+    """Write the rDSM beside the staged input for validation (no metric units).
+
+    Keeps the input's CRS/transform when it has them; a plain image gets a
+    pixel-grid raster without CRS.
+    """
+    import rasterio
+
+    from depthwizard.geospatial.transforms import to_affine
+
+    target = Path(input_path).parent / "rdsm.tif"
+    details = grid.spatial.details
+    profile: dict[str, object] = {
+        "driver": "GTiff",
+        "width": grid.width,
+        "height": grid.height,
+        "count": 1,
+        "dtype": "float32",
+        "nodata": float("nan"),
+    }
+    if details is not None and details.crs is not None and details.transform is not None:
+        profile["crs"] = details.crs
+        profile["transform"] = to_affine(details.transform)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # NotGeoreferencedWarning for plain images
+            with rasterio.open(target, "w", **profile) as dst:
+                data = np.where(grid.valid_mask, grid.array, np.nan).astype("float32")
+                dst.write(data, 1)
+                dst.update_tags(ns="depthwizard", semantics=grid.semantics.value, units="none")
+    except Exception:
+        return None
+    return str(target)
+
+
+def _write_texture(input_path: str) -> tuple[str | None, str | None]:
+    """Write the model-input RGB as an 8-bit PNG texture next to the input.
+
+    Uses the same pixels the depth model saw (band order, 16-bit stretch),
+    downsampled to at most MAX_TEXTURE_SIDE. Returns (path, warning).
+    """
+    from PIL import Image
+
+    from depthwizard.ingestion.api import inspect_input
+    from depthwizard.ingestion.pixels import load_model_rgb
+
+    target = Path(input_path).parent / "texture.png"
+    try:
+        loaded = load_model_rgb(inspect_input(input_path))
+        image = Image.fromarray(loaded.rgb, "RGB")
+        longest = max(image.size)
+        if longest > MAX_TEXTURE_SIDE:
+            scale = MAX_TEXTURE_SIDE / longest
+            size = (max(1, round(image.size[0] * scale)), max(1, round(image.size[1] * scale)))
+            image = image.resize(size, Image.Resampling.LANCZOS)
+        image.save(target, format="PNG")
+    except Exception as exc:
+        return None, f"RGB texture unavailable: {type(exc).__name__}: {exc}"
+    return str(target), None
+
+
+#: Mesh vertices shipped to the desktop as JSON; larger scenes get a coarser
+#: display LOD automatically (the DSM itself is never decimated).
+MAX_DISPLAY_MESH_VERTICES = 1_000_000
+
+
+def _payload(product: BaseModel) -> dict[str, object]:
+    """JSON-safe dict of a transport product (canonical integration encoding)."""
+    from depthwizard.integration import to_json_text
+
+    data: dict[str, object] = json.loads(to_json_text(product))
+    return data
 
 
 def build_descriptors(result: PipelineResult) -> list[ArtifactDescriptor]:
@@ -141,6 +297,7 @@ def build_response(result: PipelineResult) -> ServiceResponse:
             geotiff_path=result.geotiff_path,
             engine_version=result.engine_version,
         ),
+        warnings=list(result.warnings),
     )
 
 
@@ -176,6 +333,7 @@ class LocalService:
         request: ServiceRequest,
         calibration_provider: CalibrationProvider,
         cancellation: CancellationToken | None = None,
+        on_stage: Callable[[str], None] | None = None,
     ) -> ServiceResponse:
         """Validate, translate, run the pipeline, translate the result.
 
@@ -201,15 +359,42 @@ class LocalService:
             calibration_provider=calibration_provider,
             target_semantics=request.target_semantics,
             build_mesh=request.build_mesh,
-            geotiff_path=request.geotiff_path,
+            geotiff_path=request.geotiff_path or _desktop_geotiff_path(request),
             export_options=ExportOptions(
-                overwrite=request.export_overwrite,
+                overwrite=request.export_overwrite or request.geotiff_path is None,
                 compression=Compression(request.export_compression),
             ),
             cancellation=cancellation,
+            mesh_levels=tuple(request.mesh_levels) if request.mesh_levels else None,
+            on_stage=on_stage,
+            solar_config=_solar_config(request),
+            max_mesh_vertices=MAX_DISPLAY_MESH_VERTICES if request.include_payload else None,
         )
         result = PipelineRunner().run(pipeline_request)
-        return build_response(result)
+        response = build_response(result)
+        if request.solar_config is not None:
+            response = response.model_copy(update={"solar": _solar_summary(result)})
+        if (
+            request.include_payload
+            and result.succeeded
+            and result.depth is not None
+            and result.dsm is not None
+            and result.mesh is not None
+        ):
+            from depthwizard.integration import terrain_product
+
+            payload = _payload(terrain_product(result.depth, result.dsm, result.mesh))
+            payload["stages"] = [state.value for state in result.states]
+            payload["geotiff_path"] = result.export.path if result.export else None
+            payload["product_path"] = payload["geotiff_path"]
+            payload["slope"] = _slope_payload(result.dsm)
+            texture_path, texture_warning = _write_texture(request.input_path)
+            payload["texture_path"] = texture_path
+            warnings = list(response.warnings)
+            if texture_warning:
+                warnings.append(texture_warning)
+            response = response.model_copy(update={"payload": payload, "warnings": warnings})
+        return response
 
     def _execute_relative(self, request: ServiceRequest, backend: DepthBackend) -> ServiceResponse:
         """Run the calibration-free rDSM path (no metric output, ever).
@@ -223,7 +408,16 @@ class LocalService:
         grid = outcome.grid
         mesh = outcome.mesh
         georeferenced = _georeferenced(depth.georeferencing)
+        payload: dict[str, object] | None = None
+        if request.include_payload:
+            from depthwizard.integration import relative_product
+
+            payload = _payload(relative_product(depth, grid, mesh))
+            payload["stages"] = ["completed"]
+            payload["texture_path"], _texture_warning = _write_texture(request.input_path)
+            payload["product_path"] = _write_relative_surface(request.input_path, grid)
         return ServiceResponse(
+            payload=payload,
             contract_version=SERVICE_CONTRACT_VERSION,
             success=True,
             final_state="completed",

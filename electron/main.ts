@@ -7,15 +7,25 @@ import {
   type WebContents,
 } from "electron";
 import * as path from "path";
+import * as crypto from "crypto";
 import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
 
 let mainWindow: BrowserWindow | null = null;
-let serviceProcess: ChildProcess | null = null;
-let serviceStdout = "";
-let serviceStderr = "";
-let activeServiceResolve: ((result: unknown) => void) | null = null;
-let activeServiceReject: ((err: Error) => void) | null = null;
+
+// Python processes started by execute-service, keyed by renderer request id,
+// so Cancel and app quit can terminate them (they were previously orphaned).
+const runningExecutions = new Map<string, ChildProcess>();
+
+// Cap on captured stdout: beyond this the JSON could not be held as one V8
+// string anyway; the run is stopped with an actionable error instead.
+const MAX_OUTPUT_CHARS = 400 * 1024 * 1024;
+
+// Largest staged product the renderer may read back (e.g. texture.png).
+const MAX_STAGED_READ_BYTES = 200 * 1024 * 1024;
+
+// Staged temp dirs older than this are swept at startup (crash leftovers).
+const STALE_STAGED_MS = 24 * 60 * 60 * 1000;
 
 // Registry of staged temp directories so they can be cleaned up on crash/quit.
 const stagedDirs = new Set<string>();
@@ -51,20 +61,49 @@ function rejectUnauthorized(
 // ---------------------------------------------------------------------------
 // Runtime resolution (main process authority)
 //
-// This application requires Python to be installed externally.
-// No Python runtime is bundled with the installer.
-//
 // Resolution priority:
 //   1. DEPTHWIZARD_PYTHON env (explicit override)
-//   2. python on PATH (system Python)
+//   2. Managed runtime created by scripts/setup_backend.bat in
+//      %LOCALAPPDATA%/DepthWizard/runtime (engine + torch + DA-V2 extra)
+//   3. python.org per-user installs (Python3XY): newest numeric version
+//      first, 3.11+ only
+//   4. py.exe launcher, then "python" on PATH
 //
 // The renderer cannot provide executable paths.
 // The main process decides which executable is allowed.
 // ---------------------------------------------------------------------------
 
+const MIN_PYTHON_MINOR = 11;
+
+function managedRuntimePython(): string | null {
+  const localAppData = process.env.LOCALAPPDATA;
+  if (process.platform !== "win32" || !localAppData) return null;
+  const candidate = path.join(localAppData, "DepthWizard", "runtime", "Scripts", "python.exe");
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
+/**
+ * Newest python.org folder (e.g. "Python312") with minor >= 11. Sorted
+ * numerically: a string sort would rank "Python39" above "Python312".
+ */
+function pickNewestPythonDir(entries: string[]): string | null {
+  let best: { entry: string; minor: number } | null = null;
+  for (const entry of entries) {
+    const match = entry.match(/^Python3(\d{1,2})$/i);
+    if (!match) continue;
+    const minor = Number(match[1]);
+    if (minor < MIN_PYTHON_MINOR) continue;
+    if (best === null || minor > best.minor) best = { entry, minor };
+  }
+  return best ? best.entry : null;
+}
+
 function getPythonPath(): string {
   const explicit = process.env.DEPTHWIZARD_PYTHON;
   if (explicit) return explicit;
+
+  const managed = managedRuntimePython();
+  if (managed) return managed;
 
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA || "";
@@ -72,10 +111,9 @@ function getPythonPath(): string {
       const pyBase = path.join(localAppData, "Programs", "Python");
       if (fs.existsSync(pyBase)) {
         try {
-          const entries = fs.readdirSync(pyBase);
-          // Prefer higher version numbers (e.g. Python312 > Python310)
-          for (const entry of entries.reverse()) {
-            const candidate = path.join(pyBase, entry, "python.exe");
+          const newest = pickNewestPythonDir(fs.readdirSync(pyBase));
+          if (newest) {
+            const candidate = path.join(pyBase, newest, "python.exe");
             if (fs.existsSync(candidate)) return candidate;
           }
         } catch {
@@ -147,6 +185,11 @@ function withCheckpointEnv(
   base: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   const env = { ...base };
+  // Synthetic dev calibration is test infrastructure: a packaged build must
+  // never fabricate metric references, whatever the user's environment says.
+  if (app.isPackaged) {
+    delete env.DW_DEV_CALIBRATION;
+  }
   const dav2 = getCheckpointPath();
   if (fs.existsSync(dav2)) {
     env.DW_DAV2_CKPT = dav2;
@@ -158,18 +201,29 @@ function withCheckpointEnv(
   return env;
 }
 
-function getCheckpointStatus(): {
+async function sha256OfFile(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    fs.createReadStream(filePath)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("end", () => resolve(hash.digest("hex")))
+      .on("error", reject);
+  });
+}
+
+async function getCheckpointStatus(): Promise<{
   exists: boolean;
   path: string;
   hash: string;
-} {
+  verified: boolean;
+}> {
   const resolved = getCheckpointPath();
-  const exists = fs.existsSync(resolved);
-  return {
-    exists,
-    path: resolved,
-    hash: exists ? EXPECTED_CHECKPOINT_HASH : "",
-  };
+  if (!fs.existsSync(resolved)) {
+    return { exists: false, path: resolved, hash: "", verified: false };
+  }
+  // Report the file's actual digest; "verified" only when it matches the pin.
+  const hash = await sha256OfFile(resolved);
+  return { exists: true, path: resolved, hash, verified: hash === EXPECTED_CHECKPOINT_HASH };
 }
 
 function isDevMode(): boolean {
@@ -199,95 +253,50 @@ function resolveCapabilities(): HostCapabilities {
 }
 
 // ---------------------------------------------------------------------------
-// Service process lifecycle
+// Execution tracking (cancel + quit cleanup)
 // ---------------------------------------------------------------------------
 
-function killServiceProcess(): void {
-  if (serviceProcess) {
-    try {
-      serviceProcess.kill();
-    } catch {
-      // Process already exited or access denied
-    }
-    serviceProcess = null;
-    serviceStdout = "";
-    serviceStderr = "";
-    activeServiceResolve = null;
-    activeServiceReject = null;
+function killExecution(requestId: string): boolean {
+  const proc = runningExecutions.get(requestId);
+  if (!proc) return false;
+  try {
+    proc.kill();
+  } catch {
+    // Process already exited or access denied
   }
+  runningExecutions.delete(requestId);
+  return true;
 }
 
-function setupServiceListeners(proc: ChildProcess): void {
-  serviceStdout = "";
-  serviceStderr = "";
-
-  proc.stdout?.on("data", (chunk: Buffer) => {
-    serviceStdout += chunk.toString();
-  });
-
-  proc.stderr?.on("data", (chunk: Buffer) => {
-    serviceStderr += chunk.toString();
-  });
-
-  proc.on("close", (code) => {
-    if (activeServiceResolve && activeServiceReject) {
-      if (code === 0) {
-        try {
-          activeServiceResolve(JSON.parse(serviceStdout));
-        } catch {
-          activeServiceReject(
-            new Error(
-              `Malformed service output: ${serviceStdout.slice(0, 500)}`,
-            ),
-          );
-        }
-      } else {
-        activeServiceReject(
-          new Error(
-            `Service exited with code ${code}: ${serviceStderr.slice(0, 500)}`,
-          ),
-        );
-      }
-    }
-    serviceProcess = null;
-    serviceStdout = "";
-    serviceStderr = "";
-    activeServiceResolve = null;
-    activeServiceReject = null;
-  });
-
-  proc.on("error", (err) => {
-    if (activeServiceReject) {
-      activeServiceReject(err);
-    }
-    serviceProcess = null;
-    serviceStdout = "";
-    serviceStderr = "";
-    activeServiceResolve = null;
-    activeServiceReject = null;
-  });
+function killAllExecutions(): void {
+  for (const requestId of [...runningExecutions.keys()]) {
+    killExecution(requestId);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Input path validation
 // ---------------------------------------------------------------------------
 
-function validateInputPath(inputPath: string): string | null {
-  if (!inputPath || typeof inputPath !== "string") {
-    return "inputPath must be a non-empty string";
+function isWithinStagedDir(candidate: string): boolean {
+  const resolved = path.resolve(candidate);
+  for (const dir of stagedDirs) {
+    if (resolved.startsWith(dir + path.sep)) return true;
   }
-  const trimmed = inputPath.trim();
-  if (trimmed.length === 0) {
-    return "inputPath must not be empty";
+  return false;
+}
+
+/**
+ * Every file the renderer asks Python to read must be one it staged through
+ * stage-input-bytes. An extension blocklist was meaningless (Python never
+ * executes inputs) and absolute paths elsewhere on disk were allowed.
+ */
+function validateRendererPath(candidate: unknown, label: string): string | null {
+  if (typeof candidate !== "string" || candidate.trim().length === 0) {
+    return `${label} must be a non-empty string`;
   }
-  const segments = trimmed.split(/[\\/]/);
-  if (segments.includes("..")) {
-    return "inputPath must not contain .. segments";
-  }
-  const ext = path.extname(trimmed).toLowerCase();
-  const dangerous = [".exe", ".bat", ".cmd", ".com", ".ps1", ".sh", ".vbs"];
-  if (dangerous.includes(ext)) {
-    return `inputPath must not be an executable (${ext})`;
+  if (!isWithinStagedDir(candidate)) {
+    return `${label} must be a file staged by this app session`;
   }
   return null;
 }
@@ -295,6 +304,28 @@ function validateInputPath(inputPath: string): string | null {
 // ---------------------------------------------------------------------------
 // Staged-dir emergency cleanup (renderer crash / app quit)
 // ---------------------------------------------------------------------------
+
+function sweepStaleStagedDirs(): void {
+  const osTmp = app.getPath("temp");
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(osTmp);
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - STALE_STAGED_MS;
+  for (const entry of entries) {
+    if (!entry.startsWith("depthwiz-")) continue;
+    const dir = path.join(osTmp, entry);
+    try {
+      if (fs.statSync(dir).mtimeMs < cutoff) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    } catch {
+      /* noop */
+    }
+  }
+}
 
 function cleanAllStagedDirs(): void {
   for (const dir of stagedDirs) {
@@ -327,7 +358,7 @@ function registerIpcHandlers(): void {
     return getCheckpointPath();
   });
 
-  ipcMain.handle("get-checkpoint-status", (event) => {
+  ipcMain.handle("get-checkpoint-status", async (event) => {
     if (rejectUnauthorized(event, "get-checkpoint-status")) return null;
     return getCheckpointStatus();
   });
@@ -389,7 +420,7 @@ function registerIpcHandlers(): void {
         const tempDir = fs.mkdtempSync(path.join(osTmp, "depthwiz-"));
         const targetPath = path.join(tempDir, trimmed);
         fs.writeFileSync(targetPath, buffer);
-        stagedDirs.add(tempDir);
+        stagedDirs.add(path.resolve(tempDir));
         return { path: targetPath };
       } catch (err) {
         return {
@@ -411,10 +442,9 @@ function registerIpcHandlers(): void {
       title: "DepthWizard — Backend Setup Required",
       message: "Python backend dependencies are not installed.",
       detail:
-        `DepthWizard requires Python 3.11+ with these packages:\n` +
-        `  • pydantic\n  • Pillow\n  • rasterio\n  • numpy\n\n` +
-        `Install Python from https://python.org then run:\n` +
-        `  pip install pydantic Pillow rasterio numpy` +
+        `DepthWizard needs Python 3.11+ (https://python.org) and a one-time ` +
+        `setup that creates a managed runtime with the depth model ` +
+        `(torch, Depth Anything V2 source and its SHA-verified checkpoint).` +
         setupNote,
       buttons: ["OK"],
     });
@@ -449,64 +479,65 @@ function registerIpcHandlers(): void {
     },
   );
 
+  // Products written beside a staged input (texture.png, dsm.tif) are read or
+  // saved only through these two channels, and only inside staged dirs.
+  ipcMain.handle("read-staged-file", async (event, args: { path?: unknown }) => {
+    if (rejectUnauthorized(event, "read-staged-file")) {
+      return { error: "unauthorized" };
+    }
+    const pathError = validateRendererPath(args?.path, "path");
+    if (pathError) return { error: pathError };
+    try {
+      const filePath = args.path as string;
+      const size = fs.statSync(filePath).size;
+      if (size > MAX_STAGED_READ_BYTES) {
+        return { error: `Staged file too large to read (${size} bytes)` };
+      }
+      return { bytes: new Uint8Array(fs.readFileSync(filePath)) };
+    } catch (err) {
+      return { error: `Failed to read staged file: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  });
+
   ipcMain.handle(
-    "launch-service",
-    async (event, args: { inputPath?: string; targetMode?: string }) => {
-      if (rejectUnauthorized(event, "launch-service")) {
+    "save-staged-file",
+    async (event, args: { path?: unknown; defaultName?: unknown }) => {
+      if (rejectUnauthorized(event, "save-staged-file")) {
         return { error: "unauthorized" };
       }
-      if (serviceProcess) {
-        return { error: "Service already running" };
+      const pathError = validateRendererPath(args?.path, "path");
+      if (pathError) return { error: pathError };
+      const source = args.path as string;
+      const defaultName =
+        typeof args.defaultName === "string" && args.defaultName.trim()
+          ? path.basename(args.defaultName)
+          : path.basename(source);
+      const { dialog } = require("electron") as typeof import("electron");
+      const choice = await dialog.showSaveDialog({
+        title: "Export DSM",
+        defaultPath: defaultName,
+        filters: [{ name: "GeoTIFF", extensions: ["tif", "tiff"] }],
+      });
+      if (choice.canceled || !choice.filePath) {
+        return { saved: false };
       }
-
-      if (args.inputPath) {
-        const validationError = validateInputPath(args.inputPath);
-        if (validationError) {
-          return { error: validationError };
-        }
-      }
-
-      const python = getPythonPath();
-      const script = path.join(getScriptsDir(), SERVICE_SCRIPT);
-
-      if (!fs.existsSync(script)) {
-        return { error: `Service script not found: ${script}` };
-      }
-
-      const env = withCheckpointEnv();
-      if (args.targetMode) {
-        env.DW_TARGET_MODE = args.targetMode;
-      }
-
       try {
-        serviceProcess = spawn(python, [script], {
-          stdio: ["pipe", "pipe", "pipe"],
-          env,
-          windowsHide: true,
-        });
-        setupServiceListeners(serviceProcess);
-        return { pid: serviceProcess.pid };
+        fs.copyFileSync(source, choice.filePath);
+        return { saved: true, path: choice.filePath };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("ENOENT") || msg.includes("not found")) {
-          return {
-            error: `Python not found at "${python}". Install Python 3.10+ and ensure it is on PATH, or set the DEPTHWIZARD_PYTHON environment variable.`,
-          };
-        }
-        return { error: `Failed to spawn service: ${msg}` };
+        return { error: `Export failed: ${err instanceof Error ? err.message : String(err)}` };
       }
     },
   );
 
-  ipcMain.handle("terminate-service", (event) => {
-    if (rejectUnauthorized(event, "terminate-service")) {
-      return { terminated: false };
+  ipcMain.handle("cancel-service", (event, args: { requestId?: unknown }) => {
+    if (rejectUnauthorized(event, "cancel-service")) {
+      return { cancelled: false };
     }
-    if (serviceProcess) {
-      killServiceProcess();
-      return { terminated: true };
+    if (typeof args?.requestId !== "string") {
+      return { cancelled: false };
     }
-    return { terminated: false };
+    return { cancelled: killExecution(args.requestId) };
   });
 
   ipcMain.handle(
@@ -516,14 +547,16 @@ function registerIpcHandlers(): void {
       args: {
         payload: unknown;
         timeoutMs?: number;
+        requestId?: string;
       },
     ) => {
       if (rejectUnauthorized(event, "execute-service")) {
         return { error: "unauthorized" };
       }
-      if (serviceProcess) {
-        return { error: "Service already running" };
-      }
+      const requestId =
+        typeof args.requestId === "string" && args.requestId.length > 0
+          ? args.requestId
+          : crypto.randomUUID();
 
       const python = getPythonPath();
 
@@ -533,8 +566,12 @@ function registerIpcHandlers(): void {
       const ALLOWED_FLAGS = new Set([
         "--inspect", "--capabilities", "--backend", "--mode",
         "--terrain-file", "--terrain", "--synthetic",
+        "--mesh-levels", "--calibration-method", "--reference",
+        "--diagnostics", "--solar", "--sun-elevation", "--sun-azimuth",
+        "--min-area", "--gsd", "--assume-north-up", "--auto-reference", "--validate",
       ]);
-      const DANGEROUS_EXT = /\.(exe|bat|cmd|com|ps1|sh|vbs)$/i;
+      // Flags whose next argument is a file the renderer staged.
+      const PATH_FLAGS = new Set(["--terrain-file", "--reference", "--solar", "--inspect"]);
 
       const isBridgeArgs =
         typeof args.payload === "object" &&
@@ -544,15 +581,40 @@ function registerIpcHandlers(): void {
 
       if (isBridgeArgs) {
         const bridgeArgs = (args.payload as { bridgeArgs: unknown[] }).bridgeArgs;
-        for (const arg of bridgeArgs) {
+        for (let i = 0; i < bridgeArgs.length; i++) {
+          const arg = bridgeArgs[i];
           if (typeof arg !== "string") {
             return { error: "bridgeArgs must be an array of strings" };
           }
           if (arg.startsWith("--") && !ALLOWED_FLAGS.has(arg)) {
             return { error: `Disallowed bridgeArgs flag: ${arg}` };
           }
-          if (arg.includes("..") || DANGEROUS_EXT.test(arg)) {
-            return { error: `Unsafe bridgeArg value: ${arg}` };
+          if (PATH_FLAGS.has(arg)) {
+            const pathError = validateRendererPath(bridgeArgs[i + 1], `${arg} path`);
+            if (pathError) return { error: pathError };
+          }
+          if (arg === "--validate") {
+            // Both the product and the reference must be staged files.
+            for (const offset of [1, 2]) {
+              const pathError = validateRendererPath(bridgeArgs[i + offset], "--validate path");
+              if (pathError) return { error: pathError };
+            }
+          }
+        }
+      } else if (typeof args.payload === "object" && args.payload !== null) {
+        const request = (args.payload as { request?: Record<string, unknown> }).request;
+        if (request) {
+          const inputError = validateRendererPath(request.input_path, "input_path");
+          if (inputError) return { error: inputError };
+          if (request.calibration_reference_path != null) {
+            const refError = validateRendererPath(
+              request.calibration_reference_path,
+              "calibration_reference_path",
+            );
+            if (refError) return { error: refError };
+          }
+          if (request.geotiff_path != null) {
+            return { error: "geotiff_path must be chosen through the export dialog" };
           }
         }
       }
@@ -603,12 +665,13 @@ function registerIpcHandlers(): void {
             env: withCheckpointEnv(),
             windowsHide: true,
           });
+          runningExecutions.set(requestId, proc);
         } catch (err) {
           clearTimeout(timer);
           const msg = err instanceof Error ? err.message : String(err);
           if (msg.includes("ENOENT") || msg.includes("not found")) {
             resolve({
-              error: `Python not found at "${python}". Install Python 3.10+ and ensure it is on PATH, or set the DEPTHWIZARD_PYTHON environment variable.`,
+              error: `Python not found at "${python}". Install Python 3.11+ and run setup_backend.bat, or set the DEPTHWIZARD_PYTHON environment variable.`,
             });
           } else {
             resolve({
@@ -620,12 +683,22 @@ function registerIpcHandlers(): void {
 
         proc.stdout?.on("data", (chunk: Buffer) => {
           stdout += chunk.toString();
+          if (stdout.length > MAX_OUTPUT_CHARS) {
+            killExecution(requestId);
+            settle(() =>
+              resolve({
+                error:
+                  "Backend output exceeded the desktop transfer limit; use a smaller " +
+                  "input or a coarser mesh LOD.",
+              }),
+            );
+          }
         });
 
         let stderrBuffer = "";
         proc.stderr?.on("data", (chunk: Buffer) => {
           const text = chunk.toString();
-          stderr += text;
+          stderr = (stderr + text).slice(-64 * 1024);
           stderrBuffer += text;
           const lines = stderrBuffer.split(/\r?\n/);
           stderrBuffer = lines.pop() ?? "";
@@ -641,8 +714,13 @@ function registerIpcHandlers(): void {
           }
         });
 
-        proc.on("close", (code) => {
+        proc.on("close", (code, signal) => {
           clearTimeout(timer);
+          runningExecutions.delete(requestId);
+          if (signal !== null) {
+            settle(() => resolve({ error: "Operation cancelled" }));
+            return;
+          }
           if (code === 0) {
             settle(() => {
               try {
@@ -664,6 +742,7 @@ function registerIpcHandlers(): void {
 
         proc.on("error", (err) => {
           clearTimeout(timer);
+          runningExecutions.delete(requestId);
           settle(() => {
             resolve({ error: `Service process error: ${err.message}` });
           });
@@ -779,7 +858,7 @@ function createWindow(): void {
 
   mainWindow.webContents.on("render-process-gone", () => {
     console.error("[depthwizard] Renderer process crashed");
-    killServiceProcess();
+    killAllExecutions();
     // Clean up any staged temp files so they don't leak if the renderer
     // crashes before it can call cleanup-staged-input.
     cleanAllStagedDirs();
@@ -791,6 +870,7 @@ function createWindow(): void {
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
+  sweepStaleStagedDirs();
   registerIpcHandlers();
   createWindow();
 
@@ -802,7 +882,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  killServiceProcess();
+  killAllExecutions();
   cleanAllStagedDirs();
   if (process.platform !== "darwin") {
     app.quit();
@@ -810,11 +890,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  killServiceProcess();
+  killAllExecutions();
   cleanAllStagedDirs();
 });
 
 app.on("will-quit", () => {
-  killServiceProcess();
+  killAllExecutions();
   cleanAllStagedDirs();
 });

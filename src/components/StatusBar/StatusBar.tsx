@@ -1,11 +1,18 @@
-export function StatusBar() {
+import { APP_VERSION } from "../../version";
+
+interface StatusBarProps {
+  sourceLabel: string;
+  note: string;
+}
+
+export function StatusBar({ sourceLabel, note }: StatusBarProps) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-lg)", width: "100%", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-      <span>Development Fixture</span>
+      <span>{sourceLabel}</span>
       <span style={{ color: "var(--color-border)" }}>|</span>
-      <span>Synthetic terrain — not scientific output</span>
+      <span>{note}</span>
       <div style={{ flex: 1 }} />
-      <span>DepthWizard v0.1.0</span>
+      <span>DepthWizard v{APP_VERSION}</span>
     </div>
   );
 }

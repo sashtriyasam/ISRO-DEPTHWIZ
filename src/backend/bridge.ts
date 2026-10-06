@@ -61,7 +61,8 @@ export interface BridgeResult {
   warnings: string[];
 }
 
-const BRIDGE_TIMEOUT_MS = 120_000;
+// Large scenes on CPU (tiled satellite, Large model, solar) exceed 2 minutes.
+const BRIDGE_TIMEOUT_MS = 600_000;
 
 function validateTransportShape(data: unknown): BackendDepthResult {
   if (typeof data !== "object" || data === null) {
@@ -106,7 +107,7 @@ function validateTransportShape(data: unknown): BackendDepthResult {
   return obj as unknown as BackendDepthResult;
 }
 
-function validateRelativeShape(data: unknown): BackendRelativeProduct {
+export function validateRelativeShape(data: unknown): BackendRelativeProduct {
   if (typeof data !== "object" || data === null) {
     throw new Error("Transport data is not an object");
   }
@@ -128,7 +129,7 @@ function validateRelativeShape(data: unknown): BackendRelativeProduct {
   return obj as unknown as BackendRelativeProduct;
 }
 
-function validateTerrainShape(data: unknown): BackendTerrainProduct {
+export function validateTerrainShape(data: unknown): BackendTerrainProduct {
   if (typeof data !== "object" || data === null) {
     throw new Error("Transport data is not an object");
   }
@@ -162,6 +163,34 @@ export interface BackendBridgeOptions {
   mode?: "metric" | "relative";
   meshLevels?: number[];
   calibrationMethod?: string;
+  /** Staged DEM GeoTIFF or GCP CSV used for metric calibration. */
+  calibrationReference?: string;
+}
+
+export interface TerrainPayloadOptions {
+  meshLevels?: number[];
+  calibrationMethod?: string;
+  calibrationReference?: string;
+  autoReference?: boolean;
+}
+
+export interface ValidationScores {
+  n: number;
+  rmse: number | null;
+  mae: number | null;
+  bias: number | null;
+  pearson_r: number;
+  spearman_rho: number;
+}
+
+export interface ValidationReport {
+  product: string;
+  reference: string;
+  metric: boolean;
+  coverage: number;
+  native: ValidationScores;
+  coarse?: ValidationScores & { block_m: number };
+  note?: string;
 }
 
 export interface SolarAnalysisResult {
@@ -180,6 +209,61 @@ export class OperationCancelledError extends Error {
   constructor() {
     super("Operation cancelled");
     this.name = "OperationCancelledError";
+  }
+}
+
+function newRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Run one Python execution through the Electron main process.
+ *
+ * Aborting the signal asks main to kill that run's process (previously the
+ * process kept running until its timeout). A main-process `{error}` result
+ * is thrown as an Error so callers see the real cause, e.g. "Python not
+ * found", instead of a generic malformed-envelope message.
+ */
+export async function invokeElectronExecution(
+  payload: unknown,
+  timeoutMs: number,
+  hooks: BridgeExecutionHooks = {},
+): Promise<unknown> {
+  const host = window.depthwizard;
+  if (!host?.executeService) {
+    throw new Error("Electron host is not available");
+  }
+  if (hooks.signal?.aborted) {
+    throw new OperationCancelledError();
+  }
+  const requestId = newRequestId();
+  const onAbort = () => {
+    void host.cancelService?.({ requestId });
+  };
+  hooks.signal?.addEventListener("abort", onAbort, { once: true });
+  const unsub = hooks.onStage
+    ? host.onStageUpdate?.((stage) => hooks.onStage?.(stage))
+    : undefined;
+  try {
+    const result = await host.executeService({ payload, timeoutMs, requestId });
+    if (hooks.signal?.aborted) {
+      throw new OperationCancelledError();
+    }
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "error" in result &&
+      typeof (result as { error: unknown }).error === "string"
+    ) {
+      throw new Error((result as { error: string }).error);
+    }
+    return result;
+  } finally {
+    hooks.signal?.removeEventListener("abort", onAbort);
+    unsub?.();
   }
 }
 
@@ -215,6 +299,7 @@ export class BackendBridge {
   private mode: "metric" | "relative";
   private meshLevels: number[] | undefined;
   private calibrationMethod: string | undefined;
+  private calibrationReference: string | undefined;
 
   constructor(options: BackendBridgeOptions = {}) {
     this.pythonPath = options.pythonPath ?? defaultPythonExecutable();
@@ -226,6 +311,7 @@ export class BackendBridge {
     this.mode = options.mode ?? "metric";
     this.meshLevels = options.meshLevels;
     this.calibrationMethod = options.calibrationMethod;
+    this.calibrationReference = options.calibrationReference;
   }
 
   get backendName(): string {
@@ -261,6 +347,14 @@ export class BackendBridge {
       return [];
     }
     return ["--calibration-method", method];
+  }
+
+  private calibrationReferenceArgs(override?: string): string[] {
+    const reference = override ?? this.calibrationReference;
+    if (!reference) {
+      return [];
+    }
+    return ["--reference", reference];
   }
 
   get hostCapabilities(): HostCapabilities {
@@ -337,6 +431,7 @@ export class BackendBridge {
     modeOverride?: "metric" | "relative",
     meshLevels?: number[],
     calibrationMethod?: string,
+    calibrationReference?: string,
   ): Promise<BridgeResult> {
     const errors: BridgeError[] = [];
     const warnings: string[] = [];
@@ -368,6 +463,7 @@ export class BackendBridge {
               ...this.modeArgs(mode),
               ...this.meshLevelsArgs(meshLevels),
               ...this.calibrationMethodArgs(calibrationMethod),
+              ...this.calibrationReferenceArgs(calibrationReference),
               "--terrain-file",
               stagedPath,
               targetSemantics,
@@ -377,6 +473,7 @@ export class BackendBridge {
               ...this.modeArgs(mode),
               ...this.meshLevelsArgs(meshLevels),
               ...this.calibrationMethodArgs(calibrationMethod),
+              ...this.calibrationReferenceArgs(calibrationReference),
               "--terrain-file",
               stagedPath,
             ];
@@ -417,23 +514,40 @@ export class BackendBridge {
     hooks: BridgeExecutionHooks = {},
     targetSemantics?: string,
     backendOverride?: string,
+    options: TerrainPayloadOptions = {},
   ): Promise<BackendTerrainProduct> {
     if (!this.host.processSpawning) {
       throw new Error(
         "Backend bridge requires a desktop host with process spawning",
       );
     }
-    const args =
-      targetSemantics !== undefined
-        ? [
-            ...this.backendArgs(backendOverride),
-            "--terrain-file",
-            stagedPath,
-            targetSemantics,
-          ]
-        : [...this.backendArgs(backendOverride), "--terrain-file", stagedPath];
+    const args = [
+      ...this.backendArgs(backendOverride),
+      ...this.meshLevelsArgs(options.meshLevels),
+      ...this.calibrationMethodArgs(options.calibrationMethod),
+      ...this.calibrationReferenceArgs(options.calibrationReference),
+      ...(options.autoReference && !options.calibrationReference ? ["--auto-reference"] : []),
+      "--terrain-file",
+      stagedPath,
+      ...(targetSemantics !== undefined ? [targetSemantics] : []),
+    ];
     const jsonData = await this.spawnPython(args, hooks);
     return validateTerrainShape(jsonData);
+  }
+
+  async executeValidate(
+    productPath: string,
+    referencePath: string,
+    hooks: BridgeExecutionHooks = {},
+  ): Promise<ValidationReport> {
+    if (!this.host.processSpawning) {
+      throw new Error("Validation requires a desktop host with process spawning");
+    }
+    const data = await this.spawnPython(["--validate", productPath, referencePath], hooks);
+    if (typeof data !== "object" || data === null || !("native" in data)) {
+      throw new Error("Malformed validation report from backend");
+    }
+    return data as ValidationReport;
   }
 
   async executeSolar(
@@ -443,6 +557,7 @@ export class BackendBridge {
       sunAzimuthDeg?: number;
       minShadowAreaPx?: number;
       gsdOverride?: number;
+      assumeNorthUp?: boolean;
     },
     hooks: BridgeExecutionHooks = {},
   ): Promise<SolarAnalysisResult> {
@@ -455,18 +570,27 @@ export class BackendBridge {
       throw new OperationCancelledError();
     }
 
+    // Sun angles are sent only when the user supplied both: no defaults,
+    // otherwise the backend reads them from image metadata or refuses.
     const args: string[] = [
       "--solar",
       inputPath,
-      "--sun-elevation",
-      String(config.sunElevationDeg ?? 45),
-      "--sun-azimuth",
-      String(config.sunAzimuthDeg ?? 180),
       "--min-area",
       String(config.minShadowAreaPx ?? 20),
     ];
+    if (config.sunElevationDeg !== undefined && config.sunAzimuthDeg !== undefined) {
+      args.push(
+        "--sun-elevation",
+        String(config.sunElevationDeg),
+        "--sun-azimuth",
+        String(config.sunAzimuthDeg),
+      );
+    }
     if (config.gsdOverride !== undefined) {
       args.push("--gsd", String(config.gsdOverride));
+    }
+    if (config.assumeNorthUp) {
+      args.push("--assume-north-up");
     }
 
     const jsonData = await this.spawnPython(args, hooks);
@@ -759,29 +883,7 @@ export class BackendBridge {
     hooks: BridgeExecutionHooks = {},
   ): Promise<unknown> {
     if (typeof window !== "undefined" && window.depthwizard?.executeService) {
-      if (hooks.signal?.aborted) {
-        throw new OperationCancelledError();
-      }
-      const unsub = hooks.onStage
-        ? window.depthwizard.onStageUpdate?.((stage) => hooks.onStage?.(stage))
-        : undefined;
-      try {
-        const result = await window.depthwizard.executeService({
-          payload: { bridgeArgs: args },
-          timeoutMs: this.timeoutMs,
-        });
-        if (
-          typeof result === "object" &&
-          result !== null &&
-          "error" in result &&
-          typeof (result as { error: unknown }).error === "string"
-        ) {
-          throw new Error((result as { error: string }).error);
-        }
-        return result;
-      } finally {
-        unsub?.();
-      }
+      return invokeElectronExecution({ bridgeArgs: args }, this.timeoutMs, hooks);
     }
     const { spawn } = await import("child_process");
 

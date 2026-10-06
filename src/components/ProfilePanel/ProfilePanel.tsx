@@ -6,9 +6,11 @@ interface ProfilePanelProps {
   onStartProfile: () => void;
   onClear: () => void;
   startDisabled?: boolean;
+  /** What the profiled heights scientifically are (metric / relative / synthetic). */
+  note?: string;
 }
 
-export function ProfilePanel({ state, onStartProfile, onClear, startDisabled = false }: ProfilePanelProps) {
+export function ProfilePanel({ state, onStartProfile, onClear, startDisabled = false, note }: ProfilePanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-md)" }}>
       <div style={sectionLabelStyle}>Elevation Profile</div>
@@ -49,15 +51,15 @@ export function ProfilePanel({ state, onStartProfile, onClear, startDisabled = f
         {state.status === "completed" && (
           <>
             <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
-            <DataRow label="Path length" value={`${state.profile.totalDistance.toFixed(3)} m`} />
-            <DataRow label="Min elevation" value={`${state.profile.minElevation.toFixed(3)} m`} />
-            <DataRow label="Max elevation" value={`${state.profile.maxElevation.toFixed(3)} m`} />
+            <DataRow label="Path length" value={`${state.profile.totalDistance.toFixed(3)}${state.profile.horizontalUnits === "pixels" ? " px" : " m"}`} />
+            <DataRow label="Min elevation" value={`${state.profile.minElevation.toFixed(3)}${heightSuffix(state.profile.units)}`} />
+            <DataRow label="Max elevation" value={`${state.profile.maxElevation.toFixed(3)}${heightSuffix(state.profile.units)}`} />
             <DataRow label="Samples" value={`${state.profile.sampleCount}`} />
-            <DataRow label="Source" value="Fixture coordinate system" />
+            <DataRow label="Source" value={state.profile.source === "backend" ? "Generated product" : "Development fixture"} />
             <div style={{ height: 1, background: "var(--color-border-subtle)", margin: "var(--spacing-xs) 0" }} />
             <ProfileChart profile={state.profile} />
             <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>
-              Synthetic development data — not scientific output
+              {note ?? ""}
             </div>
             <button style={clearButtonStyle} onClick={onClear} aria-label="Clear profile">
               Clear
@@ -86,6 +88,10 @@ function DataRow({ label, value }: { label: string; value: string }) {
       <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{value}</span>
     </div>
   );
+}
+
+function heightSuffix(units: string): string {
+  return units === "meters" ? " m" : " (relative)";
 }
 
 const sectionLabelStyle: React.CSSProperties = {

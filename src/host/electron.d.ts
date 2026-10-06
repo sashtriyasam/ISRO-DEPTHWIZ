@@ -9,7 +9,10 @@ export interface ElectronHostCapabilities {
 export interface CheckpointStatus {
   exists: boolean;
   path: string;
+  /** Actual SHA-256 of the file (empty when missing). */
   hash: string;
+  /** True only when the actual hash equals the pinned checkpoint hash. */
+  verified: boolean;
 }
 
 export interface DepthWizardElectron {
@@ -18,15 +21,20 @@ export interface DepthWizardElectron {
   resolveCheckpointPath(): Promise<string | null>;
   getCheckpointStatus(): Promise<CheckpointStatus | null>;
   getScriptsDir(): Promise<string | null>;
-  launchService(args: {
-    inputPath?: string;
-    targetMode?: string;
-  }): Promise<{ pid?: number; error?: string }>;
-  terminateService(): Promise<{ terminated: boolean }>;
   executeService(args: {
     payload: unknown;
     timeoutMs?: number;
+    /** Lets cancelService terminate this run's Python process. */
+    requestId?: string;
   }): Promise<unknown>;
+  cancelService(args: { requestId: string }): Promise<{ cancelled: boolean }>;
+  /** Read a product written beside a staged input (staged dirs only). */
+  readStagedFile?(args: { path: string }): Promise<{ bytes: Uint8Array } | { error: string }>;
+  /** Copy a staged product to a user-chosen location via a save dialog. */
+  saveStagedFile?(args: {
+    path: string;
+    defaultName?: string;
+  }): Promise<{ saved: boolean; path?: string } | { error: string }>;
   stageInputBytes(args: {
     bytes: Uint8Array;
     filename: string;

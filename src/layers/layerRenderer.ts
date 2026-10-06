@@ -10,17 +10,32 @@ function elevationToColor(value: number, min: number, max: number): THREE.Color 
   return new THREE.Color(r, g, b);
 }
 
-function createColorFromElevation(elevation: ElevationData): Float32Array {
-  const { grid, width, height } = elevation;
+const NODATA_COLOR = new THREE.Color(0.35, 0.35, 0.35);
+
+/**
+ * One colour per mesh *vertex*. Vertices are compacted valid pixels (and a
+ * lattice for LOD meshes), so each vertex looks up its own source pixel;
+ * indexing the grid by vertex number painted other pixels' values.
+ */
+function createColorFromElevation(
+  elevation: ElevationData,
+  vertexCount: number,
+  sourceIndices?: Uint32Array,
+): Float32Array {
+  const { grid } = elevation;
   let min = Infinity;
   let max = -Infinity;
   for (let i = 0; i < grid.length; i++) {
-    if (grid[i] < min) min = grid[i];
-    if (grid[i] > max) max = grid[i];
+    const v = grid[i];
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
   }
-  const colors = new Float32Array(width * height * 3);
-  for (let i = 0; i < grid.length; i++) {
-    const c = elevationToColor(grid[i], min, max);
+  const colors = new Float32Array(vertexCount * 3);
+  for (let i = 0; i < vertexCount; i++) {
+    const pixel = sourceIndices ? sourceIndices[i] : i;
+    const value = grid[pixel];
+    const c = Number.isFinite(value) ? elevationToColor(value, min, max) : NODATA_COLOR;
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
@@ -36,6 +51,8 @@ function layerElevation(artifact: SceneArtifact, layerId: LayerId): ElevationDat
       return artifact.layers?.rdsm;
     case "agl":
       return artifact.layers?.agl;
+    case "slope":
+      return artifact.layers?.slope;
     default:
       return undefined;
   }
@@ -51,6 +68,9 @@ function buildTerrainGeometry(
     case "agl":
     case "rgb":
     case "wireframe":
+      break;
+    case "slope":
+      if (!artifact.layers?.slope) return null; // no slope from the backend
       break;
     default:
       return null;
@@ -77,7 +97,11 @@ function buildTerrainGeometry(
   }
   const elevation = layerElevation(artifact, layerId);
   if (elevation) {
-    const colors = createColorFromElevation(elevation);
+    const colors = createColorFromElevation(
+      elevation,
+      artifact.mesh.vertexCount,
+      artifact.mesh.sourceIndices,
+    );
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   }
   return geometry;
@@ -93,6 +117,7 @@ function surfaceMaterial(
     rdsm: 0x6a9a6a,
     agl: 0x9a6a4a,
     rgb: 0x4a7a4a,
+    slope: 0x4a7a4a,
     wireframe: 0x3a5a3a,
   };
   return new THREE.MeshStandardMaterial({
@@ -149,6 +174,14 @@ export function createLayerMesh(
   }
 
   const material = surfaceMaterial(layerId, elevation, false);
+  if (layerId === "rgb") {
+    const map = createRgbTexture(artifact);
+    if (map) {
+      material.map = map;
+      material.color.set(0xffffff);
+      material.needsUpdate = true;
+    }
+  }
   const mesh = new THREE.Mesh(geometry, material);
   mesh.userData.pickable = true;
   if (mode === "shaded") {
@@ -163,6 +196,27 @@ export function createLayerMesh(
   return { mesh, wireframe, geometry, material };
 }
 
+/**
+ * RGB texture mapped with pixel-centre UVs: mesh UVs are col/(w-1), row/(h-1)
+ * with row 0 at the top, so the texture is not flipped and is shifted by half
+ * a texel to land each pixel centre on its own vertex.
+ */
+export function createRgbTexture(artifact: SceneArtifact): THREE.Texture | null {
+  const data = artifact.texture;
+  if (!data) return null;
+  const texture = new THREE.Texture(data.image as THREE.Texture["image"]);
+  texture.flipY = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const gridW = artifact.elevation?.width ?? data.width;
+  const gridH = artifact.elevation?.height ?? data.height;
+  if (gridW > 1 && gridH > 1) {
+    texture.repeat.set((gridW - 1) / gridW, (gridH - 1) / gridH);
+    texture.offset.set(0.5 / gridW, 0.5 / gridH);
+  }
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function disposeLayerMesh(group: {
   mesh: THREE.Mesh;
   wireframe?: THREE.LineSegments;
@@ -170,6 +224,8 @@ export function disposeLayerMesh(group: {
   material: THREE.Material;
 }): void {
   group.geometry.dispose();
+  const map = (group.material as THREE.MeshStandardMaterial).map;
+  if (map) map.dispose();
   group.material.dispose();
   if (group.wireframe) {
     group.wireframe.geometry.dispose();

@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from depthwizard.backends.depth_anything_v2 import _load_image_rgb
 from depthwizard.backends.depth_anything_v2_large import (
     CHECKPOINT_FILE,
     CHECKPOINT_HF_ID,
@@ -25,7 +26,6 @@ from depthwizard.backends.depth_anything_v2_large import (
     UPSTREAM_REVISION,
     UPSTREAM_URL,
     DepthAnythingV2LargeBackend,
-    _load_image_rgb,
 )
 from depthwizard.contracts.artifacts import ImageResolution
 from depthwizard.contracts.semantics import (

@@ -20,6 +20,10 @@ export interface ServiceExecutionArgs {
   outputMode?: "metric" | "relative";
   meshLevels?: number[];
   calibrationMethod?: string;
+  calibrationReference?: string;
+  autoReference?: boolean;
+  /** Ask the service for this run's product so no second pass is needed. */
+  includePayload?: boolean;
   solarConfig?: SolarConfig;
 }
 
@@ -89,6 +93,15 @@ export class LocalServiceClient {
     }
     if (args.calibrationMethod !== undefined) {
       request.calibration_method = args.calibrationMethod;
+    }
+    if (args.calibrationReference !== undefined) {
+      request.calibration_reference_path = args.calibrationReference;
+    }
+    if (args.autoReference) {
+      request.auto_reference = true;
+    }
+    if (args.includePayload) {
+      request.include_payload = true;
     }
     return request;
   }

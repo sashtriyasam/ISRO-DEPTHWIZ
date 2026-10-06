@@ -7,6 +7,7 @@ data. Static typing is enforced by mypy; instances are immutable.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +44,7 @@ class SolarConfig:
     sun_azimuth_deg: float | None = None
     min_shadow_area_px: int = 20
     gsd_override: float | None = None
+    assume_north_up: bool = False
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,13 @@ class PipelineRequest:
     cancellation: CancellationToken | None = None
     solar_config: SolarConfig | None = None
     semantic_preprocessor: SemanticPreprocessor | None = None
+    #: LOD factors for the mesh stage; the first level is the returned mesh.
+    mesh_levels: tuple[int, ...] | None = None
+    #: Called with each stage name once that stage has completed (progress).
+    on_stage: Callable[[str], None] | None = None
+    #: Upper bound on mesh vertices (display transfer); a coarser LOD stride is
+    #: chosen automatically above it and reported as a warning.
+    max_mesh_vertices: int | None = None
 
 
 @dataclass(frozen=True)

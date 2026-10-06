@@ -15,15 +15,28 @@ export interface MeshData {
   uvs?: Float32Array;
   vertexCount: number;
   indexCount: number;
+  /** Row-major grid pixel each vertex was built from (backend meshes). */
+  sourceIndices?: Uint32Array;
 }
 
 export interface TextureData {
-  image: ImageData | HTMLImageElement;
+  image: ImageData | HTMLImageElement | ImageBitmap;
   width: number;
   height: number;
 }
 
 export type ElevationUnit = "meters" | "relative" | string;
+
+/**
+ * How mesh display coordinates map to grid pixels:
+ * display.x = offsetX + stepX * col, display.z = offsetZ + stepZ * row.
+ */
+export interface DisplayGrid {
+  offsetX: number;
+  offsetZ: number;
+  stepX: number;
+  stepZ: number;
+}
 
 export interface ElevationData {
   grid: Float32Array;
@@ -32,11 +45,15 @@ export interface ElevationData {
   cellSize: number;
   noDataValue?: number;
   unit: ElevationUnit;
+  /** Exact display↔pixel mapping for backend meshes (absent for fixtures). */
+  displayGrid?: DisplayGrid;
 }
 
 export interface LayerPayloads {
   rdsm?: ElevationData;
   agl?: ElevationData;
+  /** Slope in degrees from the canonical Python computation. */
+  slope?: ElevationData;
 }
 
 export interface BackendOrigin {
@@ -71,13 +88,22 @@ export interface SceneMetadata {
   transform?: GeoTransform;
   bounds?: BoundingBox3D;
   units: {
-    spatial: "meters";
-    elevation: "meters";
+    /** Horizontal units of display/mesh coordinates. */
+    spatial: "meters" | "pixels";
+    elevation: "meters" | "relative";
   };
   source: "deterministic-fixture" | "backend";
   description?: string;
   backend?: BackendOrigin;
   spatialDetails?: SpatialDetails;
+  /** Non-fatal backend findings shown to the user (e.g. weak calibration). */
+  warnings?: string[];
+  /** Staged, verified DSM GeoTIFF of this run (exportable via a save dialog). */
+  exportPath?: string;
+  /** Staged RGB texture of this run (model-input pixels). */
+  texturePath?: string;
+  /** Staged product raster (dsm.tif or rdsm.tif) used for validation. */
+  productPath?: string;
 }
 
 export interface GeoTransform {

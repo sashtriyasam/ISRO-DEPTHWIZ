@@ -185,3 +185,25 @@ describe("ServiceArtifactTransport", () => {
     }
   });
 });
+
+describe("single inference pass", () => {
+  it("uses the service's own payload and never re-runs the bridge", async () => {
+    const staged = await bridge.stageInputBytes(makeTestPng(4, 4), "tile.png");
+    let bridgeCalls = 0;
+    const countingBridge = new BackendBridge({ bridgeScript: "scripts/backend_bridge.py" });
+    countingBridge.fetchTerrainPayload = async () => {
+      bridgeCalls += 1;
+      throw new Error("bridge should not be called");
+    };
+    try {
+      const transport = new ServiceArtifactTransport({ bridge: countingBridge });
+      const bundle = await transport.fetchTerrain({ stagedPath: staged.path });
+      expect(bridgeCalls).toBe(0);
+      expect(bundle.response.payload).toBeDefined();
+      expect(bundle.terrain.mesh.source_checksum).toBe(bundle.response.summary.input_checksum);
+      expect(() => verifyBundle(bundle)).not.toThrow();
+    } finally {
+      await staged.cleanup();
+    }
+  });
+});

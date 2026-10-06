@@ -135,5 +135,6 @@ def create_scientific_height_product(
         calibration_offset=calibration.offset,
         calibration_valid_samples=calibration.valid_samples,
         piecewise_params=calibration.piecewise_params,
+        valid_mask=depth_result.valid_mask,
         provenance=provenance,
     )

@@ -1,5 +1,6 @@
 import type { SceneArtifact } from "../../types/scene";
 import type { ArtifactState } from "../../artifact/types";
+import { scientificNote } from "../../metadata/metadata";
 
 interface SceneInfoProps {
   artifact: SceneArtifact | null;
@@ -84,7 +85,7 @@ export function SceneInfo({ artifact, state, sourceLabel }: SceneInfoProps) {
           <div>
             <div style={sectionLabelStyle}>Note</div>
             <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>
-              Synthetic development data — not scientific output
+              {scientificNote(artifact.metadata)}
             </div>
           </div>
         </>

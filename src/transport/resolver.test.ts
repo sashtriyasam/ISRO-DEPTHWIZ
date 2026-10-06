@@ -112,6 +112,14 @@ describe("resolveTerrainArtifact", () => {
     expect(artifact.metadata.backend?.depth_scale).toBe("metric");
   });
 
+  it("carries backend warnings into artifact metadata", () => {
+    const bundle = minimalBundle();
+    bundle.response.warnings = ["Weak calibration: R² 0.10"];
+    const artifact = resolveTerrainArtifact(bundle);
+    expect(artifact.metadata.warnings).toEqual(["Weak calibration: R² 0.10"]);
+    expect(resolveTerrainArtifact(minimalBundle()).metadata.warnings).toBeUndefined();
+  });
+
   it("rejects unverified bundles before adaptation", () => {
     const bundle = minimalBundle();
     bundle.response.artifacts = [];
@@ -169,3 +177,4 @@ describe("resolveTerrainArtifact", () => {
     );
   });
 });
+

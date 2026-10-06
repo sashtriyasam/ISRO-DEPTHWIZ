@@ -9,7 +9,7 @@ contract itself — distinct from engine, package and model versions.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -39,10 +39,27 @@ class ArtifactKind(str, Enum):
     GEOTIFF = "geotiff"
 
 
-class ServiceRequest(BaseModel):
-    """Serializable execution request (no callables, no classes)."""
+class SolarRequestConfig(BaseModel):
+    """Optional solar-shadow analysis for a run (angles: both or neither)."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sun_elevation_deg: float | None = None
+    sun_azimuth_deg: float | None = None
+    min_shadow_area_px: int = Field(default=20, ge=1)
+    gsd_override: float | None = Field(default=None, gt=0)
+    assume_north_up: bool = False
+
+
+class ServiceRequest(BaseModel):
+    """Serializable execution request (no callables, no classes).
+
+    Unknown fields are rejected: silently ignoring them hid that the
+    desktop's calibration method, LOD levels and solar settings never
+    reached the engine.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     contract_version: Literal["1"] = "1"
     input_path: str = Field(min_length=1)
@@ -63,6 +80,32 @@ class ServiceRequest(BaseModel):
         "'relative' runs the calibration-free rDSM path (no metric output).",
     )
     build_mesh: bool = False
+    calibration_method: Literal[
+        "scale_offset", "scale_offset_huber", "piecewise_linear", "dem_anchored"
+    ] = Field(
+        default="scale_offset",
+        description="Calibration fitting method for metric runs.",
+    )
+    auto_reference: bool = Field(
+        default=False,
+        description="Without a reference file, fetch the Copernicus GLO-30 DEM for a "
+        "georeferenced input's footprint (cached; DW_DEM_OFFLINE=1 forbids network).",
+    )
+    calibration_reference_path: str | None = Field(
+        default=None,
+        description="Local DEM GeoTIFF or GCP CSV backing metric calibration. "
+        "Metric runs without one are refused (no fabricated metres).",
+    )
+    mesh_levels: list[int] | None = Field(
+        default=None,
+        description="Mesh LOD factors (each >= 1); the first is the returned mesh.",
+    )
+    include_payload: bool = Field(
+        default=False,
+        description="Return the terrain/relative product of this run in the "
+        "response so the desktop needs no second inference pass.",
+    )
+    solar_config: SolarRequestConfig | None = None
     geotiff_path: str | None = None
     export_compression: Literal["deflate", "none"] = "deflate"
     export_overwrite: bool = False
@@ -76,6 +119,14 @@ class ServiceRequest(BaseModel):
                 "service target semantics must be a metric meaning "
                 "(height_agl_ndsm, absolute_elevation_dsm)"
             )
+        if self.calibration_reference_path is not None and not (
+            self.calibration_reference_path.strip()
+        ):
+            raise ValueError("calibration_reference_path must not be blank when provided")
+        if self.mesh_levels is not None and (
+            not self.mesh_levels or any(level < 1 for level in self.mesh_levels)
+        ):
+            raise ValueError("mesh_levels must be a non-empty list of factors >= 1")
         if self.geotiff_path is not None and not self.geotiff_path.strip():
             raise ValueError("geotiff_path must not be blank when provided")
         return self
@@ -140,6 +191,20 @@ class ServiceResponse(BaseModel):
     failure: ServiceError | None = None
     artifacts: list[ArtifactDescriptor] = Field(default_factory=list)
     summary: RunSummary
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Non-fatal findings (weak calibration fit, flat depth, ...).",
+    )
+    solar: dict[str, Any] | None = Field(
+        default=None,
+        description="Solar-shadow height cues of this run (independent cross-check; "
+        "never fused into the DSM), or why the analysis was refused.",
+    )
+    payload: dict[str, Any] | None = Field(
+        default=None,
+        description="Terrain or relative product JSON of this very run "
+        "(only when include_payload was requested and the run succeeded).",
+    )
 
 
 class ServiceCapabilities(BaseModel):

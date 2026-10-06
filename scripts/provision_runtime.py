@@ -48,6 +48,11 @@ def main(argv: list[str] | None = None) -> int:
         help="download ONLY the fixed checkpoint identity, then verify",
     )
     parser.add_argument("--skip-pip", action="store_true", help="skip package installation")
+    parser.add_argument(
+        "--no-editable",
+        action="store_true",
+        help="regular (non-editable) install, for read-only installed app directories",
+    )
     parser.add_argument("--pretty", action="store_true", help="indent JSON output")
     args = parser.parse_args(argv)
 
@@ -60,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_src=Path(args.checkpoint_src) if args.checkpoint_src else None,
         fetch_checkpoint=args.fetch_checkpoint,
         skip_pip=args.skip_pip,
+        editable=not args.no_editable,
     )
     status = provision(request)
     print(json.dumps(status.to_dict(), indent=2 if args.pretty else None))

@@ -20,7 +20,7 @@ from depthwizard.solar.models import ShadowHeightConstraint
 def _make_georeferenced_inspection(
     gsd: float = 0.5, meta: dict[str, str] | None = None
 ) -> InputInspection:
-    transform = AffineTransform(a=gsd, b=0.0, c=1000.0, d=0.0, e=-gsd, f=2000.0)
+    transform = AffineTransform(a=1000.0, b=gsd, c=0.0, d=2000.0, e=0.0, f=-gsd)
     return InputInspection(
         handle=InputHandle(
             source_path="sat_scene.tif",
@@ -117,8 +117,68 @@ def test_solar_succeeds_with_gsd_override_on_png() -> None:
     img[10:30, 10:30, :] = 20
 
     res = solar_observations_from_image(
-        insp, img, sun_elevation_deg=45.0, sun_azimuth_deg=90.0, gsd_override=0.5
+        insp,
+        img,
+        sun_elevation_deg=45.0,
+        sun_azimuth_deg=90.0,
+        gsd_override=0.5,
+        assume_north_up=True,
     )
     assert res.count >= 1
     assert res.refused_reason is None
     assert res.constraints[0].height_m > 0.0
+
+
+def test_shadow_length_follows_sun_azimuth() -> None:
+    """A 10 px wide x 40 px long shadow cast north (sun due south) is 40 px long."""
+    insp = _make_georeferenced_inspection(
+        gsd=1.0, meta={"SUN_ELEVATION": "45.0", "SUN_AZIMUTH": "180.0"}
+    )
+    img = np.full((100, 100, 3), 220, dtype=np.uint8)
+    img[30:70, 45:55, :] = 25  # rows run north-south: 40 px long, 10 px wide
+    res = solar_observations_from_image(insp, img)
+    assert res.count == 1
+    # tan(45°) = 1 and GSD 1 m: height equals the 40 px shadow length.
+    assert abs(res.constraints[0].height_m - 40.0) < 1e-6
+
+
+def test_png_without_declared_orientation_is_refused() -> None:
+    insp = InputInspection(
+        handle=InputHandle(
+            source_path="scene.png", display_name="scene.png", file_size=1, sha256="e" * 64
+        ),
+        detected_format=DetectedFormat.PNG,
+        width=50,
+        height=50,
+        georeferencing=GeoreferencingLevel.NON_GEOREFERENCED,
+        spatial=SpatialContext(kind=SpatialKind.NOT_APPLICABLE),
+        source_format_metadata={},
+    )
+    img = np.full((50, 50, 3), 200, dtype=np.uint8)
+    img[10:30, 10:30, :] = 20
+    res = solar_observations_from_image(
+        insp, img, sun_elevation_deg=45.0, sun_azimuth_deg=90.0, gsd_override=0.5
+    )
+    assert res.count == 0
+    assert res.refused_reason is not None and "orientation" in res.refused_reason
+
+
+def test_geographic_crs_gsd_is_never_metres() -> None:
+    from depthwizard.solar.shadow_detect import gsd_from_inspection
+
+    transform = AffineTransform(a=73.0, b=1e-5, c=0.0, d=19.0, e=0.0, f=-1e-5)
+    insp = InputInspection(
+        handle=InputHandle(
+            source_path="geo.tif", display_name="geo.tif", file_size=1, sha256="f" * 64
+        ),
+        detected_format=DetectedFormat.TIFF,
+        width=10,
+        height=10,
+        georeferencing=GeoreferencingLevel.GEOREFERENCED_NO_ELEVATION_REFERENCE,
+        spatial=SpatialContext(
+            kind=SpatialKind.PRESENT,
+            details=SpatialDetails(crs="EPSG:4326", transform=transform),
+        ),
+        source_format_metadata={},
+    )
+    assert gsd_from_inspection(insp) is None

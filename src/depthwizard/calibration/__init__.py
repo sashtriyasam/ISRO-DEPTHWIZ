@@ -21,6 +21,12 @@ from depthwizard.calibration.models import (
     CalibrationSamples,
 )
 from depthwizard.calibration.provider import FileBasedCalibrationProvider
+from depthwizard.calibration.selection import (
+    DevCalibrationProvider,
+    MissingReferenceProvider,
+    make_calibrator,
+    select_calibration_provider,
+)
 
 __all__ = [
     "MIN_VALID_SAMPLES",
@@ -28,9 +34,13 @@ __all__ = [
     "CalibrationResult",
     "CalibrationSamples",
     "Calibrator",
+    "DevCalibrationProvider",
+    "MissingReferenceProvider",
     "FileBasedCalibrationProvider",
     "ScaleOffsetCalibrator",
     "HuberScaleOffsetCalibrator",
     "PiecewiseLinearCalibrator",
     "apply_calibration",
+    "make_calibrator",
+    "select_calibration_provider",
 ]

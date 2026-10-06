@@ -49,3 +49,15 @@ export function computeFrameCameraPosition(
 
   return { position, target: bounds.center.clone() };
 }
+
+/** Fit near/far clip planes to the scene so km-scale meshes are not clipped. */
+export function fitClipPlanes(camera: THREE.PerspectiveCamera, radius: number): void {
+  const r = Number.isFinite(radius) && radius > 0 ? radius : 1;
+  const near = Math.max(0.01, r / 2000);
+  const far = Math.max(100, r * 20);
+  if (camera.near !== near || camera.far !== far) {
+    camera.near = near;
+    camera.far = far;
+    camera.updateProjectionMatrix();
+  }
+}

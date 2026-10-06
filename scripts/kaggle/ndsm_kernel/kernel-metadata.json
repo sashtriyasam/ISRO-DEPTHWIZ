@@ -1,0 +1,13 @@
+{
+  "id": "shivamshelatkar/depthwizard-ndsm-train",
+  "title": "depthwizard-ndsm-train",
+  "code_file": "train_kernel.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": false,
+  "dataset_sources": ["shivamshelatkar/depthwizard-ndsm-data"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

@@ -242,3 +242,31 @@ describe("generateProfile", () => {
     }
   });
 });
+
+describe("backend display grid sampling", () => {
+  it("samples origin-relative georeferenced meshes at the right cells", () => {
+    // 3x3 grid, 0.5 m pixels, north-up: display x = 0.5*(col+0.5), z = -0.5*(row+0.5)
+    const elevation = {
+      grid: new Float32Array([0, 1, 2, 10, 11, 12, 20, 21, 22]),
+      width: 3,
+      height: 3,
+      cellSize: 0.5,
+      unit: "meters",
+      displayGrid: { offsetX: 0.25, offsetZ: -0.25, stepX: 0.5, stepZ: -0.5 },
+    };
+    const at = (col: number, row: number) => ({
+      displayPosition: { x: 0.25 + 0.5 * col, y: 0, z: -0.25 - 0.5 * row },
+      scientific: { elevation: 0 },
+      uv: { u: 0, v: 0 },
+      gridIndex: { col, row },
+      layerId: "dsm",
+      artifactId: "a",
+    });
+    // The absolute CRS origin must not be subtracted from origin-relative coords.
+    const transform = { originX: 500000, originY: 2000000, pixelWidth: 0.5, pixelHeight: -0.5 };
+    const profile = generateProfile(at(0, 2), at(2, 2), elevation, undefined, transform, {
+      sampleCount: 3,
+    });
+    expect(profile.points.map((p) => p.elevation)).toEqual([20, 21, 22]);
+  });
+});

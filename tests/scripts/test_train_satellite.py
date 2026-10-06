@@ -123,3 +123,62 @@ def test_gradient_loss_formula() -> None:
     total = loss_x + loss_y
     assert total >= 0
     assert total < 1.0
+
+
+def _run(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), *args], capture_output=True, text=True, timeout=60
+    )
+
+
+def _manifest(tmp_path: Path) -> Path:
+    import json
+
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"samples": [{"split": "test", "id": "x"}]}))
+    return path
+
+
+def test_refuses_held_out_split(tmp_path: Path) -> None:
+    result = _run(
+        "--gamus-root",
+        str(tmp_path),
+        "--manifest",
+        str(_manifest(tmp_path)),
+        "--output",
+        str(tmp_path / "o.pth"),
+        "--split",
+        "test",
+    )
+    assert result.returncode != 0
+    assert "HELD_OUT_SPLIT" in result.stdout
+
+
+def test_missing_resume_checkpoint_is_an_error(tmp_path: Path) -> None:
+    result = _run(
+        "--gamus-root",
+        str(tmp_path),
+        "--manifest",
+        str(_manifest(tmp_path)),
+        "--output",
+        str(tmp_path / "o.pth"),
+        "--split",
+        "test",
+        "--allow-held-out-split",
+        "--resume",
+        str(tmp_path / "missing.pth"),
+    )
+    assert result.returncode != 0
+    assert "RESUME_MISSING" in result.stdout
+
+
+def test_base_load_check_only_tolerates_head_differences() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("train_mod", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.check_base_load(["depth_head.conv.weight"], []) is None
+    error = module.check_base_load(["pretrained.blocks.0.attn.qkv.weight"], [])
+    assert error is not None and "does not match" in error

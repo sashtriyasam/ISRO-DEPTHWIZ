@@ -14,13 +14,15 @@ Envelope out:  {"capabilities": {...ServiceCapabilities...}}
   executes the real ``PipelineRunner``; responses are encoded with the
   real wire encoder (``encode_response``). This script never touches
   scientific pipeline modules directly.
-- Calibration comes from an in-process dev provider mirroring the
-  sanctioned backend test collaborator
-  (``tests/pipeline/support.py::SyntheticCalibrationProvider``): paired
-  references fitted with the real ``ScaleOffsetCalibrator``. No DEM/GCP
-  source is faked — the reference id marks it as synthetic dev data.
-- The service is synchronous with no live progress: no stage lines are
-  emitted. Stage history arrives post-hoc inside the response.
+- Calibration comes from ``select_calibration_provider``: the request's
+  ``calibration_reference_path`` (DEM GeoTIFF or GCP CSV) backs metric
+  runs. Without one, metric runs fail at the calibrating stage unless
+  ``DW_DEV_CALIBRATION=1`` explicitly enables the labelled synthetic dev
+  calibration (test suites only; the packaged app strips it).
+- Each pipeline stage is reported on stderr as ``STAGE <name>`` once it
+  has completed (same protocol as backend_bridge.py); the full state
+  history also arrives inside the response. With ``include_payload`` the
+  response carries this run's product, so no second inference is needed.
 - Exit 0 for any valid wire exchange, even when
   ``response.success`` is false (a failed run is still a valid
   response). Non-zero exit means wire/process failure only.
@@ -44,13 +46,7 @@ for _candidate in (
         sys.path.insert(0, str(_candidate))
 
 try:
-    from depthwizard.calibration import (
-        CalibrationResult,
-        CalibrationSamples,
-        ScaleOffsetCalibrator,
-    )
-    from depthwizard.contracts.artifacts import DepthResult
-    from depthwizard.contracts.semantics import ElevationSemantics
+    from depthwizard.calibration import select_calibration_provider
     from depthwizard.service import (
         LocalService,
         decode_request,
@@ -64,25 +60,9 @@ except ImportError as exc:
     sys.exit(1)
 
 
-DEV_REFERENCE_ID = "synthetic-dev-ref"
-
-#: M17 checkpoint file name (canonical candidate, never committed).
-_M17_CHECKPOINT_FILE = "m17_geonrw_struct_best.pt"
-
 #: Satellite DA-V2 checkpoint file name (never committed).
 _SAT_CHECKPOINT_FILE = "depth_anything_v2_satellite.pth"
 _SAT_CHECKPOINT_ENV = "DW_DAV2_SAT_CKPT"
-
-
-def _m17_checkpoint_present() -> bool:
-    """Whether an M17 checkpoint resolves (discovery only, no loading)."""
-    import os
-
-    override = os.environ.get("DW_M17_CKPT")
-    if override:
-        return Path(override).is_file()
-    root = Path(__file__).resolve().parent.parent
-    return (root / "checkpoints" / _M17_CHECKPOINT_FILE).is_file()
 
 
 def _sat_checkpoint_present() -> bool:
@@ -94,6 +74,21 @@ def _sat_checkpoint_present() -> bool:
         return Path(override).is_file()
     root = Path(__file__).resolve().parent.parent
     return (root / "checkpoints" / _SAT_CHECKPOINT_FILE).is_file()
+
+
+def _device() -> str:
+    """GPU when torch sees one (DW_DEVICE overrides), else CPU."""
+    import os
+
+    explicit = os.environ.get("DW_DEVICE")
+    if explicit:
+        return explicit
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
 
 
 def build_backends() -> dict[str, Any]:
@@ -122,10 +117,15 @@ def build_backends() -> dict[str, Any]:
         from depthwizard.backends.depth_anything_v2 import DepthAnythingV2Backend
 
         backends["depth-anything-v2-small"] = DepthAnythingV2Backend()
-    if _m17_checkpoint_present():
-        from depthwizard.backends.m17 import M17DepthBackend
+    # M17 is a frozen research candidate whose head is not in this repository
+    # (M17DepthBackend.load() always refuses without an injected factory), so
+    # it is never advertised as an available backend.
+    from depthwizard.backends.ndsm import checkpoint_usable
 
-        backends["m17-geonrw-struct"] = M17DepthBackend()
+    if module_available("torch") and checkpoint_usable():
+        from depthwizard.backends.ndsm import NdsmBackend
+
+        backends["depthwizard-ndsm-vits"] = NdsmBackend(device=_device())
     if _sat_checkpoint_present():
         from depthwizard.backends.satellite import SatelliteDepthBackend
 
@@ -133,37 +133,9 @@ def build_backends() -> dict[str, Any]:
     return backends
 
 
-class DevCalibrationProvider:
-    """Deterministic dev calibration provider (test infrastructure).
-
-    Mirrors the sanctioned backend test collaborator
-    ``tests/pipeline/support.py::SyntheticCalibrationProvider``:
-    reference = 2.5 * predicted + 10 fitted with the real OLS
-    calibrator. Never production data; the reference id says so.
-    """
-
-    def __init__(self, target: ElevationSemantics) -> None:
-        """Bind the metric target semantics for this run."""
-        self._target = target
-
-    @property
-    def name(self) -> str:
-        """Stable provider name for run metadata."""
-        return "synthetic-dev-provider"
-
-    def calibrate(self, depth_result: DepthResult) -> CalibrationResult:
-        """Fit paired references against the actual depth values."""
-        predicted = depth_result.depth_values
-        reference = tuple(2.5 * value + 10.0 for value in predicted)
-        samples = CalibrationSamples(
-            predicted_values=predicted,
-            reference_values=reference,
-            reference_id=DEV_REFERENCE_ID,
-            reference_units="meters",
-            target_semantics=self._target,
-            source_checksum=depth_result.provenance.input_checksum,
-        )
-        return ScaleOffsetCalibrator().calibrate(samples)
+def _emit_stage(name: str) -> None:
+    """Report a completed pipeline stage on stderr (``STAGE <name>``)."""
+    print(f"STAGE {name}", file=sys.stderr, flush=True)
 
 
 def handle_capabilities() -> dict[str, Any]:
@@ -180,9 +152,16 @@ def handle_request(payload: object) -> dict[str, Any]:
         request = decode_request(json.dumps(payload))
     except Exception as exc:
         return {"wire_error": f"invalid ServiceRequest: {exc}"}
-    provider = DevCalibrationProvider(request.target_semantics)
+    provider = select_calibration_provider(
+        request.calibration_reference_path,
+        request.target_semantics,
+        request.calibration_method,
+        auto_reference=request.auto_reference,
+    )
     try:
-        response = LocalService(backends=build_backends()).execute(request, provider)
+        response = LocalService(backends=build_backends()).execute(
+            request, provider, on_stage=_emit_stage
+        )
     except Exception as exc:
         return {"wire_error": f"service execution failed: {type(exc).__name__}: {exc}"}
     return {"response": json.loads(encode_response(response))}

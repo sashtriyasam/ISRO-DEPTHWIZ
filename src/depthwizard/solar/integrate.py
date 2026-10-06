@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -32,51 +31,20 @@ from depthwizard.errors import InvalidInputError
 from depthwizard.ingestion.models import InputInspection
 from depthwizard.solar.geometry import estimate_height
 from depthwizard.solar.models import PixelPoint, ShadowObservation
-from depthwizard.solar.shadow_detect import ShadowRegion, detect_shadows, gsd_from_inspection
+from depthwizard.solar.shadow_detect import (
+    gsd_from_inspection,
+    is_north_up,
+    region_pixels,
+    segment_shadows,
+)
 from depthwizard.solar.sun_angles import SunAngles, resolve_sun_angles
 
 
 def load_image_rgb(inspection: InputInspection) -> NDArray[np.uint8]:
-    """Load image pixels as HWC uint8 RGB from an InputInspection."""
-    import numpy as np
+    """Load image pixels as HWC uint8 RGB (shared loader, see ``ingestion.pixels``)."""
+    from depthwizard.ingestion.pixels import load_model_rgb
 
-    path = Path(inspection.handle.source_path)
-    fmt = inspection.detected_format
-
-    if fmt.value in ("png", "jpeg"):
-        from PIL import Image
-
-        with Image.open(path) as img:
-            img.load()
-            if img.mode != "RGB":
-                rgb_img = img.convert("RGB")
-                return np.array(rgb_img, dtype=np.uint8)
-            return np.array(img, dtype=np.uint8)
-
-    if fmt.value == "tiff":
-        try:
-            import rasterio
-
-            with rasterio.open(path) as ds:
-                bands = ds.count
-                if bands >= 3:
-                    data = ds.read((1, 2, 3))
-                    return np.transpose(data, (1, 2, 0)).astype(np.uint8)
-                elif bands == 1:
-                    gray = ds.read(1)
-                    return np.stack([gray, gray, gray], axis=-1).astype(np.uint8)
-        except Exception:
-            pass
-        from PIL import Image
-
-        with Image.open(path) as img:
-            img.load()
-            rgb_img = img.convert("RGB")
-            return np.array(rgb_img, dtype=np.uint8)
-
-    raise InvalidInputError(
-        f"Unsupported format for RGB loading: {fmt.value} ({inspection.handle.display_name})"
-    )
+    return load_model_rgb(inspection).rgb
 
 
 @dataclass(frozen=True)
@@ -108,6 +76,7 @@ def solar_observations_from_image(
     sun_azimuth_deg: float | None = None,
     min_area_px: int = 20,
     gsd_override: float | None = None,
+    assume_north_up: bool = False,
 ) -> SolarIntegrationResult:
     """Derive shadow height constraints from one image.
 
@@ -129,7 +98,12 @@ def solar_observations_from_image(
     gsd_override:
         Force a specific GSD (m/px) instead of reading it from the
         inspection's affine transform.  Only for cases where the caller has
-        an independent GSD measurement; ``None`` uses the transform.
+        an independent GSD measurement; ``None`` uses the transform (which
+        must be a projected metric CRS: degrees are never treated as metres).
+    assume_north_up:
+        Caller declares that image rows run north to south. Required for
+        inputs without a north-up transform (e.g. PNG), because the shadow is
+        measured along the direction opposite the sun azimuth.
 
     Returns
     -------
@@ -166,10 +140,29 @@ def solar_observations_from_image(
             detected_count=0,
             refused_reason=(
                 "GSD (ground sampling distance) could not be resolved from the "
-                "image transform.  Shadow trig requires a metric pixel size; "
-                "supply gsd_override for non-georeferenced inputs."
+                "image transform.  Shadow trig requires a metric pixel size from a "
+                "projected metre CRS with square, axis-aligned pixels; supply "
+                "gsd_override for other inputs."
             ),
         )
+
+    # --- orientation: shadows are measured along (sun azimuth + 180°) ---
+    if not (is_north_up(inspection) or assume_north_up):
+        return SolarIntegrationResult(
+            constraints=(),
+            skipped_count=0,
+            detected_count=0,
+            refused_reason=(
+                "Image orientation is unknown: the shadow direction cannot be related "
+                "to the sun azimuth. Use a north-up georeferenced raster or declare "
+                "the image north-up explicitly."
+            ),
+        )
+    shadow_azimuth = math.radians((sun_angles.azimuth_deg + 180.0) % 360.0)
+    # Pixel frame: north = -row, east = +col.
+    dir_row = -math.cos(shadow_azimuth)
+    dir_col = math.sin(shadow_azimuth)
+    expected_angle = math.degrees(math.atan2(dir_row, dir_col))
 
     # --- shadow detection ---
     import importlib.util
@@ -186,9 +179,8 @@ def solar_observations_from_image(
 
     import numpy as np
 
-    regions: list[ShadowRegion] = detect_shadows(
-        cast(np.ndarray, rgb_array), min_area_px=min_area_px
-    )
+    labels, regions = segment_shadows(cast(np.ndarray, rgb_array), min_area_px=min_area_px)
+    pixels = region_pixels(labels)
 
     source_id = inspection.handle.display_name
     source_checksum = inspection.handle.sha256
@@ -197,13 +189,24 @@ def solar_observations_from_image(
     skipped = 0
 
     for region in regions:
-        # Shadow base = region centroid (representative structure foot)
-        base = PixelPoint(row=int(round(region.centroid_row)), col=int(round(region.centroid_col)))
-        tip = PixelPoint(row=region.tip_row, col=region.tip_col)
-
-        # Shadow length in pixels (Euclidean distance from centroid to tip)
-        length_px = math.hypot(tip.row - base.row, tip.col - base.col)
-        if length_px <= 0.0:
+        rows, cols = pixels[region.region_id]
+        # Extent along the shadow direction: the foot is the pixel nearest the
+        # sun, the tip the farthest; length spans the whole shadow.
+        projection = rows * dir_row + cols * dir_col
+        p_min, p_max = float(projection.min()), float(projection.max())
+        c_row, c_col = float(rows.mean()), float(cols.mean())
+        p_mid = c_row * dir_row + c_col * dir_col
+        # Foot and tip on the region's central axis along the shadow direction.
+        base = PixelPoint(
+            row=int(round(c_row + dir_row * (p_min - p_mid))),
+            col=int(round(c_col + dir_col * (p_min - p_mid))),
+        )
+        tip = PixelPoint(
+            row=int(round(c_row + dir_row * (p_max - p_mid))),
+            col=int(round(c_col + dir_col * (p_max - p_mid))),
+        )
+        length_px = p_max - p_min + 1.0
+        if tip == base:
             skipped += 1
             continue
 
@@ -217,7 +220,9 @@ def solar_observations_from_image(
                 gsd_m_per_px=gsd,
                 sun_elevation_deg=sun_angles.elevation_deg,
                 sun_azimuth_deg=sun_angles.azimuth_deg,
-                method=f"otsu-luminance-v1;sun-source={sun_angles.source}",
+                expected_shadow_angle_deg=expected_angle,
+                angle_tolerance_deg=15.0,
+                method=f"otsu-luminance-v2-azimuth-extent;sun-source={sun_angles.source}",
                 quality=region.quality,
             )
         except (ValueError, TypeError):
@@ -227,7 +232,7 @@ def solar_observations_from_image(
         try:
             constraint = estimate_height(obs)
         except InvalidInputError:
-            # Direction contradiction or non-positive height — skip silently.
+            # Direction contradiction or non-positive height — skip.
             skipped += 1
             continue
 

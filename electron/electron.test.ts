@@ -81,6 +81,13 @@ describe("Electron security audit", () => {
     expect(prodCspIdx).toBeGreaterThan(-1);
   });
 
+  it("production build injects a CSP meta (file:// has no response headers)", () => {
+    const viteConfig = readFileSync(resolve(ROOT, "vite.config.ts"), "utf-8");
+    expect(viteConfig).toContain('apply: "build"');
+    expect(viteConfig).toContain('http-equiv="Content-Security-Policy"');
+    expect(viteConfig).toContain("\"script-src 'self'\"");
+  });
+
   it("no unsafe-inline script-src in CSP", () => {
     const cspStart = mainSource.indexOf("Content-Security-Policy");
     const cspEnd = mainSource.indexOf("];", cspStart);
@@ -142,13 +149,22 @@ describe("Electron security audit", () => {
     expect(preloadSource).toContain("Blocked IPC channel");
   });
 
-  it("Python resolution uses system Python (external prerequisite)", () => {
+  it("Python resolution prefers override, then the managed runtime", () => {
     expect(mainSource).toContain("getPythonPath");
     expect(mainSource).toContain("DEPTHWIZARD_PYTHON");
+    const body = mainSource.slice(mainSource.indexOf("function getPythonPath"));
+    expect(body.indexOf("DEPTHWIZARD_PYTHON")).toBeLessThan(body.indexOf("managedRuntimePython()"));
+    expect(mainSource).toContain('path.join(localAppData, "DepthWizard", "runtime", "Scripts", "python.exe")');
+  });
+
+  it("Python installs are ranked numerically with a 3.11 floor", () => {
+    expect(mainSource).toContain("const MIN_PYTHON_MINOR = 11;");
+    expect(mainSource).toContain("pickNewestPythonDir");
+    expect(mainSource).not.toContain("entries.reverse()");
   });
 
   it("Python missing produces actionable error", () => {
-    expect(mainSource).toContain("Install Python 3.10+");
+    expect(mainSource).toContain("Install Python 3.11+ and run setup_backend.bat");
   });
 
   it("Python missing produces actionable error message", () => {
@@ -163,8 +179,44 @@ describe("Electron security audit", () => {
     expect(mainSource).toContain("resourcesPath");
   });
 
-  it("input path validation rejects traversal without platform-dependent normalization", () => {
-    expect(mainSource).toContain('segments.includes("..")');
+  it("renderer-supplied paths must be files staged by this session", () => {
+    expect(mainSource).toContain("function validateRendererPath");
+    expect(mainSource).toContain("isWithinStagedDir(candidate)");
+    for (const flag of ["--terrain-file", "--reference", "--solar", "--inspect"]) {
+      expect(mainSource).toContain(`"${flag}"`);
+    }
+    expect(mainSource).toContain('validateRendererPath(request.input_path, "input_path")');
+  });
+
+  it("checkpoint status reports the real hash, not the pinned constant", () => {
+    expect(mainSource).toContain("sha256OfFile(resolved)");
+    expect(mainSource).not.toContain("hash: exists ? EXPECTED_CHECKPOINT_HASH");
+  });
+
+  it("running executions can be cancelled and are killed on quit", () => {
+    expect(mainSource).toContain('ipcMain.handle("cancel-service"');
+    expect(mainSource).toContain("runningExecutions.set(requestId, proc)");
+    expect(mainSource).toContain("function killAllExecutions");
+    expect(mainSource).not.toContain('"launch-service"');
+  });
+
+  it("staged products are read/saved only inside staged dirs", () => {
+    for (const channel of ["read-staged-file", "save-staged-file"]) {
+      const start = mainSource.indexOf(`"${channel}"`);
+      expect(start).toBeGreaterThan(-1);
+      const body = mainSource.slice(start, start + 600);
+      expect(body).toContain("validateRendererPath");
+    }
+    expect(preloadSource).toContain('"read-staged-file"');
+    expect(preloadSource).toContain('"save-staged-file"');
+  });
+
+  it("captured output is bounded", () => {
+    expect(mainSource).toContain("MAX_OUTPUT_CHARS");
+  });
+
+  it("stale staged temp dirs are swept at startup", () => {
+    expect(mainSource).toContain("sweepStaleStagedDirs();");
   });
 
   it("execute-service timeout is capped", () => {
@@ -203,9 +255,9 @@ describe("Electron API shape", () => {
     expect(typesSource).toContain("resolveCheckpointPath");
     expect(typesSource).toContain("getCheckpointStatus");
     expect(typesSource).toContain("getScriptsDir");
-    expect(typesSource).toContain("launchService");
-    expect(typesSource).toContain("terminateService");
     expect(typesSource).toContain("executeService");
+    expect(typesSource).toContain("cancelService");
+    expect(typesSource).not.toContain("launchService");
   });
 
   it("getHostCapabilities can return null (auth rejection)", () => {

@@ -45,3 +45,10 @@ sample_test_data/
 scratch/
 sih_satellite_data/
 fix.js
+
+# IDE and static-analysis output
+.idea/
+P1/
+
+# Datasets, benchmark downloads and training crops (never committed)
+data/

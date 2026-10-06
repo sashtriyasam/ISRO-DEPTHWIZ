@@ -15,6 +15,7 @@ function isLayerAvailable(artifact: SceneArtifact, layerId: LayerId): boolean {
     case "wireframe":
       return true;
     case "slope":
+      return artifact.layers?.slope != null;
     case "contours":
     case "reference":
       return false;
@@ -37,7 +38,7 @@ export function createLayerState(artifact: SceneArtifact): LayerState {
       visualizationType:
         id === "wireframe" ? "line-overlay"
         : id === "rgb" ? "texture"
-        : id === "slope" || id === "contours" || id === "reference" ? "line-overlay"
+        : id === "contours" || id === "reference" ? "line-overlay"
         : "mesh-displacement",
       available: isLayerAvailable(artifact, id),
       enabled: false,

@@ -16,6 +16,8 @@ export interface ElevationProfile {
   maxElevation: number;
   sampleCount: number;
   units: "meters" | "relative" | string;
+  /** Horizontal units of the path length (metres or pixel indices). */
+  horizontalUnits?: "meters" | "pixels" | string;
   source: "fixture-coordinate-system" | "backend";
   elevationSemantics?: string;
 }

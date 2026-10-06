@@ -34,6 +34,7 @@ from depthwizard.evaluation.protocols import (
     CalibrationPlan,
     control_stride_split,
     fit_controls,
+    sparse_control_split,
 )
 from depthwizard.evaluation.results import EvaluationResult, EvaluationRun
 from depthwizard.pipeline.protocols import CalibrationProvider
@@ -50,6 +51,18 @@ def _repository_sha() -> str | None:
         return None
     sha = proc.stdout.strip()
     return sha if proc.returncode == 0 and sha else None
+
+
+def _backend_fact(backend: DepthBackend, key: str) -> str | None:
+    """Provenance fact reported by a backend's ``config_dict()`` (if any)."""
+    config = getattr(backend, "config_dict", None)
+    if not callable(config):
+        return None
+    try:
+        value = config().get(key)
+    except Exception:
+        return None
+    return str(value).lower() if isinstance(value, str) and value else None
 
 
 def _write_temp_png(rgb: np.ndarray, directory: Path) -> Path:
@@ -72,6 +85,7 @@ def run_sample(
     dataset_release: str | None = None,
     manifest_checksum: str | None = None,
     device: str | None = None,
+    controls: int | None = None,
 ) -> tuple[EvaluationResult, np.ndarray, np.ndarray]:
     """Score one sample; also return held-out (calibrated, reference) pairs."""
     from depthwizard.ingestion import inspect_input
@@ -129,7 +143,10 @@ def run_sample(
     base_valid = valid_evaluation_mask(
         predicted, reference_values, np.asarray(reference.valid_mask, dtype=bool)
     )
-    control_mask, evaluation_mask = control_stride_split((height, width), base_valid, stride)
+    if controls is not None:
+        control_mask, evaluation_mask = sparse_control_split((height, width), base_valid, controls)
+    else:
+        control_mask, evaluation_mask = control_stride_split((height, width), base_valid, stride)
     dataset_name = getattr(sample, "dataset_name", "stratified-benchmark")
     split_name = getattr(sample, "split", "evaluation")
     ref_checksum = getattr(sample, "reference_checksum", None)
@@ -163,8 +180,9 @@ def run_sample(
     metrics = compute_metrics(calibrated_full, reference_values, evaluation_mask, units="meters")
     sample_timings["metric_seconds"] = time.perf_counter() - metric_start
     plan = CalibrationPlan(
-        protocol="control-stride",
-        stride=stride,
+        protocol="sparse-controls" if controls is not None else "control-stride",
+        stride=None if controls is not None else stride,
+        control_count=controls,
         offset=0,
         reference_id=calibration.reference_id,
         target_semantics=target,
@@ -186,8 +204,8 @@ def run_sample(
         model_name=depth.model_name,
         model_version=depth.model_version,
         checkpoint_id=depth.checkpoint_id,
-        checkpoint_sha256=None,
-        upstream_revision=None,
+        checkpoint_sha256=_backend_fact(backend, "checkpoint_sha256"),
+        upstream_revision=_backend_fact(backend, "upstream_revision"),
         input_checksum=depth.provenance.input_checksum,
         reference_id=calibration.reference_id,
         reference_checksum=ref_checksum,
@@ -227,10 +245,11 @@ def evaluate_sample(
     dataset_release: str | None = None,
     manifest_checksum: str | None = None,
     device: str | None = None,
+    controls: int | None = None,
 ) -> EvaluationResult:
     """Score one sample end to end (summary only)."""
     result, _, _ = run_sample(
-        loaded, backend, target, stride, dataset_release, manifest_checksum, device
+        loaded, backend, target, stride, dataset_release, manifest_checksum, device, controls
     )
     return result
 

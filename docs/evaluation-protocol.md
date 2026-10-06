@@ -100,3 +100,17 @@ Two tiles cannot represent geographic robustness; no GPU measurement;
 no labelled-benchmark comparison (protocols would differ); AGL
 negatives treated as finite (no documented nodata marker); 1024² CPU
 inference is slow (~1 min/tile), so large splits need batch planning.
+
+## Sparse-control protocol (realistic calibration)
+
+`control-stride` calibrates on every `stride`-th ground-truth pixel of the
+very tile it scores (1/64 of pixels at stride 8). Those controls are dense
+and spatially adjacent to the evaluation pixels, so the fit is close to
+in-sample: its MAE/RMSE are an optimistic bound, not what a user with a
+30 m DEM or a few GCPs would see.
+
+`scripts/evaluate.py --controls K` calibrates each tile on only `K` evenly
+spaced ground-truth points (GCP-like) and scores every other valid pixel.
+Runs record `calibration_protocol = sparse-controls-K` and
+`calibration_plan.control_count = K`. Report both protocols side by side;
+published accuracy claims should cite the sparse-control numbers.

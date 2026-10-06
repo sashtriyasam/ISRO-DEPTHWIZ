@@ -43,6 +43,18 @@ async function openFile(container: HTMLElement, file: File) {
   fireEvent.change(input);
 }
 
+function gcpFile(name = "gcps.csv"): File {
+  return new File(["pixel_col,pixel_row,elevation\n0,0,100\n1,1,101\n2,2,103\n"], name, {
+    type: "text/csv",
+  });
+}
+
+async function attachReference(file: File) {
+  const input = screen.getByLabelText("Calibration reference file") as HTMLInputElement;
+  Object.defineProperty(input, "files", { value: [file], configurable: true });
+  fireEvent.change(input);
+}
+
 async function waitForSupported(container: HTMLElement) {
   await waitFor(
     () => expect(container.textContent).toContain("Supported:"),
@@ -118,6 +130,10 @@ describe("InputWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByText("Validated")).toBeInTheDocument();
     }, SLOW);
+    await attachReference(gcpFile());
+    await waitFor(() => {
+      expect(screen.getByText(/calibrated against gcps\.csv/)).toBeInTheDocument();
+    }, SLOW);
     fireEvent.click(screen.getByRole("radio", { name: "Piecewise Linear" }));
     fireEvent.change(
       screen.getByRole("combobox", { name: "Mesh LOD levels" }),
@@ -130,6 +146,50 @@ describe("InputWorkspace", () => {
     const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
     expect(source.calibrationMethod).toBe("piecewise_linear");
     expect(source.meshLevels).toEqual([1]);
+    expect(source.mode).toBe("metric");
+    expect(source.calibrationReference).toMatch(/gcps\.csv$/);
+  });
+
+  it("runs relative output without a calibration reference (no metres)", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={onGenerate}
+      />,
+    );
+    await waitForSupported(container);
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    expect(screen.getByText(/relative surface \(no metric units\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Piecewise Linear" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.mode).toBe("relative");
+    expect(source.calibrationReference).toBeUndefined();
+    expect(source.calibrationMethod).toBeUndefined();
+  });
+
+  it("rejects calibration references that are not DEM GeoTIFF or GCP CSV", async () => {
+    const { container } = render(
+      <InputWorkspace
+        bridge={bridge}
+        processingRunning={false}
+        onGenerate={() => undefined}
+      />,
+    );
+    await waitForSupported(container);
+    await openFile(container, pngFile());
+    await waitFor(() => {
+      expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    await attachReference(new File(["x"], "notes.txt", { type: "text/plain" }));
+    await waitFor(() => {
+      expect(screen.getByText(/Unsupported reference format \(\.txt\)/)).toBeInTheDocument();
+    }, SLOW);
   });
 
   it("shows backend rejection reasons for corrupt files", async () => {
@@ -219,6 +279,10 @@ describe("InputWorkspace", () => {
     await openFile(container, pngFile());
     await waitFor(() => {
       expect(screen.getByText("Validated")).toBeInTheDocument();
+    }, SLOW);
+    await attachReference(gcpFile());
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Height / AGL" })).toBeInTheDocument();
     }, SLOW);
     fireEvent.click(screen.getByRole("radio", { name: "Height / AGL" }));
     fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
@@ -319,4 +383,58 @@ describe("InputWorkspace", () => {
       expect(screen.queryByText("Validated")).toBeNull();
     }, SLOW);
   });
+});
+
+describe("InputWorkspace georeferenced defaults", () => {
+  async function geotiffFile(): Promise<File> {
+    const { execFileSync } = await import("child_process");
+    const { mkdtempSync, readFileSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { join } = await import("path");
+    const dir = mkdtempSync(join(tmpdir(), "depthwiz-geo-ui-"));
+    const out = join(dir, "scene.tif");
+    const script = [
+      "import numpy as np, rasterio, sys",
+      "from rasterio.transform import Affine",
+      "p = sys.argv[1]",
+      "a = (np.arange(3*8*8) % 255).astype('uint8').reshape(3, 8, 8)",
+      "with rasterio.open(p, 'w', driver='GTiff', height=8, width=8, count=3, dtype='uint8',",
+      "    crs='EPSG:32643', transform=Affine(0.5, 0, 715000, 0, -0.5, 3160000)) as d: d.write(a)",
+    ].join("\n");
+    const python = process.env.DEPTHWIZARD_PYTHON ?? "python";
+    execFileSync(python, ["-c", script, out]);
+    return new File([readFileSync(out)], "scene.tif", { type: "image/tiff" });
+  }
+
+  it("defaults GeoTIFF input to metric output on the automatic Copernicus DEM", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />,
+    );
+    await waitForSupported(container);
+    await openFile(container, await geotiffFile());
+    await waitFor(() => expect(screen.getByText("Validated")).toBeInTheDocument(), SLOW);
+    expect(screen.getByRole("checkbox", { name: "Use Copernicus DEM automatically" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.mode).toBe("metric");
+    expect(source.autoReference).toBe(true);
+    expect(source.calibrationMethod).toBe("dem_anchored");
+    expect(source.targetSemantics).toBe("absolute_elevation_dsm");
+  }, 60000);
+
+  it("can opt out of the automatic DEM (relative output)", async () => {
+    const onGenerate = vi.fn();
+    const { container } = render(
+      <InputWorkspace bridge={bridge} processingRunning={false} onGenerate={onGenerate} />,
+    );
+    await waitForSupported(container);
+    await openFile(container, await geotiffFile());
+    await waitFor(() => expect(screen.getByText("Validated")).toBeInTheDocument(), SLOW);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use Copernicus DEM automatically" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate terrain" }));
+    const source = onGenerate.mock.calls[0][0] as ApplicationBackendSource;
+    expect(source.mode).toBe("relative");
+    expect(source.autoReference).toBe(false);
+  }, 60000);
 });

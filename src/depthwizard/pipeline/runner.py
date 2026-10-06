@@ -16,6 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from depthwizard.calibration.models import CalibrationResult
+from depthwizard.calibration.selection import fit_quality_warnings
 from depthwizard.contracts.artifacts import METRIC_UNIT, DepthResult
 from depthwizard.contracts.pipeline import PipelineState
 from depthwizard.contracts.semantics import ElevationSemantics
@@ -157,6 +158,10 @@ class _Engine:
                 )
         else:
             check_transition(self._states[-1], state)
+            # Entering a new state means the previous one genuinely completed.
+            callback = self._request.on_stage
+            if callback is not None:
+                callback(self._states[-1].value)
         self._states.append(state)
 
     def _cancelled(self) -> bool:
@@ -261,6 +266,7 @@ class _Engine:
                     sun_azimuth_deg=request.solar_config.sun_azimuth_deg,
                     min_area_px=request.solar_config.min_shadow_area_px,
                     gsd_override=request.solar_config.gsd_override,
+                    assume_north_up=request.solar_config.assume_north_up,
                 )
                 self._solar_constraints = res.constraints
                 self._solar_refused_reason = res.refused_reason
@@ -328,6 +334,10 @@ class _Engine:
                 prepare(self._inspection)
             calibration = request.calibration_provider.calibrate(depth)
             self._check_calibration(calibration)
+            self._warnings.extend(fit_quality_warnings(calibration))
+            provider_notes = getattr(request.calibration_provider, "warnings", None)
+            if isinstance(provider_notes, list):
+                self._warnings.extend(str(note) for note in provider_notes)
             product = create_scientific_height_product(depth, calibration, request.target_semantics)
         except Exception as exc:
             return self._fail(PipelineState.CALIBRATING, exc)
@@ -348,7 +358,19 @@ class _Engine:
                 return self._finish(PipelineState.CANCELLED)
             self._enter(PipelineState.MESH_GENERATION)
             try:
-                mesh = build_terrain_mesh(dsm)
+                stride = request.mesh_levels[0] if request.mesh_levels else 1
+                if request.max_mesh_vertices:
+                    valid_pixels = int(dsm.valid_mask.sum())
+                    needed = math.ceil(math.sqrt(valid_pixels / request.max_mesh_vertices))
+                    if needed > stride:
+                        self._warnings.append(
+                            f"Display mesh simplified to every {needed}th pixel "
+                            f"({valid_pixels} valid pixels exceed the "
+                            f"{request.max_mesh_vertices}-vertex transfer limit); the DSM "
+                            "and exports keep full resolution."
+                        )
+                        stride = needed
+                mesh = build_terrain_mesh(dsm, stride=stride)
             except Exception as exc:
                 return self._fail(PipelineState.MESH_GENERATION, exc)
             self._mesh = mesh

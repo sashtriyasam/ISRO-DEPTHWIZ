@@ -82,15 +82,38 @@ def test_unknown_crs_refused() -> None:
         compute_slope(bad_grid)
 
 
-def test_missing_gsd_refused() -> None:
-    """Spatial context without resolution cannot yield slope."""
+def test_missing_spacing_refused() -> None:
+    """Without a transform or a resolution there is no metric pixel spacing."""
     grid = flat_dsm(5, 4, 10.0, georef=True)
     assert grid.spatial.details is not None
-    details = grid.spatial.details.model_copy(update={"resolution_gsd": None})
+    details = grid.spatial.details.model_copy(update={"resolution_gsd": None, "transform": None})
     spatial = SpatialContext(kind=SpatialKind.PRESENT, details=details)
     bad_grid = grid.model_copy(update={"spatial": spatial})
     with pytest.raises(InvalidInputError, match="resolution_gsd"):
         compute_slope(bad_grid)
+
+
+def test_non_square_pixels_use_per_axis_spacing() -> None:
+    """Column and row steps come from the GDAL-order affine (b and f)."""
+    from depthwizard.contracts.spatial import AffineTransform
+
+    base = _ramp_dsm()
+    assert base.spatial.details is not None
+    # 0.5 m columns, 2.0 m rows (north-up), no single resolution_gsd.
+    details = base.spatial.details.model_copy(
+        update={
+            "resolution_gsd": None,
+            "transform": AffineTransform(a=100.0, b=0.5, c=0.0, d=200.0, e=0.0, f=-2.0),
+        }
+    )
+    grid = base.model_copy(
+        update={"spatial": SpatialContext(kind=SpatialKind.PRESENT, details=details)}
+    )
+    slope = compute_slope(grid)  # type: ignore[arg-type]
+    # ramp: dz/dcol = 2 m per column, dz/drow = 1 m per row
+    expected = math.degrees(math.atan(math.hypot(2.0 / 0.5, 1.0 / 2.0)))
+    interior = slope.array[1:-1, 1:-1][slope.valid_mask[1:-1, 1:-1]]
+    assert bool((np.abs(interior - expected) < 1e-9).all())
 
 
 def test_source_grid_unchanged() -> None:

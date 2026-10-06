@@ -41,11 +41,17 @@ def apply_calibration(
             return last[1] * x + last[2]
         return calibration.scale * x + calibration.offset
 
+    field = calibration.offset_field
+    if field is not None and len(field) != len(inputs):
+        raise CalibrationError(f"offset field has {len(field)} entries for {len(inputs)} values")
+
     outputs: list[float] = []
     for index, value in enumerate(inputs):
         if not math.isfinite(value):
             raise CalibrationError(f"non-finite input value at index {index}: {value!r}")
-        calibrated = predict(value)
+        calibrated = (
+            calibration.scale * value + field[index] if field is not None else predict(value)
+        )
         if not math.isfinite(calibrated):
             raise CalibrationError(
                 f"non-finite calibrated value at index {index} "

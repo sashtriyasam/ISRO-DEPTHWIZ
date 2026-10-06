@@ -46,3 +46,20 @@ def require_crs(context: SpatialContext, operation: str) -> str:
             f"(spatial kind: {context.kind.value})"
         )
     return details.crs
+
+
+def crs_is_projected_metric(crs_id: str | None) -> bool:
+    """Whether a CRS is projected with metre linear units.
+
+    Geographic CRSs (e.g. EPSG:4326) store positions in degrees: those must
+    never be mixed with metric heights or treated as metres. Unparseable or
+    absent identifiers are not metric.
+    """
+    if not crs_id:
+        return False
+    try:
+        crs = parse_crs(crs_id)
+    except GeospatialProcessingError:
+        return False
+    linear = str(getattr(crs, "linear_units", "") or "").lower()
+    return bool(crs.is_projected) and linear in ("metre", "meter", "m")

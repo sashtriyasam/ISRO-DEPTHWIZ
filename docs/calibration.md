@@ -108,3 +108,22 @@ same `calibrate()` boundary; add the method enum member when the
 implementation lands. No GCP extraction, DEM alignment/loading/
 resampling, or terrain correction here — this engine receives
 already-paired scalars.
+
+## Calibration sources in the desktop app and service
+
+`depthwizard.calibration.select_calibration_provider` is the single
+place that picks the reference behind a metric run (used by
+`scripts/depthwiz_service.py` and `scripts/backend_bridge.py`):
+
+| Situation | Provider | Result |
+| :--- | :--- | :--- |
+| Reference given (`calibration_reference_path` / `--reference`) | `FileBasedCalibrationProvider` (DEM GeoTIFF or GCP CSV `pixel_col,pixel_row,elevation`) | Real calibration; `calibration_reference` = the DEM id / CSV name |
+| No reference, `DW_DEV_CALIBRATION=1` | `DevCalibrationProvider` (`reference = 2.5·predicted + 10`) | Labelled `synthetic-dev-ref`; test suites only |
+| No reference otherwise | `MissingReferenceProvider` | Metric run refused with `CalibrationError` |
+
+DEM and GCP references require a georeferenced input (CRS +
+transform); PNG/JPG inputs stay on Path A (relative only). The
+desktop app runs relative mode unless the user attaches a reference
+file, and a packaged build strips `DW_DEV_CALIBRATION` from every
+spawned process. `FileBasedCalibrationProvider` never falls back to a
+synthetic reference.

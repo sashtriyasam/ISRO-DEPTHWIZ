@@ -8,6 +8,7 @@ serializes the existing scientific raster.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import tempfile
@@ -119,7 +120,8 @@ def _writer_kwargs(grid: DSMGrid, compression: Compression) -> dict[str, object]
     if profile["crs"] is not None:
         kwargs["crs"] = profile["crs"]
     if transform is not None:
-        assert isinstance(transform, tuple)
+        if not isinstance(transform, tuple) or len(transform) != 6:
+            raise ExportError(f"export profile transform must be a 6-tuple; got {transform!r}")
         kwargs["transform"] = Affine.from_gdal(*transform)
     if compression is Compression.DEFLATE:
         kwargs["compress"] = "deflate"
@@ -138,6 +140,20 @@ def _metadata_tags(grid: DSMGrid) -> dict[str, str]:
     }
     if grid.source_checksum is not None:
         tags["source_checksum"] = grid.source_checksum
+    # Enough to reproduce the metric mapping from the relative depth.
+    tags["calibration_scale"] = repr(grid.calibration_scale)
+    tags["calibration_offset"] = repr(grid.calibration_offset)
+    tags["calibration_valid_samples"] = str(grid.calibration_valid_samples)
+    if grid.piecewise_params is not None:
+        tags["calibration_piecewise_params"] = json.dumps(
+            [list(segment) for segment in grid.piecewise_params]
+        )
+    if grid.depth_model_version is not None:
+        tags["model_version"] = grid.depth_model_version
+    if grid.depth_checkpoint_id is not None:
+        tags["checkpoint_id"] = grid.depth_checkpoint_id
+    if grid.source_input_id is not None:
+        tags["source_input_id"] = grid.source_input_id
     return tags
 
 

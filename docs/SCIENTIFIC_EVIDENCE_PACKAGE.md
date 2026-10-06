@@ -4,6 +4,13 @@
 **Repository State:** `main` at commit `54264ec261edbfafb405527a206a461b6c6b4b45` (`54264ec`)  
 **Git Tag:** `v0.1.0-sih-26175-rc1` (Immutable tag target)  
 
+> **Historical snapshot (RC1).** Engineering counts, the signed installer and
+> the witness result below belong to `v0.1.0-sih-26175-rc1`. The current
+> release `v1.3.1` ships an **unsigned** installer, its clean-machine witness
+> is **pending**, and solar-shadow analysis has since been added to the
+> product (v1.2.0). The accuracy evidence in sections 3–4 is unchanged.
+> Current state: [docs/project/PROJECT_STATUS.md](project/PROJECT_STATUS.md).
+
 ---
 
 ## 1. Executive Summary & Scientific Principles
@@ -60,7 +67,7 @@ The ML research track conducted cross-city structural adaptation probes across 6
 
 ## 5. Calibration Methodology & Height Products
 
-To convert scale-ambiguous relative depth $z_{\text{rel}}$ into metric height $z_{\text{metric}}$ in metres ($m$), DepthWizard employs the `ScaleOffsetCalibrator` engine ([`src/depthwizard/calibration/calibrator.py`](file:///d:/SIH%20DEPH%20WIZARD/src/depthwizard/calibration/calibrator.py)):
+To convert scale-ambiguous relative depth $z_{\text{rel}}$ into metric height $z_{\text{metric}}$ in metres ($m$), DepthWizard employs the `ScaleOffsetCalibrator` engine ([`src/depthwizard/calibration/calibrator.py`](../src/depthwizard/calibration/calibrator.py)):
 
 ### Mathematical Model
 $$z_{\text{metric}}(x, y) = s \cdot z_{\text{rel}}(x, y) + o$$

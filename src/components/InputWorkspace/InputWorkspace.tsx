@@ -53,6 +53,15 @@ async function toClientFile(file: File): Promise<ClientFile> {
   };
 }
 
+/** Reference sources the backend can calibrate against (DEM GeoTIFF, GCP CSV). */
+const REFERENCE_SUFFIXES = [".tif", ".tiff", ".csv"];
+
+interface CalibrationReference {
+  name: string;
+  stagedPath: string;
+  cleanup: () => Promise<void>;
+}
+
 const FIXTURE_METADATA: InputMetadata = {
   filename: "Built-in development fixture",
   format: "development fixture",
@@ -82,8 +91,13 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
   const [inputState, setInputState] = useState<InputState>({ status: "empty" });
   const [targetSemantics, setTargetSemantics] =
     useState<MetricTargetSemantics>(DEFAULT_TARGET_SEMANTICS);
-  const [calibrationMethod, setCalibrationMethod] = useState("scale_offset_huber");
+  const [calibrationMethod, setCalibrationMethod] = useState("dem_anchored");
+  const [useAutoDem, setUseAutoDem] = useState(true);
   const [meshLevels, setMeshLevels] = useState<string>("1,4,16");
+  const [reference, setReference] = useState<CalibrationReference | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const referenceRef = useRef<CalibrationReference | null>(null);
+  referenceRef.current = reference;
   const MESH_LEVEL_PRESETS: Record<string, number[]> = {
     "1": [1],
     "1,4,16": [1, 4, 16],
@@ -114,15 +128,15 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     try {
       const result = await fetchServiceCapabilities(serviceClientRef.current ?? undefined);
       setCapabilities(result);
-      if (
-        !result.supported_target_semantics.includes(targetSemantics) &&
-        result.supported_target_semantics.length > 0
-      ) {
+      // Functional update: this callback is memoised once, so reading
+      // `targetSemantics` directly would see only its initial value.
+      setTargetSemantics((current) => {
+        if (result.supported_target_semantics.includes(current)) return current;
         const fallback = result.supported_target_semantics[0];
-        if (fallback === "absolute_elevation_dsm" || fallback === "height_agl_ndsm") {
-          setTargetSemantics(fallback);
-        }
-      }
+        return fallback === "absolute_elevation_dsm" || fallback === "height_agl_ndsm"
+          ? fallback
+          : current;
+      });
     } catch (err) {
       setCapabilitiesError(err instanceof Error ? err.message : String(err));
       setCapabilities(null);
@@ -146,6 +160,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       if (cleanup) {
         void cleanup();
       }
+      void referenceRef.current?.cleanup();
     };
   }, []);
 
@@ -156,6 +171,42 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
       await cleanup();
     }
   }, []);
+
+  const clearReference = useCallback(async () => {
+    const current = referenceRef.current;
+    setReference(null);
+    setReferenceError(null);
+    if (current) {
+      await current.cleanup();
+    }
+  }, []);
+
+  const handleReferenceFile = useCallback(
+    async (file: File) => {
+      if (processingRunning) {
+        return;
+      }
+      await clearReference();
+      const dot = file.name.lastIndexOf(".");
+      const suffix = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";
+      if (!REFERENCE_SUFFIXES.includes(suffix)) {
+        setReferenceError(
+          `Unsupported reference format (${suffix || "no extension"}). Use a DEM GeoTIFF or a GCP CSV.`,
+        );
+        return;
+      }
+      try {
+        const clientFile = await toClientFile(file);
+        const staged = await bridgeRef.current!.stageInputBytes(clientFile.bytes, file.name);
+        setReference({ name: file.name, stagedPath: staged.path, cleanup: staged.cleanup });
+      } catch (err) {
+        setReferenceError(
+          `Reference could not be staged: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [clearReference, processingRunning],
+  );
 
   const runValidation = useCallback(
     async (file: ClientFile, allowed: readonly string[]) => {
@@ -242,13 +293,29 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     validationRef.current?.abort();
     validationRef.current = null;
     await releaseStaged();
+    await clearReference();
     setInputState({ status: "empty" });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, [releaseStaged, processingRunning]);
+  }, [releaseStaged, clearReference, processingRunning]);
 
   const backendUnavailable = capabilities !== null && !backendRegistered;
+
+  // Georeferenced inputs get absolute heights from the Copernicus GLO-30 DEM
+  // automatically (the PS evaluation scores GeoTIFF output against SRTM/
+  // Copernicus-class DEMs); an attached DEM/GCP file always takes precedence.
+  const georeferenced = inputState.status === "validated" && inputState.metadata.crs != null;
+  const referenceIsDem = reference != null && /\.tiff?$/i.test(reference.name);
+  const autoDemActive = !reference && georeferenced && useAutoDem;
+  const metricSource = reference != null || autoDemActive;
+  const effectiveMethod =
+    autoDemActive || (referenceIsDem && calibrationMethod === "dem_anchored")
+      ? "dem_anchored"
+      : calibrationMethod === "dem_anchored"
+        ? "scale_offset_huber"
+        : calibrationMethod;
+  const demAnchored = effectiveMethod === "dem_anchored";
 
   const handleGenerate = useCallback(() => {
     if (inputState.status !== "validated" || processingRunning || backendUnavailable) {
@@ -257,32 +324,41 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
     if (inputState.stagedPath) {
       let selectedBackend: string | undefined = undefined;
       if (capabilities && capabilities.available_backends.length > 0) {
-        if (capabilities.available_backends.includes("depth-anything-v2-large")) {
+        // Released backends first. The satellite fine-tune is smoke-trained with
+        // no accuracy evidence yet, so it is only a fallback until promoted.
+        // The LiDAR-trained height model predicts metres above ground and is
+        // preferred; then the released DA-V2 checkpoints.
+        if (capabilities.available_backends.includes("depthwizard-ndsm-vits")) {
+          selectedBackend = "depthwizard-ndsm-vits";
+        } else if (capabilities.available_backends.includes("depth-anything-v2-large")) {
           selectedBackend = "depth-anything-v2-large";
+        } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
+          selectedBackend = "depth-anything-v2-small";
         } else if (
           capabilities.available_backends.includes("depth-anything-v2-satellite")
         ) {
           selectedBackend = "depth-anything-v2-satellite";
-        } else if (capabilities.available_backends.includes("depth-anything-v2-small")) {
-          selectedBackend = "depth-anything-v2-small";
-        } else if (capabilities.available_backends.includes("m17-geonrw-struct")) {
-          selectedBackend = "m17-geonrw-struct";
         }
       }
 
       const source = new ApplicationBackendSource({
         stagedPath: inputState.stagedPath,
         metadata: inputState.metadata,
-        targetSemantics,
         backend: selectedBackend,
         meshLevels: MESH_LEVEL_PRESETS[meshLevels],
-        calibrationMethod,
+        // Metric output only with a real reference (file or automatic DEM);
+        // otherwise relative (no metres).
+        mode: metricSource ? "metric" : "relative",
+        targetSemantics: demAnchored ? "absolute_elevation_dsm" : targetSemantics,
+        calibrationMethod: metricSource ? effectiveMethod : undefined,
+        calibrationReference: reference?.stagedPath,
+        autoReference: autoDemActive,
       });
       onGenerate(source);
     } else {
       onGenerate(new FixtureSource());
     }
-  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, calibrationMethod]);
+  }, [inputState, processingRunning, onGenerate, targetSemantics, backendUnavailable, capabilities, meshLevels, metricSource, effectiveMethod, demAnchored, autoDemActive, reference]);
   const acceptAttr = suffixes ? suffixes.join(",") : undefined;
 
   return (
@@ -399,7 +475,61 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
             label="GSD"
             value={inputState.metadata.gsd === null ? "—" : String(inputState.metadata.gsd)}
           />
-          {targetChoices.length > 1 && inputState.stagedPath !== "" && (
+          {inputState.stagedPath !== "" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                Calibration reference
+              </span>
+              <input
+                type="file"
+                accept={REFERENCE_SUFFIXES.join(",")}
+                disabled={processingRunning}
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) {
+                    void handleReferenceFile(picked);
+                  }
+                }}
+                aria-label="Calibration reference file"
+                style={{ fontSize: "var(--font-size-xs)" }}
+              />
+              {reference ? (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--spacing-xs)" }}>
+                  <DataRow label="Output" value={`Metric, calibrated against ${reference.name}`} />
+                  <button onClick={() => void clearReference()} style={actionButtonStyle} disabled={processingRunning}>
+                    Remove reference
+                  </button>
+                </div>
+              ) : georeferenced ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", fontSize: "var(--font-size-xs)" }}>
+                    <input
+                      type="checkbox"
+                      checked={useAutoDem}
+                      onChange={(e) => setUseAutoDem(e.target.checked)}
+                      disabled={processingRunning}
+                      aria-label="Use Copernicus DEM automatically"
+                    />
+                    <span>Absolute heights from the Copernicus GLO-30 DEM (automatic)</span>
+                  </label>
+                  <div style={mutedStyle}>
+                    {useAutoDem
+                      ? "Output: metric DSM anchored to the DEM (downloaded once for this area, then cached). Attach your own DEM or GCP CSV to override."
+                      : "Output: relative surface (no metric units)."}
+                  </div>
+                </div>
+              ) : (
+                <div style={mutedStyle}>
+                  Output: relative surface (no metric units). Attach a DEM GeoTIFF or GCP CSV
+                  to produce a calibrated metric DSM.
+                </div>
+              )}
+              {referenceError && (
+                <div style={errorStyle} role="alert">{referenceError}</div>
+              )}
+            </div>
+          )}
+          {reference && !demAnchored && targetChoices.length > 1 && inputState.stagedPath !== "" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
               <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
                 Output target
@@ -421,16 +551,29 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               ))}
             </div>
           )}
+          {reference && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
             <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
               Calibration method
             </span>
             <div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
+              {referenceIsDem && (
+                <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
+                  <input
+                    type="radio"
+                    name="calibration-method"
+                    checked={effectiveMethod === "dem_anchored"}
+                    onChange={() => setCalibrationMethod("dem_anchored")}
+                    disabled={processingRunning}
+                  />
+                  <span>DEM-anchored fusion (recommended)</span>
+                </label>
+              )}
               <label style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}>
                 <input
                   type="radio"
                   name="calibration-method"
-                  checked={calibrationMethod === "scale_offset"}
+                  checked={effectiveMethod === "scale_offset"}
                   onChange={() => setCalibrationMethod("scale_offset")}
                   disabled={processingRunning}
                 />
@@ -440,7 +583,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
                 <input
                   type="radio"
                   name="calibration-method"
-                  checked={calibrationMethod === "scale_offset_huber"}
+                  checked={effectiveMethod === "scale_offset_huber"}
                   onChange={() => setCalibrationMethod("scale_offset_huber")}
                   disabled={processingRunning}
                 />
@@ -450,7 +593,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
                 <input
                   type="radio"
                   name="calibration-method"
-                  checked={calibrationMethod === "piecewise_linear"}
+                  checked={effectiveMethod === "piecewise_linear"}
                   onChange={() => setCalibrationMethod("piecewise_linear")}
                   disabled={processingRunning}
                 />
@@ -458,6 +601,7 @@ export function InputWorkspace({ bridge, serviceClient, processingRunning, onGen
               </label>
             </div>
           </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-xs)" }}>
             <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
               Mesh LOD levels

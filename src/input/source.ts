@@ -10,6 +10,7 @@ import {
 } from "../transport";
 import type { MetricTargetSemantics } from "../service/wireTypes";
 import type { InputMetadata } from "./types";
+import { attachStagedTexture } from "../artifact/stagedTexture";
 
 export interface FileInputSourceOptions {
   stagedPath: string;
@@ -18,6 +19,11 @@ export interface FileInputSourceOptions {
   targetSemantics?: MetricTargetSemantics;
   backend?: string;
   mode?: "metric" | "relative";
+  meshLevels?: number[];
+  calibrationMethod?: string;
+  /** Staged DEM GeoTIFF or GCP CSV; metric output needs one outside tests. */
+  calibrationReference?: string;
+  autoReference?: boolean;
 }
 
 function stableIdFor(metadata: InputMetadata): string {
@@ -42,6 +48,10 @@ export class FileInputSource implements ArtifactSource {
   readonly targetSemantics: MetricTargetSemantics;
   private backend?: string;
   private mode: "metric" | "relative";
+  private meshLevels?: number[];
+  private calibrationMethod?: string;
+  private calibrationReference?: string;
+  private autoReference?: boolean;
 
   constructor(options: FileInputSourceOptions) {
     this.stagedPath = options.stagedPath;
@@ -50,6 +60,10 @@ export class FileInputSource implements ArtifactSource {
     this.targetSemantics = options.targetSemantics ?? "absolute_elevation_dsm";
     this.backend = options.backend;
     this.mode = options.mode ?? "metric";
+    this.meshLevels = options.meshLevels;
+    this.calibrationMethod = options.calibrationMethod;
+    this.calibrationReference = options.calibrationReference;
+    this.autoReference = options.autoReference;
     this.id = stableIdFor(options.metadata);
     this.label = options.metadata.filename;
   }
@@ -77,17 +91,21 @@ export class FileInputSource implements ArtifactSource {
           },
           loadOptions,
         );
-        return resolveRelativeArtifact(bundle);
+        return attachStagedTexture(resolveRelativeArtifact(bundle));
       }
       const bundle = await this.transport.fetchTerrain(
         {
           stagedPath: this.stagedPath,
           targetSemantics: this.targetSemantics,
           backend: this.backend,
+          meshLevels: this.meshLevels,
+          calibrationMethod: this.calibrationMethod,
+          calibrationReference: this.calibrationReference,
+          autoReference: this.autoReference,
         },
         loadOptions,
       );
-      return resolveTerrainArtifact(bundle);
+      return attachStagedTexture(resolveTerrainArtifact(bundle));
     } catch (err) {
       if (err instanceof ArtifactTransportFailure) {
         throw new BackendOperationError(err.toBridgeErrors());

@@ -107,4 +107,40 @@ def test_piecewise_with_mask():
     assert result.valid_samples == 3
     assert result.total_samples == 8
     assert result.piecewise_params is not None
-    assert len(result.piecewise_params) == 2
+    # Three samples cannot support two segments: one segment (= OLS line).
+    assert len(result.piecewise_params) == 1
+
+
+def _apply(result, x):
+    from depthwizard.calibration import apply_calibration
+
+    return apply_calibration((x,), result, piecewise_params=result.piecewise_params)[0]
+
+
+def test_piecewise_is_continuous_at_every_knot():
+    result = PiecewiseLinearCalibrator().calibrate(_samples())
+    for knot, _slope, _offset in result.piecewise_params[1:]:
+        left = _apply(result, knot - 1e-9)
+        right = _apply(result, knot + 1e-9)
+        assert left == pytest.approx(right, abs=1e-6)
+
+
+def test_piecewise_r_squared_uses_global_mean():
+    samples = _samples()
+    result = PiecewiseLinearCalibrator().calibrate(samples)
+    ys = samples.reference_values
+    mean = sum(ys) / len(ys)
+    preds = [_apply(result, x) for x in samples.predicted_values]
+    ss_res = sum((y - p) ** 2 for y, p in zip(ys, preds, strict=True))
+    ss_tot = sum((y - mean) ** 2 for y in ys)
+    assert result.r_squared == pytest.approx(1.0 - ss_res / ss_tot)
+
+
+def test_piecewise_reports_global_line_not_first_segment():
+    from depthwizard.calibration import ScaleOffsetCalibrator
+
+    samples = _samples()
+    piecewise = PiecewiseLinearCalibrator().calibrate(samples)
+    ols = ScaleOffsetCalibrator().calibrate(samples)
+    assert piecewise.scale == pytest.approx(ols.scale)
+    assert piecewise.offset == pytest.approx(ols.offset)

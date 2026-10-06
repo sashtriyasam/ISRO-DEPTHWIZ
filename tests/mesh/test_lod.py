@@ -35,7 +35,7 @@ def test_build_lod_meshes_single_level():
     grid = flat_dsm(4, 4, 2.0)
     meshes = build_lod_meshes(grid, (2,))
     assert len(meshes) == 1
-    assert meshes[0].vertex_count == 4  # 4x4 -> 2x2 -> 4 valid
+    assert meshes[0].vertex_count == 9  # rows/cols 0, 2 and the kept edge 3
     assert meshes[0].decimated is True
     assert meshes[0].lod_level == 2
 
@@ -100,3 +100,27 @@ def test_decimate_mesh_flat_plane():
     decimated = decimate_mesh(mesh, target_ratio=0.5)
     assert decimated.vertex_count > 0
     assert decimated.triangle_count > 0
+
+
+def test_lod_mesh_keeps_grid_dimensions_and_source_pixels():
+    grid = flat_dsm(9, 7, 1.0)
+    mesh = build_terrain_mesh(grid, stride=4)
+    # Same grid described (desktop checks mesh dims against the DSM).
+    assert (mesh.width, mesh.height) == (grid.width, grid.height)
+    cols = mesh.vertex_source_indices % grid.width
+    rows = mesh.vertex_source_indices // grid.width
+    assert set(cols.tolist()) == {0, 4, 8}
+    assert set(rows.tolist()) == {0, 4, 6}
+
+
+def test_lod_mesh_preserves_georeferenced_extent():
+    import numpy as np
+
+    grid = flat_dsm(9, 9, 1.0, georef=True)
+    full = build_terrain_mesh(grid)
+    coarse = build_terrain_mesh(grid, stride=4)
+    full_x = np.asarray(full.vertices)[:, 0]
+    coarse_x = np.asarray(coarse.vertices)[:, 0]
+    # The old LOD path shrank coordinates by the factor.
+    assert coarse_x.min() == full_x.min()
+    assert coarse_x.max() == full_x.max()

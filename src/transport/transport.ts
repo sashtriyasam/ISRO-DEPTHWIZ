@@ -1,6 +1,8 @@
 import {
   BackendBridge,
   OperationCancelledError,
+  validateRelativeShape,
+  validateTerrainShape,
   type BridgeExecutionHooks,
 } from "../backend/bridge";
 import type { ArtifactLoadOptions } from "../artifact/types";
@@ -60,6 +62,11 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           buildMesh: request.buildMesh ?? true,
           backend: request.backend,
           outputMode: "metric",
+          calibrationMethod: request.calibrationMethod,
+          calibrationReference: request.calibrationReference,
+          autoReference: request.autoReference,
+          meshLevels: request.meshLevels,
+          includePayload: true,
         },
         hooks,
       );
@@ -89,11 +96,22 @@ export class ServiceArtifactTransport implements ArtifactTransport {
     }
 
     try {
+      // One inference pass: the payload comes from the very run that produced
+      // the descriptors. The bridge re-run is only a fallback for old engines.
+      if (response.payload !== undefined) {
+        return { response, terrain: validateTerrainShape(response.payload) };
+      }
       const terrain = await this.bridge.fetchTerrainPayload(
         request.stagedPath,
         hooks,
         request.targetSemantics,
         request.backend,
+        {
+          meshLevels: request.meshLevels,
+          calibrationMethod: request.calibrationMethod,
+          calibrationReference: request.calibrationReference,
+          autoReference: request.autoReference,
+        },
       );
       return { response, terrain };
     } catch (err) {
@@ -134,6 +152,7 @@ export class ServiceArtifactTransport implements ArtifactTransport {
           buildMesh: request.buildMesh ?? true,
           backend: request.backend,
           outputMode: "relative",
+          includePayload: true,
         },
         hooks,
       );
@@ -164,6 +183,9 @@ export class ServiceArtifactTransport implements ArtifactTransport {
     }
 
     try {
+      if (response.payload !== undefined) {
+        return { response, relative: validateRelativeShape(response.payload) };
+      }
       const relative = await this.bridge.fetchRelativePayload(
         request.stagedPath,
         hooks,

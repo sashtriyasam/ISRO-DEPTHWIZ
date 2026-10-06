@@ -78,9 +78,14 @@ export class OrbitCameraController implements CameraController {
       this.camera.aspect,
       this.initialDirection
     );
+    // Scale the zoom limits with the scene: a metric DSM can span kilometres.
+    const distance = position.distanceTo(target);
+    this.controls.maxDistance = Math.max(this.controls.maxDistance, distance * 3);
+    this.controls.minDistance = Math.min(this.controls.minDistance, Math.max(0.01, distance / 500));
     this.camera.position.copy(position);
     this.controls.target.copy(target);
     this.controls.update();
+    this.initialState = { position: position.clone(), target: target.clone() };
   }
 
   reset(): void {
