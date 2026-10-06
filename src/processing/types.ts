@@ -106,6 +106,33 @@ export type ProcessingEvent =
   | { type: "cancel"; previousAvailable: boolean; completedStages: readonly ProcessingStage[] }
   | { type: "reset" };
 
+/**
+ * Apply an operation's emitted state without losing stages relayed over IPC.
+ *
+ * In the desktop app the Python service reports stages through the Electron
+ * relay straight into React state; the operation's own stage list never sees
+ * them, so its final state would otherwise reset the count to zero.
+ */
+export function mergeRelayedStages(
+  prev: ProcessingState,
+  next: ProcessingState,
+): ProcessingState {
+  if (
+    next.status === "idle" ||
+    prev.status === "idle" ||
+    prev.operationId !== next.operationId
+  ) {
+    return next;
+  }
+  const merged = [...next.completedStages];
+  for (const stage of prev.completedStages) {
+    if (!merged.includes(stage)) merged.push(stage);
+  }
+  return merged.length === next.completedStages.length
+    ? next
+    : { ...next, completedStages: merged };
+}
+
 export function canStartOperation(state: ProcessingState): boolean {
   return state.status !== "running";
 }

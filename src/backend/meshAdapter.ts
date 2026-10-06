@@ -425,6 +425,9 @@ export function adaptTerrainProduct(
   if (mesh.depth_model_version)
     backend.model_version = mesh.depth_model_version;
   applyProvenance(backend, mesh.provenance);
+  // The mesh names its source input even when provenance omits it.
+  backend.input_id ??= mesh.source_input_id ?? undefined;
+  backend.input_checksum ??= mesh.source_checksum ?? undefined;
 
   const metadata: SceneMetadata = {
     source: "backend",
@@ -761,6 +764,9 @@ export function adaptRelativeProduct(
   if (mesh.depth_model_version)
     backend.model_version = mesh.depth_model_version;
   applyProvenance(backend, mesh.provenance);
+  // The mesh names its source input even when provenance omits it.
+  backend.input_id ??= mesh.source_input_id ?? undefined;
+  backend.input_checksum ??= mesh.source_checksum ?? undefined;
 
   const metadata: SceneMetadata = {
     source: "backend",

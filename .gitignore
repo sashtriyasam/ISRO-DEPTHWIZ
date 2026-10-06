@@ -52,3 +52,6 @@ P1/
 
 # Datasets, benchmark downloads and training crops (never committed)
 data/
+
+# Training records (published with the release assets)
+checkpoints/*.json
