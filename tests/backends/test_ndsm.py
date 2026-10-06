@@ -55,3 +55,35 @@ def test_checkpoint_usable_requires_pinned_hash(
     monkeypatch.delenv("DW_ALLOW_UNPINNED_CHECKPOINT")
     monkeypatch.setattr(ndsm, "CHECKPOINT_SHA256", ndsm.file_sha256(ckpt))
     assert ndsm.checkpoint_usable(ckpt)
+
+
+def test_gpu_out_of_memory_falls_back_to_cpu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    torch = pytest.importorskip("torch")
+    from depthwizard.backends import ndsm
+
+    class _Model:
+        def to(self, device: str) -> "_Model":
+            return self
+
+        def eval(self) -> "_Model":
+            return self
+
+    backend = NdsmBackend(device="cuda")
+    backend._model = _Model()
+
+    def predict(patch: np.ndarray) -> np.ndarray:
+        if backend._device == "cuda":
+            raise RuntimeError("CUDA error: out of memory")
+        return np.full(patch.shape[:2], 3.0, dtype=np.float32)
+
+    monkeypatch.setattr(backend, "_predict", predict)
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
+    inspection = inspect_input(make_png(tmp_path / "scene.png"))
+    result = backend.estimate_depth(inspection)
+
+    assert np.allclose(result.depth_values, 3.0)
+    assert "out-of-memory" in result.preprocessing["device_fallback"]
+    assert ndsm._is_gpu_oom(RuntimeError("CUDA error: out of memory"))
+    assert not ndsm._is_gpu_oom(RuntimeError("size mismatch"))

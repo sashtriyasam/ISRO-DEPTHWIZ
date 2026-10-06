@@ -80,6 +80,12 @@ def checkpoint_usable(path: Path | None = None) -> bool:
     return file_sha256(path).lower() == CHECKPOINT_SHA256.lower()
 
 
+def _is_gpu_oom(exc: BaseException) -> bool:
+    """torch.OutOfMemoryError, or a CUDA/accelerator error reporting out of memory."""
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return "outofmemory" in text or ("out of memory" in text and "cuda" in text)
+
+
 def _starts(length: int, tile: int, stride: int) -> list[int]:
     if length <= tile:
         return [0]
@@ -144,6 +150,16 @@ class NdsmBackend:
         self._factory = model_factory
         self._model: Any = None
         self._checkpoint_status = INJECTED if model_factory is not None else "not loaded"
+        self._fallback: str | None = None
+
+    def _fall_back_to_cpu(self, model: Any, exc: BaseException) -> None:
+        """Small GPUs (e.g. 4 GB laptops) run out of memory: finish on the CPU."""
+        import torch
+
+        torch.cuda.empty_cache()
+        self._device = "cpu"
+        self._model = model.to("cpu").eval()
+        self._fallback = f"cuda -> cpu after GPU out-of-memory ({type(exc).__name__})"
 
     @property
     def model_name(self) -> str:
@@ -182,7 +198,12 @@ class NdsmBackend:
         model.load_state_dict(state["model"] if "model" in state else state)
         if self._device == "cuda" and not torch.cuda.is_available():
             raise ModelInferenceError('device="cuda" requested but CUDA is unavailable')
-        self._model = model.to(self._device).eval()
+        try:
+            self._model = model.to(self._device).eval()
+        except Exception as exc:
+            if self._device == "cpu" or not _is_gpu_oom(exc):
+                raise
+            self._fall_back_to_cpu(model, exc)
 
     def _predict(self, patch: NDArray[np.float32]) -> NDArray[np.float32]:
         if self._factory is not None:
@@ -202,7 +223,13 @@ class NdsmBackend:
         loaded = load_model_rgb(inspection)
         if self._model is None:
             self.load()
-        heights = tiled_predict(self._predict, loaded.rgb)
+        try:
+            heights = tiled_predict(self._predict, loaded.rgb)
+        except Exception as exc:
+            if self._device == "cpu" or self._factory is not None or not _is_gpu_oom(exc):
+                raise
+            self._fall_back_to_cpu(self._model, exc)
+            heights = tiled_predict(self._predict, loaded.rgb)
         heights = np.clip(np.nan_to_num(heights, nan=0.0), 0.0, None)
         h, w = heights.shape
         resolution = ImageResolution(width=w, height=h)
@@ -225,6 +252,7 @@ class NdsmBackend:
                 HEIGHT_UNITS_KEY: HEIGHT_UNITS,
                 **loaded.preprocessing_record(),
                 "checkpoint_verification": self._checkpoint_status,
+                **({"device_fallback": self._fallback} if self._fallback else {}),
             },
             units=None,
             spatial=inspection.spatial,
