@@ -118,8 +118,8 @@ LOW_FIT_R_SQUARED = 0.25
 
 def fit_quality_warnings(result: CalibrationResult) -> list[str]:
     """Human-readable warnings for weak calibration fits (empty when fine)."""
-    if result.method is CalibrationMethod.DEM_ANCHORED:
-        return []  # anchored to the DEM by construction; fusion reports its own fit
+    if result.method in (CalibrationMethod.DEM_ANCHORED, CalibrationMethod.GCP_GROUND_PLANE):
+        return []  # anchored to the reference by construction; reports its own fit
     if result.r_squared >= LOW_FIT_R_SQUARED:
         return []
     explained = max(result.r_squared, 0.0) * 100.0

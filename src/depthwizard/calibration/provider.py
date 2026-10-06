@@ -33,6 +33,7 @@ from depthwizard.dem.models import DEMInspection
 from depthwizard.errors import CalibrationError, InsufficientGCPsError
 from depthwizard.geospatial.grids import TargetGrid
 from depthwizard.ingestion.models import InputInspection
+from depthwizard.version import __version__
 
 
 def _depth_valid(depth_result: DepthResult, height: int, width: int) -> NDArray[np.bool_]:
@@ -242,6 +243,11 @@ class FileBasedCalibrationProvider:
                 f"Too few valid GCP samples after bounds check: "
                 f"{len(predicted)} (need >= {MIN_VALID_SAMPLES})"
             )
+        if (
+            self._target is ElevationSemantics.ABSOLUTE_ELEVATION_DSM
+            and depth_result.preprocessing.get("height_units") == "meters_above_ground"
+        ):
+            return self._gcp_ground_plane(depth_result, gcps, depth_array, depth_valid, path)
 
         samples = CalibrationSamples(
             predicted_values=tuple(predicted),
@@ -290,6 +296,70 @@ class FileBasedCalibrationProvider:
         )
         self.warnings.extend(notes)
         return result
+
+    def _gcp_ground_plane(
+        self,
+        depth_result: DepthResult,
+        gcps: list[dict[str, float]],
+        heights: NDArray[np.float32],
+        valid: NDArray[np.bool_],
+        path: Path,
+    ) -> CalibrationResult:
+        """Height model + GCPs: GCPs fix the ground, the model adds structures.
+
+        A height model predicts metres above ground, so scale-fitting it to
+        absolute GCP elevations is wrong (GCPs on open ground all predict ~0
+        and the fit is degenerate). Instead ground_i = elevation_i - height_i
+        at each GCP, a least-squares plane through those ground points (a
+        constant with fewer than 3) becomes a per-pixel offset field, and
+        DSM = ground + height with a fixed scale of 1.
+        """
+        rows: list[float] = []
+        cols: list[float] = []
+        ground: list[float] = []
+        for gcp in gcps:
+            r, c = int(round(gcp["row"])), int(round(gcp["col"]))
+            if 0 <= r < heights.shape[0] and 0 <= c < heights.shape[1] and valid[r, c]:
+                rows.append(r)
+                cols.append(c)
+                ground.append(gcp["value"] - float(heights[r, c]))
+        g: NDArray[np.float64] = np.asarray(ground, dtype=np.float64)
+        height, width = heights.shape
+        if g.size >= 3:
+            design = np.column_stack([np.ones(g.size), cols, rows])
+            coef, *_ = np.linalg.lstsq(design, g, rcond=None)
+            fitted = design @ coef
+            yy, xx = np.mgrid[0:height, 0:width]
+            field = coef[0] + coef[1] * xx + coef[2] * yy
+        else:
+            fitted = np.full(g.size, float(np.median(g)))
+            field = np.full((height, width), float(np.median(g)))
+        residual = g - fitted
+        rmse = float(np.sqrt(np.mean(residual**2)))
+        if g.size > 3 and rmse > 5.0:
+            self.warnings.append(
+                f"GCP ground plane fits with RMSE {rmse:.1f} m over {g.size} points: the "
+                "terrain is not planar at this scale; a DEM reference (or the automatic "
+                "Copernicus DEM) follows relief better."
+            )
+        ss_tot = float(np.sum((g - g.mean()) ** 2))
+        return CalibrationResult(
+            method=CalibrationMethod.GCP_GROUND_PLANE,
+            scale=1.0,
+            offset=float(field.mean()),
+            reference_id=self._reference_label or path.name,
+            reference_units="meters",
+            target_semantics=self._target,
+            total_samples=len(gcps),
+            valid_samples=int(g.size),
+            rmse=rmse,
+            mae=float(np.mean(np.abs(residual))),
+            max_abs_residual=float(np.max(np.abs(residual))),
+            r_squared=1.0 - float(np.sum(residual**2)) / ss_tot if ss_tot > 0 else 1.0,
+            engine_version=__version__,
+            source_checksum=depth_result.provenance.input_checksum,
+            offset_field=tuple(float(v) for v in field.ravel()),
+        )
 
     @staticmethod
     def _read_gcps(path: str | Path) -> tuple[list[dict[str, float]], str]:

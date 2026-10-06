@@ -189,3 +189,43 @@ def test_weak_fit_is_flagged_and_good_fit_is_not() -> None:
     assert fit_quality_warnings(fit((1.0, 3.0, 5.0, 7.0, 9.0, 11.0))) == []
     weak = fit_quality_warnings(fit((5.0, 1.0, 9.0, 0.0, 8.0, 2.0)))
     assert len(weak) == 1 and "Weak calibration" in weak[0]
+
+
+def test_height_model_gcps_fix_the_ground_plane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Height model + GCPs: ground plane through (elevation - height), scale 1."""
+    import numpy as np
+
+    from depthwizard.calibration.apply import apply_calibration
+    from depthwizard.calibration.models import CalibrationMethod
+
+    monkeypatch.delenv(DEV_CALIBRATION_ENV, raising=False)
+    inspection = inspect_input(make_geotiff(tmp_path / "scene.tif"))
+    depth = SyntheticDepthBackend().estimate_depth(inspection)
+    h, w = depth.output_resolution.height, depth.output_resolution.width
+    heights = np.zeros((h, w))
+    heights[1, 2] = 10.0  # one 10 m building; GCPs elsewhere sit on open ground
+    depth = depth.model_copy(
+        update={
+            "depth_values": tuple(float(v) for v in heights.ravel()),
+            "preprocessing": {**depth.preprocessing, "height_units": "meters_above_ground"},
+        }
+    )
+
+    def ground(col: int, row: int) -> float:
+        return 100.0 + 2.0 * col + 3.0 * row
+
+    points = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (2, 1)]
+    lines = ["pixel_col,pixel_row,elevation"] + [
+        f"{c},{r},{ground(c, r) + heights[r, c]}" for c, r in points
+    ]
+    gcps = tmp_path / "gcps.csv"
+    gcps.write_text("\n".join(lines) + "\n")
+
+    result = calibrate_with(select_calibration_provider(str(gcps), TARGET), inspection, depth)
+    assert result.method is CalibrationMethod.GCP_GROUND_PLANE
+    assert result.scale == 1.0 and result.rmse == pytest.approx(0.0, abs=1e-9)
+    dsm = np.asarray(apply_calibration(depth.depth_values, result)).reshape(h, w)
+    assert dsm[1, 2] == pytest.approx(ground(2, 1) + 10.0)
+    assert dsm[h - 1, 0] == pytest.approx(ground(0, h - 1))
