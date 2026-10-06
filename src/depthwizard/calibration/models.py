@@ -25,6 +25,8 @@ class CalibrationMethod(str, Enum):
     PIECEWISE_LINEAR = "piecewise_linear"
     #: DSM = DEM_up + s * (rel - lowpass(rel)): scale plus per-pixel offset field.
     DEM_ANCHORED = "dem_anchored"
+    #: Height model + GCPs: DSM = ground plane through (elevation - height) + height.
+    GCP_GROUND_PLANE = "gcp_ground_plane"
 
 
 _METRIC_TARGETS = frozenset(
@@ -157,8 +159,8 @@ class CalibrationResult(BaseModel):
     )
     offset_field: tuple[float, ...] | None = Field(
         default=None,
-        description="For DEM_ANCHORED: row-major per-pixel offsets (y_i = scale*x_i + "
-        "offset_i); `offset` then holds their mean for display.",
+        description="For DEM_ANCHORED / GCP_GROUND_PLANE: row-major per-pixel offsets "
+        "(y_i = scale*x_i + offset_i); `offset` then holds their mean for display.",
     )
 
     @property
